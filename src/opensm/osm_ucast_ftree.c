@@ -2,7 +2,7 @@
  * Copyright (c) 2009 Simula Research Laboratory. All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -554,25 +554,40 @@ static ftree_sw_t *sw_create(IN ftree_fabric_t * p_ftree,
 	p_sw->down_port_groups =
 	    (ftree_port_group_t **) malloc(ports_num *
 					   sizeof(ftree_port_group_t *));
+	if (p_sw->down_port_groups == NULL)
+		goto FREE_P_SW;
+
 	p_sw->up_port_groups =
 	    (ftree_port_group_t **) malloc(ports_num *
 					   sizeof(ftree_port_group_t *));
+	if (p_sw->up_port_groups == NULL)
+		goto FREE_DOWN;
+
 	p_sw->sibling_port_groups =
 	    (ftree_port_group_t **) malloc(ports_num *
 					   sizeof(ftree_port_group_t *));
-
-	if (!p_sw->down_port_groups || !p_sw->up_port_groups
-	    || !p_sw->sibling_port_groups)
-		return NULL;
+	if (p_sw->sibling_port_groups == NULL)
+		goto FREE_UP;
 
 	/* initialize lft buffer */
 	memset(p_osm_sw->new_lft, OSM_NO_PATH, p_osm_sw->lft_size);
 	p_sw->hops = malloc((p_osm_sw->max_lid_ho + 1) * sizeof(*(p_sw->hops)));
 	if (p_sw->hops == NULL)
-		return NULL;
+		goto FREE_SIBLING;
+
 	memset(p_sw->hops, OSM_NO_PATH, p_osm_sw->max_lid_ho + 1);
 
 	return p_sw;
+
+FREE_SIBLING:
+	free(p_sw->sibling_port_groups);
+FREE_UP:
+	free(p_sw->up_port_groups);
+FREE_DOWN:
+	free(p_sw->down_port_groups);
+FREE_P_SW:
+	free(p_sw);
+	return NULL;
 }				/* sw_create() */
 
 /***************************************************/
@@ -1035,9 +1050,13 @@ static uint8_t fabric_get_rank(ftree_fabric_t * p_ftree)
 
 static void fabric_add_hca(ftree_fabric_t * p_ftree, osm_node_t * p_osm_node)
 {
-	ftree_hca_t *p_hca = hca_create(p_osm_node);
+	ftree_hca_t *p_hca;
 
 	CL_ASSERT(osm_node_get_type(p_osm_node) == IB_NODE_TYPE_CA);
+
+	p_hca = hca_create(p_osm_node);
+	if (!p_hca)
+		return;
 
 	cl_qmap_insert(&p_ftree->hca_tbl, p_osm_node->node_info.node_guid,
 		       &p_hca->map_item);
@@ -1047,9 +1066,13 @@ static void fabric_add_hca(ftree_fabric_t * p_ftree, osm_node_t * p_osm_node)
 
 static void fabric_add_sw(ftree_fabric_t * p_ftree, osm_switch_t * p_osm_sw)
 {
-	ftree_sw_t *p_sw = sw_create(p_ftree, p_osm_sw);
+	ftree_sw_t *p_sw;
 
 	CL_ASSERT(osm_node_get_type(p_osm_sw->p_node) == IB_NODE_TYPE_SWITCH);
+
+	p_sw = sw_create(p_ftree, p_osm_sw);
+	if (!p_sw)
+		return;
 
 	cl_qmap_insert(&p_ftree->sw_tbl, p_osm_sw->p_node->node_info.node_guid,
 		       &p_sw->map_item);
@@ -1662,6 +1685,7 @@ static int fabric_create_leaf_switch_array(IN ftree_fabric_t * p_ftree)
 	if (!p_ftree->leaf_switches) {
 		osm_log(&p_ftree->p_osm->log, OSM_LOG_SYS,
 			"Fat-tree routing: Memory allocation failed\n");
+		free(all_switches_at_leaf_level);
 		res = -1;
 		goto Exit;
 	}
@@ -3265,7 +3289,7 @@ fabric_construct_hca_ports(IN ftree_fabric_t * p_ftree, IN ftree_hca_t * p_hca)
 		p_remote_node =
 		    osm_node_get_remote_node(p_node, i, &remote_port_num);
 
-		if (!p_remote_osm_port)
+		if (!p_remote_osm_port || !p_remote_node)
 			continue;
 
 		remote_node_type = osm_node_get_type(p_remote_node);
@@ -3404,6 +3428,8 @@ static int fabric_construct_sw_ports(IN ftree_fabric_t * p_ftree,
 
 		p_remote_node =
 		    osm_node_get_remote_node(p_node, i, &remote_port_num);
+		if (!p_remote_node)
+			continue;
 
 		/* ignore any loopback connection on switch */
 		if (p_node == p_remote_node) {
@@ -4108,7 +4134,7 @@ int osm_ucast_ftree_setup(struct osm_routing_engine *r, osm_opensm_t * p_osm)
 	r->context = (void *)p_ftree;
 	r->build_lid_matrices = construct_fabric;
 	r->ucast_build_fwd_tables = do_routing;
-	r->delete = delete;
+	r->destroy = delete;
 
 	return 0;
 }

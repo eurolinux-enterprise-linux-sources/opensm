@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2006 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -99,8 +99,8 @@ match_service_pkey_with_ports_pkey(IN osm_sa_t * sa,
 	}
 
 	if ((comp_mask & IB_SR_COMPMASK_SPKEY) == IB_SR_COMPMASK_SPKEY) {
-		/* We have a ServiceP_Key - check matching on requester port, and
-		   ServiceGid port (if such exists) */
+		/* We have a ServiceP_Key - check matching on requester port,
+		   and ServiceGid port (if such exists) */
 		/* Make sure it matches the p_req_physp */
 		if (!osm_physp_has_pkey
 		    (sa->p_log, p_service_rec->service_pkey, p_req_physp)) {
@@ -109,7 +109,7 @@ match_service_pkey_with_ports_pkey(IN osm_sa_t * sa,
 		}
 
 		/* Make sure it matches the port of the ServiceGid */
-		if ((comp_mask & IB_SR_COMPMASK_SGID) == IB_SR_COMPMASK_SGID) {
+		if (comp_mask & IB_SR_COMPMASK_SGID) {
 			service_guid =
 			    p_service_rec->service_gid.unicast.interface_id;
 			service_port =
@@ -220,189 +220,189 @@ static void get_matching_sr(IN cl_list_item_t * p_list_item, IN void *context)
 	ib_net64_t comp_mask = p_sr_item->comp_mask;
 	const osm_physp_t *p_req_physp = p_ctxt->p_req_physp;
 
-	if ((comp_mask & IB_SR_COMPMASK_SID) == IB_SR_COMPMASK_SID) {
+	if (comp_mask & IB_SR_COMPMASK_SID) {
 		if (p_sr_item->p_service_rec->service_id !=
 		    p_svcr->service_record.service_id)
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SGID) == IB_SR_COMPMASK_SGID) {
+	if (comp_mask & IB_SR_COMPMASK_SGID) {
 		if (memcmp(&p_sr_item->p_service_rec->service_gid,
 			   &p_svcr->service_record.service_gid,
 			   sizeof(p_svcr->service_record.service_gid)) != 0)
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SPKEY) == IB_SR_COMPMASK_SPKEY) {
+	if (comp_mask & IB_SR_COMPMASK_SPKEY) {
 		if (p_sr_item->p_service_rec->service_pkey !=
 		    p_svcr->service_record.service_pkey)
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SKEY) == IB_SR_COMPMASK_SKEY) {
+	if (comp_mask & IB_SR_COMPMASK_SKEY) {
 		if (memcmp(p_sr_item->p_service_rec->service_key,
 			   p_svcr->service_record.service_key,
 			   16 * sizeof(uint8_t)))
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SNAME) == IB_SR_COMPMASK_SNAME) {
+	if (comp_mask & IB_SR_COMPMASK_SNAME) {
 		if (memcmp(p_sr_item->p_service_rec->service_name,
 			   p_svcr->service_record.service_name,
 			   sizeof(p_svcr->service_record.service_name)) != 0)
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_0) == IB_SR_COMPMASK_SDATA8_0) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_0) {
 		if (p_sr_item->p_service_rec->service_data8[0] !=
 		    p_svcr->service_record.service_data8[0])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_1) == IB_SR_COMPMASK_SDATA8_1) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_1) {
 		if (p_sr_item->p_service_rec->service_data8[1] !=
 		    p_svcr->service_record.service_data8[1])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_2) == IB_SR_COMPMASK_SDATA8_2) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_2) {
 		if (p_sr_item->p_service_rec->service_data8[2] !=
 		    p_svcr->service_record.service_data8[2])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_3) == IB_SR_COMPMASK_SDATA8_3) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_3) {
 		if (p_sr_item->p_service_rec->service_data8[3] !=
 		    p_svcr->service_record.service_data8[3])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_4) == IB_SR_COMPMASK_SDATA8_4) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_4) {
 		if (p_sr_item->p_service_rec->service_data8[4] !=
 		    p_svcr->service_record.service_data8[4])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_5) == IB_SR_COMPMASK_SDATA8_5) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_5) {
 		if (p_sr_item->p_service_rec->service_data8[5] !=
 		    p_svcr->service_record.service_data8[5])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_6) == IB_SR_COMPMASK_SDATA8_6) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_6) {
 		if (p_sr_item->p_service_rec->service_data8[6] !=
 		    p_svcr->service_record.service_data8[6])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_7) == IB_SR_COMPMASK_SDATA8_7) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_7) {
 		if (p_sr_item->p_service_rec->service_data8[7] !=
 		    p_svcr->service_record.service_data8[7])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_8) == IB_SR_COMPMASK_SDATA8_8) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_8) {
 		if (p_sr_item->p_service_rec->service_data8[8] !=
 		    p_svcr->service_record.service_data8[8])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_9) == IB_SR_COMPMASK_SDATA8_9) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_9) {
 		if (p_sr_item->p_service_rec->service_data8[9] !=
 		    p_svcr->service_record.service_data8[9])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_10) == IB_SR_COMPMASK_SDATA8_10) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_10) {
 		if (p_sr_item->p_service_rec->service_data8[10] !=
 		    p_svcr->service_record.service_data8[10])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_11) == IB_SR_COMPMASK_SDATA8_11) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_11) {
 		if (p_sr_item->p_service_rec->service_data8[11] !=
 		    p_svcr->service_record.service_data8[11])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_12) == IB_SR_COMPMASK_SDATA8_12) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_12) {
 		if (p_sr_item->p_service_rec->service_data8[12] !=
 		    p_svcr->service_record.service_data8[12])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_13) == IB_SR_COMPMASK_SDATA8_13) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_13) {
 		if (p_sr_item->p_service_rec->service_data8[13] !=
 		    p_svcr->service_record.service_data8[13])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_14) == IB_SR_COMPMASK_SDATA8_14) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_14) {
 		if (p_sr_item->p_service_rec->service_data8[14] !=
 		    p_svcr->service_record.service_data8[14])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA8_15) == IB_SR_COMPMASK_SDATA8_15) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA8_15) {
 		if (p_sr_item->p_service_rec->service_data8[15] !=
 		    p_svcr->service_record.service_data8[15])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_0) == IB_SR_COMPMASK_SDATA16_0) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_0) {
 		if (p_sr_item->p_service_rec->service_data16[0] !=
 		    p_svcr->service_record.service_data16[0])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_1) == IB_SR_COMPMASK_SDATA16_1) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_1) {
 		if (p_sr_item->p_service_rec->service_data16[1] !=
 		    p_svcr->service_record.service_data16[1])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_2) == IB_SR_COMPMASK_SDATA16_2) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_2) {
 		if (p_sr_item->p_service_rec->service_data16[2] !=
 		    p_svcr->service_record.service_data16[2])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_3) == IB_SR_COMPMASK_SDATA16_3) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_3) {
 		if (p_sr_item->p_service_rec->service_data16[3] !=
 		    p_svcr->service_record.service_data16[3])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_4) == IB_SR_COMPMASK_SDATA16_4) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_4) {
 		if (p_sr_item->p_service_rec->service_data16[4] !=
 		    p_svcr->service_record.service_data16[4])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_5) == IB_SR_COMPMASK_SDATA16_5) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_5) {
 		if (p_sr_item->p_service_rec->service_data16[5] !=
 		    p_svcr->service_record.service_data16[5])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_6) == IB_SR_COMPMASK_SDATA16_6) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_6) {
 		if (p_sr_item->p_service_rec->service_data16[6] !=
 		    p_svcr->service_record.service_data16[6])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA16_7) == IB_SR_COMPMASK_SDATA16_7) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA16_7) {
 		if (p_sr_item->p_service_rec->service_data16[7] !=
 		    p_svcr->service_record.service_data16[7])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA32_0) == IB_SR_COMPMASK_SDATA32_0) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA32_0) {
 		if (p_sr_item->p_service_rec->service_data32[0] !=
 		    p_svcr->service_record.service_data32[0])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA32_1) == IB_SR_COMPMASK_SDATA32_1) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA32_1) {
 		if (p_sr_item->p_service_rec->service_data32[1] !=
 		    p_svcr->service_record.service_data32[1])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA32_2) == IB_SR_COMPMASK_SDATA32_2) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA32_2) {
 		if (p_sr_item->p_service_rec->service_data32[2] !=
 		    p_svcr->service_record.service_data32[2])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA32_3) == IB_SR_COMPMASK_SDATA32_3) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA32_3) {
 		if (p_sr_item->p_service_rec->service_data32[3] !=
 		    p_svcr->service_record.service_data32[3])
 			return;
 	}
 
-	if ((comp_mask & IB_SR_COMPMASK_SDATA64_0) == IB_SR_COMPMASK_SDATA64_0) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA64_0) {
 		if (p_sr_item->p_service_rec->service_data64[0] !=
 		    p_svcr->service_record.service_data64[0])
 			return;
 	}
-	if ((comp_mask & IB_SR_COMPMASK_SDATA64_1) == IB_SR_COMPMASK_SDATA64_1) {
+	if (comp_mask & IB_SR_COMPMASK_SDATA64_1) {
 		if (p_sr_item->p_service_rec->service_data64[1] !=
 		    p_svcr->service_record.service_data64[1])
 			return;
@@ -528,9 +528,8 @@ static void sr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 		goto Exit;
 	}
 
-	/* if we were not provided with a service lease make it
-	   infinite */
-	if ((comp_mask & IB_SR_COMPMASK_SLEASE) != IB_SR_COMPMASK_SLEASE) {
+	/* if we were not provided with a service lease make it infinite */
+	if (!(comp_mask & IB_SR_COMPMASK_SLEASE)) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"ServiceLease Component Mask not set - using infinite lease\n");
 		p_recvd_service_rec->service_lease = 0xFFFFFFFF;
@@ -603,7 +602,6 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 {
 	ib_sa_mad_t *p_sa_mad;
 	ib_service_record_t *p_recvd_service_rec;
-	ib_net64_t comp_mask;
 	osm_svcr_t *p_svcr;
 	osm_sr_item_t *p_sr_item;
 	cl_qlist_t sr_list;
@@ -615,8 +613,6 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	p_sa_mad = osm_madw_get_sa_mad_ptr(p_madw);
 	p_recvd_service_rec =
 	    (ib_service_record_t *) ib_sa_mad_get_payload_ptr(p_sa_mad);
-
-	comp_mask = p_sa_mad->comp_mask;
 
 	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
 		osm_dump_service_record(sa->p_log, p_recvd_service_rec,
@@ -635,10 +631,9 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 			"No records matched the RID\n");
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_NO_RECORDS);
 		goto Exit;
-	} else {
-		osm_svcr_remove_from_db(sa->p_subn, sa->p_log, p_svcr);
 	}
 
+	osm_svcr_remove_from_db(sa->p_subn, sa->p_log, p_svcr);
 	cl_plock_release(sa->p_lock);
 
 	p_sr_item = malloc(sizeof(*p_sr_item));
@@ -646,6 +641,7 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2413: "
 			"Unable to acquire Service record\n");
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_NO_RESOURCES);
+		osm_svcr_delete(p_svcr);
 		goto Exit;
 	}
 
@@ -655,8 +651,7 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 
 	cl_qlist_insert_tail(&sr_list, &p_sr_item->list_item);
 
-	if (p_svcr)
-		osm_svcr_delete(p_svcr);
+	osm_svcr_delete(p_svcr);
 
 	sr_rcv_respond(sa, p_madw, &sr_list);
 

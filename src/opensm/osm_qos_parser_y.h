@@ -1,10 +1,8 @@
+/* A Bison parser, made by GNU Bison 2.5.  */
 
-/* A Bison parser, made by GNU Bison 2.4.1.  */
-
-/* Skeleton interface for Bison's Yacc-like parsers in C
+/* Bison interface for Yacc-like parsers in C
    
-      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
-   Free Software Foundation, Inc.
+      Copyright (C) 1984, 1989-1990, 2000-2011 Free Software Foundation, Inc.
    
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -105,15 +103,17 @@
      TK_ULP_ANY_SERVICE_ID = 321,
      TK_ULP_ANY_PKEY = 322,
      TK_ULP_ANY_TARGET_PORT_GUID = 323,
-     TK_ULP_SDP_DEFAULT = 324,
-     TK_ULP_SDP_PORT = 325,
-     TK_ULP_RDS_DEFAULT = 326,
-     TK_ULP_RDS_PORT = 327,
-     TK_ULP_ISER_DEFAULT = 328,
-     TK_ULP_ISER_PORT = 329,
-     TK_ULP_SRP_GUID = 330,
-     TK_ULP_IPOIB_DEFAULT = 331,
-     TK_ULP_IPOIB_PKEY = 332
+     TK_ULP_ANY_SOURCE_PORT_GUID = 324,
+     TK_ULP_ANY_SOURCE_TARGET_PORT_GUID = 325,
+     TK_ULP_SDP_DEFAULT = 326,
+     TK_ULP_SDP_PORT = 327,
+     TK_ULP_RDS_DEFAULT = 328,
+     TK_ULP_RDS_PORT = 329,
+     TK_ULP_ISER_DEFAULT = 330,
+     TK_ULP_ISER_PORT = 331,
+     TK_ULP_SRP_GUID = 332,
+     TK_ULP_IPOIB_DEFAULT = 333,
+     TK_ULP_IPOIB_PKEY = 334
    };
 #endif
 /* Tokens.  */
@@ -183,15 +183,17 @@
 #define TK_ULP_ANY_SERVICE_ID 321
 #define TK_ULP_ANY_PKEY 322
 #define TK_ULP_ANY_TARGET_PORT_GUID 323
-#define TK_ULP_SDP_DEFAULT 324
-#define TK_ULP_SDP_PORT 325
-#define TK_ULP_RDS_DEFAULT 326
-#define TK_ULP_RDS_PORT 327
-#define TK_ULP_ISER_DEFAULT 328
-#define TK_ULP_ISER_PORT 329
-#define TK_ULP_SRP_GUID 330
-#define TK_ULP_IPOIB_DEFAULT 331
-#define TK_ULP_IPOIB_PKEY 332
+#define TK_ULP_ANY_SOURCE_PORT_GUID 324
+#define TK_ULP_ANY_SOURCE_TARGET_PORT_GUID 325
+#define TK_ULP_SDP_DEFAULT 326
+#define TK_ULP_SDP_PORT 327
+#define TK_ULP_RDS_DEFAULT 328
+#define TK_ULP_RDS_PORT 329
+#define TK_ULP_ISER_DEFAULT 330
+#define TK_ULP_ISER_PORT 331
+#define TK_ULP_SRP_GUID 332
+#define TK_ULP_IPOIB_DEFAULT 333
+#define TK_ULP_IPOIB_PKEY 334
 
 
 

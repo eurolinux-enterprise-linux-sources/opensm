@@ -98,6 +98,35 @@ typedef struct _umad_receiver {
 
 static void osm_vendor_close_port(osm_vendor_t * const p_vend);
 
+static void log_send_error(osm_vendor_t * const p_vend, osm_madw_t *p_madw)
+{
+	if (p_madw->p_mad->mgmt_class != IB_MCLASS_SUBN_DIR) {
+		/* LID routed */
+		OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5410: "
+			"Send completed with error (%s) -- dropping\n"
+			"\t\t\tClass 0x%x, Method 0x%X, Attr 0x%X, "
+			"TID 0x%" PRIx64 ", LID %u\n",
+			ib_get_err_str(p_madw->status),
+			p_madw->p_mad->mgmt_class, p_madw->p_mad->method,
+			cl_ntoh16(p_madw->p_mad->attr_id),
+			cl_ntoh64(p_madw->p_mad->trans_id),
+			cl_ntoh16(p_madw->mad_addr.dest_lid));
+	} else {
+		ib_smp_t *p_smp;
+
+		/* Direct routed SMP */
+		p_smp = osm_madw_get_smp_ptr(p_madw);
+		OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5411: "
+			"DR SMP Send completed with error (%s) -- dropping\n"
+			"\t\t\tMethod 0x%X, Attr 0x%X, TID 0x%" PRIx64 "\n",
+			ib_get_err_str(p_madw->status),
+			p_madw->p_mad->method,
+			cl_ntoh16(p_madw->p_mad->attr_id),
+			cl_ntoh64(p_madw->p_mad->trans_id));
+		osm_dump_smp_dr_path(p_vend->p_log, p_smp, OSM_LOG_ERROR);
+	}
+}
+
 static void clear_madw(osm_vendor_t * p_vend)
 {
 	umad_match_t *m, *e, *old_m;
@@ -174,7 +203,7 @@ put_madw(osm_vendor_t * p_vend, osm_madw_t * p_madw, ib_net64_t tid)
 			pthread_mutex_unlock(&p_vend->match_tbl_mutex);
 			return;
 		}
-		if (oldest > m->version) {
+		if (oldest >= m->version) {
 			oldest = m->version;
 			lru = m;
 		}
@@ -185,6 +214,7 @@ put_madw(osm_vendor_t * p_vend, osm_madw_t * p_madw, ib_net64_t tid)
 	p_req_madw = old_lru->v;
 	p_bind = p_req_madw->h_bind;
 	p_req_madw->status = IB_CANCELED;
+	log_send_error(p_vend, p_req_madw);
 	pthread_mutex_lock(&p_vend->cb_mutex);
 	(*p_bind->send_err_callback) (p_bind->client_context, p_req_madw);
 	pthread_mutex_unlock(&p_vend->cb_mutex);
@@ -243,7 +273,6 @@ static void *umad_receiver(void *p_ptr)
 	umad_receiver_t *const p_ur = (umad_receiver_t *) p_ptr;
 	osm_vendor_t *p_vend = p_ur->p_vend;
 	osm_umad_bind_info_t *p_bind;
-	ib_mad_addr_t *ib_mad_addr;
 	osm_mad_addr_t osm_addr;
 	osm_madw_t *p_madw, *p_req_madw;
 	ib_mad_t *mad;
@@ -299,7 +328,6 @@ static void *umad_receiver(void *p_ptr)
 		}
 
 		mad = (ib_mad_t *) umad_get_mad(umad);
-		ib_mad_addr = umad_get_mad_addr(umad);
 
 		ib_mad_addr_conv(umad, &osm_addr,
 				 mad->mgmt_class == IB_MCLASS_SUBN_LID ||
@@ -326,32 +354,6 @@ static void *umad_receiver(void *p_ptr)
 
 		/* if status != 0 then we are handling recv timeout on send */
 		if (umad_status(p_madw->vend_wrap.umad)) {
-
-			if (mad->mgmt_class != IB_MCLASS_SUBN_DIR) {
-				/* LID routed */
-				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5410: "
-					"Send completed with error -- dropping\n"
-					"\t\t\tClass 0x%x, Method 0x%X, Attr 0x%X, "
-					"TID 0x%" PRIx64 ", LID %u\n",
-					mad->mgmt_class, mad->method,
-					cl_ntoh16(mad->attr_id),
-					cl_ntoh64(mad->trans_id),
-					cl_ntoh16(ib_mad_addr->lid));
-			} else {
-				ib_smp_t *smp;
-
-				/* Direct routed SMP */
-				smp = (ib_smp_t *) mad;
-				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5411: "
-					"DR SMP Send completed with error -- dropping\n"
-					"\t\t\tMethod 0x%X, Attr 0x%X, TID 0x%" PRIx64
-					", Hop Ptr: 0x%X\n",
-					mad->method, cl_ntoh16(mad->attr_id),
-					cl_ntoh64(mad->trans_id), smp->hop_ptr);
-				osm_dump_smp_dr_path(p_vend->p_log, smp,
-						     OSM_LOG_ERROR);
-			}
-
 			if (!(p_req_madw = get_madw(p_vend, &mad->trans_id))) {
 				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR,
 					"ERR 5412: "
@@ -361,6 +363,7 @@ static void *umad_receiver(void *p_ptr)
 					cl_ntoh64(mad->trans_id));
 			} else {
 				p_req_madw->status = IB_TIMEOUT;
+				log_send_error(p_vend, p_req_madw);
 				/* cb frees req_madw */
 				pthread_mutex_lock(&p_vend->cb_mutex);
 				pthread_cleanup_push(unlock_mutex,
@@ -1002,8 +1005,9 @@ osm_vendor_send(IN osm_bind_handle_t h_bind,
 	ib_mad_t *const p_mad = osm_madw_get_mad_ptr(p_madw);
 	ib_sa_mad_t *const p_sa = (ib_sa_mad_t *) p_mad;
 	int ret = -1;
-	int is_rmpp = 0;
+	int __attribute__((__unused__)) is_rmpp = 0;
 	uint32_t sent_mad_size;
+	uint64_t tid;
 #ifndef VENDOR_RMPP_SUPPORT
 	uint32_t paylen = 0;
 #endif
@@ -1041,10 +1045,10 @@ osm_vendor_send(IN osm_bind_handle_t h_bind,
 #ifdef VENDOR_RMPP_SUPPORT
 		} else
 			is_rmpp = 1;
-			OSM_LOG(p_vend->p_log, OSM_LOG_VERBOSE, "RMPP %d length %d\n",
-				ib_rmpp_is_flag_set((ib_rmpp_mad_t *) p_sa,
-						    IB_RMPP_FLAG_ACTIVE),
-				p_madw->mad_size);
+		OSM_LOG(p_vend->p_log, OSM_LOG_DEBUG, "RMPP %d length %d\n",
+			ib_rmpp_is_flag_set((ib_rmpp_mad_t *) p_sa,
+					    IB_RMPP_FLAG_ACTIVE),
+			p_madw->mad_size);
 #else
 		} else {
 			p_sa->rmpp_version = 1;
@@ -1068,13 +1072,14 @@ Resp:
 	sent_mad_size = is_rmpp ? p_madw->mad_size - IB_SA_MAD_HDR_SIZE :
 	    p_madw->mad_size;
 #endif
+	tid = cl_ntoh64(p_mad->trans_id);
 	if ((ret = umad_send(p_bind->port_id, p_bind->agent_id, p_vw->umad,
 			     sent_mad_size,
 			     resp_expected ? p_bind->timeout : 0,
 			     p_bind->max_retries)) < 0) {
 		OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5430: "
 			"Send p_madw = %p of size %d TID 0x%" PRIx64 " failed %d (%m)\n",
-			p_madw, sent_mad_size, cl_ntoh64(p_mad->trans_id), ret);
+			p_madw, sent_mad_size, tid, ret);
 		if (resp_expected) {
 			get_madw(p_vend, &p_mad->trans_id);	/* remove from aging table */
 			p_madw->status = IB_ERROR;
@@ -1089,8 +1094,8 @@ Resp:
 	if (!resp_expected)
 		osm_mad_pool_put(p_bind->p_mad_pool, p_madw);
 
-	OSM_LOG(p_vend->p_log, OSM_LOG_DEBUG, "Completed sending %s p_madw = %p\n",
-		resp_expected ? "request" : "response or unsolicited", p_madw);
+	OSM_LOG(p_vend->p_log, OSM_LOG_DEBUG, "Completed sending %s TID 0x%" PRIx64 "\n",
+		resp_expected ? "request" : "response or unsolicited", tid);
 Exit:
 	OSM_LOG_EXIT(p_vend->p_log);
 	return (ret);

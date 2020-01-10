@@ -40,6 +40,8 @@ DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(top_srcdir)/include/opensm/osm_config.h.in \
 	$(top_srcdir)/include/opensm/osm_version.h.in \
 	$(top_srcdir)/man/opensm.8.in \
+	$(top_srcdir)/man/torus-2QoS.8.in \
+	$(top_srcdir)/man/torus-2QoS.conf.5.in \
 	$(top_srcdir)/scripts/opensm.init.in \
 	$(top_srcdir)/scripts/redhat-opensm.init.in \
 	$(top_srcdir)/scripts/sldd.sh.in AUTHORS COPYING ChangeLog \
@@ -47,8 +49,12 @@ DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	config/depcomp config/install-sh config/ltmain.sh \
 	config/missing config/ylwrap
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/osmvsel.m4 \
-	$(top_srcdir)/configure.in
+am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
+	$(top_srcdir)/config/ltoptions.m4 \
+	$(top_srcdir)/config/ltsugar.m4 \
+	$(top_srcdir)/config/ltversion.m4 \
+	$(top_srcdir)/config/lt~obsolete.m4 \
+	$(top_srcdir)/config/osmvsel.m4 $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
@@ -56,7 +62,8 @@ am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/include/config.h \
 	$(top_builddir)/include/opensm/osm_config.h
-CONFIG_CLEAN_FILES = man/opensm.8 scripts/opensm.init \
+CONFIG_CLEAN_FILES = man/opensm.8 man/torus-2QoS.8 \
+	man/torus-2QoS.conf.5 scripts/opensm.init \
 	scripts/redhat-opensm.init scripts/sldd.sh \
 	include/opensm/osm_version.h opensm.spec
 CONFIG_CLEAN_VPATH_FILES =
@@ -90,8 +97,9 @@ am__nobase_list = $(am__nobase_strip_setup); \
 am__base_list = \
   sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
   sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+man5dir = $(mandir)/man5
+am__installdirs = "$(DESTDIR)$(man5dir)" "$(DESTDIR)$(man8dir)"
 man8dir = $(mandir)/man8
-am__installdirs = "$(DESTDIR)$(man8dir)"
 NROFF = nroff
 MANS = $(man_MANS)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
@@ -153,6 +161,7 @@ CYGPATH_W = @CYGPATH_W@
 DEFAULT_EVENT_PLUGIN = @DEFAULT_EVENT_PLUGIN@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -179,6 +188,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -210,6 +220,7 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
 TARBALL = @TARBALL@
+TORUS2QOS_CONF_FILE = @TORUS2QOS_CONF_FILE@
 VERSION = @VERSION@
 YACC = @YACC@
 YFLAGS = @YFLAGS@
@@ -219,6 +230,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
@@ -251,7 +263,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -272,7 +283,7 @@ top_srcdir = @top_srcdir@
 SUBDIRS = complib libvendor opensm osmtest include $(DEFAULT_EVENT_PLUGIN)
 DIST_SUBDIRS = complib libvendor opensm osmtest include osmeventplugin
 ACLOCAL_AMFLAGS = -I config
-man_MANS = man/opensm.8 man/osmtest.8
+man_MANS = man/opensm.8 man/osmtest.8 man/torus-2QoS.8 man/torus-2QoS.conf.5
 various_scripts = $(wildcard scripts/*)
 docs = doc/performance-manager-HOWTO.txt doc/QoS_management_in_OpenSM.txt \
 	doc/opensm_release_notes-3.3.txt
@@ -334,6 +345,10 @@ distclean-hdr:
 	-rm -f include/opensm/osm_config.h include/opensm/stamp-h2
 man/opensm.8: $(top_builddir)/config.status $(top_srcdir)/man/opensm.8.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
+man/torus-2QoS.8: $(top_builddir)/config.status $(top_srcdir)/man/torus-2QoS.8.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+man/torus-2QoS.conf.5: $(top_builddir)/config.status $(top_srcdir)/man/torus-2QoS.conf.5.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
 scripts/opensm.init: $(top_builddir)/config.status $(top_srcdir)/scripts/opensm.init.in
 	cd $(top_builddir) && $(SHELL) ./config.status $@
 scripts/redhat-opensm.init: $(top_builddir)/config.status $(top_srcdir)/scripts/redhat-opensm.init.in
@@ -353,6 +368,44 @@ clean-libtool:
 
 distclean-libtool:
 	-rm -f libtool config.lt
+install-man5: $(man_MANS)
+	@$(NORMAL_INSTALL)
+	test -z "$(man5dir)" || $(MKDIR_P) "$(DESTDIR)$(man5dir)"
+	@list=''; test -n "$(man5dir)" || exit 0; \
+	{ for i in $$list; do echo "$$i"; done; \
+	l2='$(man_MANS)'; for i in $$l2; do echo "$$i"; done | \
+	  sed -n '/\.5[a-z]*$$/p'; \
+	} | while read p; do \
+	  if test -f $$p; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; echo "$$p"; \
+	done | \
+	sed -e 'n;s,.*/,,;p;h;s,.*\.,,;s,^[^5][0-9a-z]*$$,5,;x' \
+	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,' | \
+	sed 'N;N;s,\n, ,g' | { \
+	list=; while read file base inst; do \
+	  if test "$$base" = "$$inst"; then list="$$list $$file"; else \
+	    echo " $(INSTALL_DATA) '$$file' '$(DESTDIR)$(man5dir)/$$inst'"; \
+	    $(INSTALL_DATA) "$$file" "$(DESTDIR)$(man5dir)/$$inst" || exit $$?; \
+	  fi; \
+	done; \
+	for i in $$list; do echo "$$i"; done | $(am__base_list) | \
+	while read files; do \
+	  test -z "$$files" || { \
+	    echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(man5dir)'"; \
+	    $(INSTALL_DATA) $$files "$(DESTDIR)$(man5dir)" || exit $$?; }; \
+	done; }
+
+uninstall-man5:
+	@$(NORMAL_UNINSTALL)
+	@list=''; test -n "$(man5dir)" || exit 0; \
+	files=`{ for i in $$list; do echo "$$i"; done; \
+	l2='$(man_MANS)'; for i in $$l2; do echo "$$i"; done | \
+	  sed -n '/\.5[a-z]*$$/p'; \
+	} | sed -e 's,.*/,,;h;s,.*\.,,;s,^[^5][0-9a-z]*$$,5,;x' \
+	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,'`; \
+	test -z "$$files" || { \
+	  echo " ( cd '$(DESTDIR)$(man5dir)' && rm -f" $$files ")"; \
+	  cd "$(DESTDIR)$(man5dir)" && rm -f $$files; }
 install-man8: $(man_MANS)
 	@$(NORMAL_INSTALL)
 	test -z "$(man8dir)" || $(MKDIR_P) "$(DESTDIR)$(man8dir)"
@@ -723,7 +776,7 @@ check: check-recursive
 all-am: Makefile $(MANS)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(man8dir)"; do \
+	for dir in "$(DESTDIR)$(man5dir)" "$(DESTDIR)$(man8dir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -790,7 +843,7 @@ install-info: install-info-recursive
 
 install-info-am:
 
-install-man: install-man8
+install-man: install-man5 install-man8
 
 install-pdf: install-pdf-recursive
 
@@ -822,7 +875,7 @@ ps-am:
 
 uninstall-am: uninstall-man
 
-uninstall-man: uninstall-man8
+uninstall-man: uninstall-man5 uninstall-man8
 
 .MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) ctags-recursive \
 	install-am install-exec-am install-strip tags-recursive
@@ -837,12 +890,13 @@ uninstall-man: uninstall-man8
 	install install-am install-data install-data-am install-dvi \
 	install-dvi-am install-exec install-exec-am install-exec-hook \
 	install-html install-html-am install-info install-info-am \
-	install-man install-man8 install-pdf install-pdf-am install-ps \
-	install-ps-am install-strip installcheck installcheck-am \
-	installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-recursive \
-	uninstall uninstall-am uninstall-man uninstall-man8
+	install-man install-man5 install-man8 install-pdf \
+	install-pdf-am install-ps install-ps-am install-strip \
+	installcheck installcheck-am installdirs installdirs-am \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	tags tags-recursive uninstall uninstall-am uninstall-man \
+	uninstall-man5 uninstall-man8
 
 
 # we should provide a hint for other apps about the build mode of this project

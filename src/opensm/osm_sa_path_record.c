@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2007 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
@@ -159,12 +159,13 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 					     OUT osm_path_parms_t * p_parms)
 {
 	const osm_node_t *p_node;
-	const osm_physp_t *p_physp;
+	const osm_physp_t *p_physp, *p_physp0;
 	const osm_physp_t *p_src_physp;
 	const osm_physp_t *p_dest_physp;
 	const osm_prtn_t *p_prtn = NULL;
 	osm_opensm_t *p_osm;
-	const ib_port_info_t *p_pi;
+	struct osm_routing_engine *p_re;
+	const ib_port_info_t *p_pi, *p_pi0;
 	ib_api_status_t status = IB_SUCCESS;
 	ib_net16_t pkey;
 	uint8_t mtu;
@@ -180,7 +181,6 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 	ib_slvl_table_t *p_slvl_tbl = NULL;
 	osm_qos_level_t *p_qos_level = NULL;
 	uint16_t valid_sl_mask = 0xffff;
-	int is_lash;
 	int hops = 0;
 
 	OSM_LOG_ENTER(sa->p_log);
@@ -192,9 +192,11 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 	p_src_physp = p_physp;
 	p_pi = &p_physp->port_info;
 	p_osm = sa->p_subn->p_osm;
+	p_re = p_osm->routing_engine_used;
 
 	mtu = ib_port_info_get_mtu_cap(p_pi);
-	rate = ib_port_info_compute_rate(p_pi);
+	rate = ib_port_info_compute_rate(p_pi,
+					 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 	/*
 	   Mellanox Tavor device performance is better using 1K MTU.
@@ -348,8 +350,13 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		if (rate > ib_port_info_compute_rate(p_pi))
-			rate = ib_port_info_compute_rate(p_pi);
+		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
+		p_pi0 = &p_physp0->port_info;
+		if (ib_path_compare_rates(rate,
+					  ib_port_info_compute_rate(p_pi,
+								    p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+			rate = ib_port_info_compute_rate(p_pi,
+							 p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 		/*
 		   Continue with the egress port on this switch.
@@ -371,8 +378,13 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		if (rate > ib_port_info_compute_rate(p_pi))
-			rate = ib_port_info_compute_rate(p_pi);
+		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
+		p_pi0 = &p_physp0->port_info;
+		if (ib_path_compare_rates(rate,
+					  ib_port_info_compute_rate(p_pi,
+								    p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+			rate = ib_port_info_compute_rate(p_pi,
+							 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 		if (sa->p_subn->opt.qos) {
 			/*
@@ -424,8 +436,11 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 	if (mtu > ib_port_info_get_mtu_cap(p_pi))
 		mtu = ib_port_info_get_mtu_cap(p_pi);
 
-	if (rate > ib_port_info_compute_rate(p_pi))
-		rate = ib_port_info_compute_rate(p_pi);
+	if (ib_path_compare_rates(rate,
+				  ib_port_info_compute_rate(p_pi,
+							    p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+		rate = ib_port_info_compute_rate(p_pi,
+						 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 		"Path min MTU = %u, min rate = %u\n", mtu, rate);
@@ -450,7 +465,7 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 			mtu = p_qos_level->mtu_limit;
 
 		if (p_qos_level->rate_limit_set
-		    && (rate > p_qos_level->rate_limit))
+		    && (ib_path_compare_rates(rate, p_qos_level->rate_limit) > 0))
 			rate = p_qos_level->rate_limit;
 
 		if (p_qos_level->sl_set) {
@@ -528,23 +543,22 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		required_rate = ib_path_rec_rate(p_pr);
 		switch (ib_path_rec_rate_sel(p_pr)) {
 		case 0:	/* must be greater than */
-			if (rate <= required_rate)
+			if (ib_path_compare_rates(rate, required_rate) <= 0)
 				status = IB_NOT_FOUND;
 			break;
 
 		case 1:	/* must be less than */
-			if (rate >= required_rate) {
+			if (ib_path_compare_rates(rate, required_rate) >= 0) {
 				/* adjust the rate to use the highest rate
 				   lower then the required one */
-				if (required_rate > 2)
-					rate = required_rate - 1;
-				else
+				rate = ib_path_rate_get_prev(required_rate);
+				if (!rate)
 					status = IB_NOT_FOUND;
 			}
 			break;
 
 		case 2:	/* exact match */
-			if (rate < required_rate)
+			if (ib_path_compare_rates(rate, required_rate))
 				status = IB_NOT_FOUND;
 			else
 				rate = required_rate;
@@ -717,8 +731,6 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 	 * Set PathRecord SL
 	 */
 
-	is_lash = (p_osm->routing_engine_used == OSM_ROUTING_ENGINE_TYPE_LASH);
-
 	if (comp_mask & IB_PR_COMPMASK_SL) {
 		/*
 		 * Specific SL was requested
@@ -741,34 +753,10 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 			goto Exit;
 		}
 
-		if (is_lash
-		    && osm_get_lash_sl(p_osm, p_src_port, p_dest_port) != sl) {
-			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F23: "
-				"Required PathRecord SL (%u) doesn't "
-				"match LASH SL (%u) "
-				"[%s port %d <-> %s port %d]\n",
-				sl,
-				osm_get_lash_sl(p_osm, p_src_port,
-						p_dest_port),
-				p_src_port->p_node->print_desc,
-				p_src_port->p_physp->port_num,
-				p_dest_port->p_node->print_desc,
-				p_dest_port->p_physp->port_num);
-			status = IB_NOT_FOUND;
-			goto Exit;
-		}
-
-	} else if (is_lash) {
-		/*
-		 * No specific SL in PathRecord request.
-		 * If it's LASH routing - use its SL.
-		 * slid and dest_lid are stored in network in lash.
-		 */
-		sl = osm_get_lash_sl(p_osm, p_src_port, p_dest_port);
 	} else if (p_qos_level && p_qos_level->sl_set) {
 		/*
-		 * No specific SL was requested, and we're not in
-		 * LASH routing, but there is an SL in QoS level.
+		 * No specific SL was requested, but there is an SL in
+		 * QoS level.
 		 */
 		sl = p_qos_level->sl;
 
@@ -820,6 +808,14 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		status = IB_NOT_FOUND;
 		goto Exit;
 	}
+
+	/*
+	 * If the routing engine wants to have a say in path SL selection,
+	 * send the currently computed SL value as a hint and let the routing
+	 * engine override it.
+	 */
+	if (p_re && p_re->path_sl)
+		sl = p_re->path_sl(p_re->context, sl, p_src_port, p_dest_port);
 
 	/* reset pkey when raw traffic */
 	if (comp_mask & IB_PR_COMPMASK_RAWTRAFFIC &&
@@ -1620,6 +1616,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 	const ib_gid_t *p_dgid = NULL;
 	const osm_port_t *p_src_port, *p_dest_port;
 	osm_port_t *requester_port;
+	uint8_t rate, mtu;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -1637,7 +1634,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	requester_port = osm_get_port_by_mad_addr(sa->p_log, sa->p_subn,
 						  osm_madw_get_mad_addr_ptr
 						  (p_madw));
@@ -1649,6 +1646,27 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 
 	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
 		osm_dump_path_record(sa->p_log, p_pr, OSM_LOG_DEBUG);
+
+	/* Validate rate if supplied */
+	if ((p_sa_mad->comp_mask & IB_PR_COMPMASK_RATESELEC) &&
+	    (p_sa_mad->comp_mask & IB_PR_COMPMASK_RATE)) {
+		rate = ib_path_rec_rate(p_pr);
+		if (!ib_rate_is_valid(rate)) {
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+	}
+	/* Validate MTU if supplied */
+	if ((p_sa_mad->comp_mask & IB_PR_COMPMASK_MTUSELEC) &&
+	    (p_sa_mad->comp_mask & IB_PR_COMPMASK_MTU)) {
+		mtu = ib_path_rec_mtu(p_pr);
+		if (!ib_mtu_is_valid(mtu)) {
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+	}
 
 	cl_qlist_init(&pr_list);
 

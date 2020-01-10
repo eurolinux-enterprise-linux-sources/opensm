@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2007 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
  *
@@ -53,20 +53,23 @@
 #include <opensm/osm_helper.h>
 #include <opensm/osm_msgdef.h>
 #include <opensm/osm_opensm.h>
-#include <opensm/osm_ucast_lash.h>
 
 static uint8_t link_mgr_get_smsl(IN osm_sm_t * sm, IN osm_physp_t * p_physp)
 {
 	osm_opensm_t *p_osm = sm->p_subn->p_osm;
+	struct osm_routing_engine *re = p_osm->routing_engine_used;
 	const osm_port_t *p_sm_port, *p_src_port;
 	ib_net16_t slid;
 	uint8_t sl;
 
 	OSM_LOG_ENTER(sm->p_log);
 
-	if (p_osm->routing_engine_used != OSM_ROUTING_ENGINE_TYPE_LASH
-	    || !(slid = osm_physp_get_base_lid(p_physp))) {
-		/* Use default SL if lash routing is not used */
+	if (!(re && re->path_sl &&
+	      (slid = osm_physp_get_base_lid(p_physp)))) {
+		/*
+		 * Use default SL if routing engine does not provide a
+		 * path SL lookup callback.
+		 */
 		OSM_LOG_EXIT(sm->p_log);
 		return sm->p_subn->opt.sm_sl;
 	}
@@ -77,8 +80,9 @@ static uint8_t link_mgr_get_smsl(IN osm_sm_t * sm, IN osm_physp_t * p_physp)
 	/* Find osm_port of the source = p_physp */
 	p_src_port = osm_get_port_by_lid(sm->p_subn, slid);
 
-	/* Call lash to find proper SL */
-	sl = osm_get_lash_sl(p_osm, p_src_port, p_sm_port);
+	/* Call into routing engine to find proper SL */
+	sl = re->path_sl(re->context, sm->p_subn->opt.sm_sl,
+			 p_src_port, p_sm_port);
 
 	OSM_LOG_EXIT(sm->p_log);
 	return sl;
@@ -87,16 +91,20 @@ static uint8_t link_mgr_get_smsl(IN osm_sm_t * sm, IN osm_physp_t * p_physp)
 static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 				 IN uint8_t port_state)
 {
-	uint8_t payload[IB_SMP_DATA_SIZE];
+	uint8_t payload[IB_SMP_DATA_SIZE], payload2[IB_SMP_DATA_SIZE];
 	ib_port_info_t *p_pi = (ib_port_info_t *) payload;
+	ib_mlnx_ext_port_info_t *p_epi = (ib_mlnx_ext_port_info_t *) payload2;
 	const ib_port_info_t *p_old_pi;
+	const ib_mlnx_ext_port_info_t *p_old_epi;
 	osm_madw_context_t context;
 	osm_node_t *p_node;
 	ib_api_status_t status;
 	uint8_t port_num, mtu, op_vls, smsl = OSM_DEFAULT_SL;
-	boolean_t esp0 = FALSE, send_set = FALSE;
-	osm_physp_t *p_remote_physp;
+	boolean_t esp0 = FALSE, send_set = FALSE, send_set2 = FALSE;
+	osm_physp_t *p_remote_physp, *physp0;
+	int qdr_change = 0, fdr10_change = 0;
 	int ret = 0;
+	ib_net32_t attr_mod, cap_mask;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -149,8 +157,6 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	}
 
 	memcpy(payload, p_old_pi, sizeof(ib_port_info_t));
-	memset(payload + sizeof(ib_port_info_t), 0,
-	       IB_SMP_DATA_SIZE - sizeof(ib_port_info_t));
 
 	/*
 	   Should never write back a value that is bigger then 3 in
@@ -231,16 +237,14 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 				   sizeof(p_pi->m_key_lease_period)))
 				send_set = TRUE;
 
-			if (esp0 == FALSE)
-				p_pi->mkey_lmc = sm->p_subn->opt.lmc;
-			else {
-				if (sm->p_subn->opt.lmc_esp0)
-					p_pi->mkey_lmc = sm->p_subn->opt.lmc;
-				else
-					p_pi->mkey_lmc = 0;
-			}
-			if (memcmp(&p_pi->mkey_lmc, &p_old_pi->mkey_lmc,
-				   sizeof(p_pi->mkey_lmc)))
+			/* M_KeyProtectBits are currently always zero */
+			p_pi->mkey_lmc = 0;
+			if (esp0 == FALSE || sm->p_subn->opt.lmc_esp0)
+				ib_port_info_set_lmc(p_pi, sm->p_subn->opt.lmc);
+			if (ib_port_info_get_lmc(p_old_pi) !=
+			    ib_port_info_get_lmc(p_pi) ||
+			    ib_port_info_get_mpb(p_old_pi) !=
+			    ib_port_info_get_mpb(p_pi))
 				send_set = TRUE;
 
 			ib_port_info_set_timeout(p_pi,
@@ -327,8 +331,76 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 							    sm->p_subn->opt.
 							    force_link_speed);
 			if (memcmp(&p_pi->link_speed, &p_old_pi->link_speed,
-				   sizeof(p_pi->link_speed)))
+				   sizeof(p_pi->link_speed))) {
 				send_set = TRUE;
+				/* Determine whether QDR in LSE is being changed */
+				if ((ib_port_info_get_link_speed_enabled(p_pi) &
+				     IB_LINK_SPEED_ACTIVE_10 &&
+				     !(ib_port_info_get_link_speed_enabled(p_old_pi) &
+				      IB_LINK_SPEED_ACTIVE_10)) ||
+				    ((!(ib_port_info_get_link_speed_enabled(p_pi) &
+				       IB_LINK_SPEED_ACTIVE_10) &&
+				      ib_port_info_get_link_speed_enabled(p_old_pi) &
+				      IB_LINK_SPEED_ACTIVE_10)))
+				qdr_change = 1;
+			}
+		}
+
+		if (sm->p_subn->opt.fdr10 &&
+		    p_physp->ext_port_info.link_speed_supported & FDR10) {
+			if (sm->p_subn->opt.fdr10 == 1) { /* enable */
+				if (!(p_physp->ext_port_info.link_speed_enabled & FDR10))
+					fdr10_change = 1;
+			} else {	/* disable */
+				if (p_physp->ext_port_info.link_speed_enabled & FDR10)
+					fdr10_change = 1;
+			}
+			if (fdr10_change) {
+				p_old_epi = &p_physp->ext_port_info;
+				memcpy(payload2, p_old_epi,
+				       sizeof(ib_mlnx_ext_port_info_t));
+				p_epi->state_change_enable = 0x01;
+				if (sm->p_subn->opt.fdr10 == 1)
+					p_epi->link_speed_enabled = FDR10;
+				else
+					p_epi->link_speed_enabled = 0;
+				send_set2 = TRUE;
+			}
+		}
+
+		if (osm_node_get_type(p_physp->p_node) == IB_NODE_TYPE_SWITCH) {
+			physp0 = osm_node_get_physp_ptr(p_physp->p_node, 0);
+			cap_mask = physp0->port_info.capability_mask;
+		} else
+			cap_mask = p_pi->capability_mask;
+		if (!(cap_mask & IB_PORT_CAP_HAS_EXT_SPEEDS))
+			qdr_change = 0;
+
+		/* Do peer ports support extended link speeds ? */
+		if (port_num != 0 && p_remote_physp) {
+			osm_physp_t *rphysp0;
+			ib_net32_t rem_cap_mask;
+
+			if (osm_node_get_type(p_remote_physp->p_node) ==
+			    IB_NODE_TYPE_SWITCH) {
+				rphysp0 = osm_node_get_physp_ptr(p_remote_physp->p_node, 0);
+				rem_cap_mask = rphysp0->port_info.capability_mask;
+			} else
+				rem_cap_mask = p_remote_physp->port_info.capability_mask;
+
+			if (cap_mask & IB_PORT_CAP_HAS_EXT_SPEEDS &&
+			    rem_cap_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) {
+				if (sm->p_subn->opt.force_link_speed_ext &&
+				    (sm->p_subn->opt.force_link_speed_ext != IB_LINK_SPEED_EXT_SET_LSES ||
+				     p_pi->link_speed_ext_enabled !=
+				     ib_port_info_get_link_speed_sup(p_pi))) {
+					p_pi->link_speed_ext_enabled = sm->p_subn->opt.force_link_speed_ext;
+					if (memcmp(&p_pi->link_speed_ext_enabled,
+						   &p_old_pi->link_speed_ext_enabled,
+						   sizeof(p_pi->link_speed_ext_enabled)))
+						send_set = TRUE;
+				}
+			}
 		}
 
 		/* calc new op_vls and mtu */
@@ -384,11 +456,24 @@ Send:
 	if (!send_set)
 		goto Exit;
 
+	attr_mod = cl_hton32(port_num);
+	if (qdr_change)
+		attr_mod |= cl_hton32(1 << 31);	/* AM SMSupportExtendedSpeeds */
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
-			     cl_hton32(port_num), CL_DISP_MSGID_NONE, &context);
+			     attr_mod, CL_DISP_MSGID_NONE, &context);
 	if (status)
 		ret = -1;
+
+	if (send_set2) {
+		status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
+				     payload2, sizeof(payload2),
+				     IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO,
+				     cl_hton32(port_num),
+				     CL_DISP_MSGID_NONE, &context);
+		if (status)
+			ret = -1;
+	}
 
 Exit:
 	OSM_LOG_EXIT(sm->p_log);

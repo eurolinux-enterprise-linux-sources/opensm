@@ -35,7 +35,7 @@ opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
 		 osm_mcm_port.c osm_mesh.c osm_mtree.c osm_multicast.c osm_node.c \
 		 osm_node_desc_rcv.c osm_node_info_rcv.c \
 		 osm_opensm.c osm_pkey.c osm_pkey_mgr.c osm_pkey_rcv.c \
-		 osm_port.c osm_port_info_rcv.c \
+		 osm_port.c osm_port_info_rcv.c osm_mlnx_ext_port_info_rcv.c \
 		 osm_remote_sm.c osm_req.c \
 		 osm_resp.c osm_sa.c osm_sa_class_port_info.c \
 		 osm_sa_informinfo.c osm_sa_lft_record.c osm_sa_mft_record.c \
@@ -53,8 +53,8 @@ opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
 		 osm_prtn.c osm_prtn_config.c osm_qos.c osm_router.c \
 		 osm_trap_rcv.c osm_ucast_mgr.c osm_ucast_updn.c \
 		 osm_ucast_lash.c osm_ucast_file.c osm_ucast_ftree.c \
-		 osm_vl15intf.c osm_vl_arb_rcv.c \
-		 st.c osm_perfmgr.c osm_perfmgr_db.c \
+		 osm_torus.c osm_ucast_dnup.c osm_vl15intf.c \
+		 osm_vl_arb_rcv.c st.c osm_perfmgr.c osm_perfmgr_db.c \
 		 osm_event_plugin.c osm_dump.c osm_ucast_cache.c \
 		 osm_qos_parser_y.y osm_qos_parser_l.l osm_qos_policy.c
 

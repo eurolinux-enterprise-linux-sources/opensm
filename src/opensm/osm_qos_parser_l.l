@@ -134,6 +134,8 @@ NAME                    name
 USE                     use
 PORT_GUID               port\-guid
 TARGET_PORT_GUID        target\-port\-guid
+SOURCE_PORT_GUID        source\-port\-guid
+SOURCE_TARGET_PORT_GUID source\-target\-port\-guid
 PORT_NAME               port\-name
 PARTITION               partition
 NODE_TYPE               node\-type
@@ -274,6 +276,8 @@ QUOTED_TEXT             \"[^\"]*\"
 {ULP_ANY}{WHITE_COMMA_WHITE}{SERVICE_ID}       { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_ANY; return TK_ULP_ANY_SERVICE_ID; }
 {ULP_ANY}{WHITE_COMMA_WHITE}{PKEY}             { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_ANY; return TK_ULP_ANY_PKEY; }
 {ULP_ANY}{WHITE_COMMA_WHITE}{TARGET_PORT_GUID} { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_ANY; return TK_ULP_ANY_TARGET_PORT_GUID; }
+{ULP_ANY}{WHITE_COMMA_WHITE}{SOURCE_PORT_GUID} { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_ANY; return TK_ULP_ANY_SOURCE_PORT_GUID; }
+{ULP_ANY}{WHITE_COMMA_WHITE}{SOURCE_TARGET_PORT_GUID} { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_ANY; return TK_ULP_ANY_SOURCE_TARGET_PORT_GUID; }
 
 {ULP_SDP}{WHITE_DOTDOT_WHITE}                  { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_SDP_DEFAULT; return TK_ULP_SDP_DEFAULT; }
 {ULP_SDP}{WHITE_COMMA_WHITE}{PORT_NUM}         { SAVE_POS; HANDLE_IF_IN_DESCRIPTION; START_ULP_SDP_PORT; return TK_ULP_SDP_PORT; }
@@ -355,6 +359,10 @@ QUOTED_TEXT             \"[^\"]*\"
 
 .                   { SAVE_POS; yylval = strdup(yytext); return TK_TEXT;}
 
+<<EOF>>             {
+                        YY_NEW_FILE;
+                        yyterminate();
+                    }
 %%
 
 

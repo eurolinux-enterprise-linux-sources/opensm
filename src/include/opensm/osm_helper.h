@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
@@ -240,6 +240,52 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 *
 * SEE ALSO
 *********/
+
+/****f* OpenSM: Helper/osm_dump_guid_info
+* NAME
+*	osm_dump_guid_info
+*
+* DESCRIPTION
+*	Dumps the GUIDInfo attribute to the log.
+*
+* SYNOPSIS
+*/
+void osm_dump_guid_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
+			IN ib_net64_t port_guid, IN uint8_t block_num,
+			IN const ib_guid_info_t * p_gi,
+			IN osm_log_level_t log_level);
+/*
+* PARAMETERS
+*	p_log
+*		[in] Pointer to the osm_log_t object.
+*
+*	node_guid
+*		[in] Node GUID that owns this port.
+*
+*	port_guid
+*		[in] Port GUID for this port.
+*
+*	block_num
+*		[in] Block number.
+*
+*	p_gi
+*		[in] Pointer to the GUIDInfo attribute.
+*
+*	log_level
+*		[in] Log verbosity level with which to dump the data.
+*
+* RETURN VALUES
+*	None.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+void osm_dump_mlnx_ext_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
+				 IN ib_net64_t port_guid, IN uint8_t port_num,
+				 IN const ib_mlnx_ext_port_info_t * p_pi,
+				 IN osm_log_level_t log_level);
 
 void osm_dump_path_record(IN osm_log_t * p_log, IN const ib_path_rec_t * p_pr,
 			  IN osm_log_level_t log_level);
@@ -493,7 +539,8 @@ const char *osm_get_mtu_str(IN uint8_t mtu);
 
 const char *osm_get_lwa_str(IN uint8_t lwa);
 
-const char *osm_get_lsa_str(IN uint8_t lsa);
+const char *osm_get_lsa_str(IN uint8_t lsa, IN uint8_t lsea, IN uint8_t state,
+			    IN uint8_t fdr10);
 
 /****f* IBA Base: Types/osm_get_sm_mgr_signal_str
 * NAME
@@ -535,6 +582,134 @@ const char *osm_get_sm_mgr_state_str(IN uint16_t state);
 *
 * RETURN VALUES
 *	Pointer to the state description string.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_mtu_is_valid
+* NAME
+*	ib_mtu_is_valid
+*
+* DESCRIPTION
+*	Validates encoded MTU
+*
+* SYNOPSIS
+*/
+int ib_mtu_is_valid(IN const int mtu);
+/*
+* PARAMETERS
+*	mtu
+*		[in] Encoded path mtu.
+*
+* RETURN VALUES
+*	Returns an int indicating mtu is valid (1)
+*	or invalid (0).
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_rate_is_valid
+* NAME
+*	ib_rate_is_valid
+*
+* DESCRIPTION
+*	Validates encoded rate
+*
+* SYNOPSIS
+*/
+int ib_rate_is_valid(IN const int rate);
+/*
+* PARAMETERS
+*	rate
+*		[in] Encoded path rate.
+*
+* RETURN VALUES
+*	Returns an int indicating rate is valid (1)
+*	or invalid (0).
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_path_compare_rates
+* NAME
+*	ib_path_compare_rates
+*
+* DESCRIPTION
+*	Compares the encoded values for two path rates and
+*	return value is based on the ordered comparison of
+*	the path rates (or path rate equivalents).
+*
+* SYNOPSIS
+*/
+int ib_path_compare_rates(IN const int rate1, IN const int rate2);
+
+/*
+* PARAMETERS
+*	rate1
+*		[in] Encoded path rate 1.
+*
+*	rate2
+*		[in] Encoded path rate 2.
+*
+* RETURN VALUES
+*	Returns an int indicating less than (-1), equal to (0), or
+*	greater than (1) rate1 as compared with rate2.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_path_rate_get_prev
+* NAME
+*	ib_path_rate_get_prev
+*
+* DESCRIPTION
+*	Obtains encoded rate for the rate previous to the one requested.
+*
+* SYNOPSIS
+*/
+int ib_path_rate_get_prev(IN const int rate);
+
+/*
+* PARAMETERS
+*	rate
+*		[in] Encoded path rate.
+*
+* RETURN VALUES
+*	Returns an int indicating encoded rate or
+*	0 if none can be found.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_path_rate_get_next
+* NAME
+*	ib_path_rate_get_next
+*
+* DESCRIPTION
+*	Obtains encoded rate for the rate subsequent to the one requested.
+*
+* SYNOPSIS
+*/
+int ib_path_rate_get_next(IN const int rate);
+
+/*
+* PARAMETERS
+*	rate
+*		[in] Encoded path rate.
+*
+* RETURN VALUES
+*	Returns an int indicating encoded rate or
+*	0 if none can be found.
 *
 * NOTES
 *

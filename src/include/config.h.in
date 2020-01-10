@@ -3,6 +3,9 @@
 /* Define as 1 if you want Dual Sided RMPP Support */
 #undef DUAL_SIDED_RMPP
 
+/* Define as 1 if you want to enable a loopback console */
+#undef ENABLE_OSM_CONSOLE_LOOPBACK
+
 /* Define as 1 if you want to enable a console on a socket connection */
 #undef ENABLE_OSM_CONSOLE_SOCKET
 

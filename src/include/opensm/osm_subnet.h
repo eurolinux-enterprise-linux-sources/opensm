@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
@@ -158,6 +158,8 @@ typedef struct osm_subn_opt {
 	boolean_t lmc_esp0;
 	uint8_t max_op_vls;
 	uint8_t force_link_speed;
+	uint8_t force_link_speed_ext;
+	uint8_t fdr10;
 	boolean_t reassign_lids;
 	boolean_t ignore_other_sm;
 	boolean_t single_thread;
@@ -171,6 +173,7 @@ typedef struct osm_subn_opt {
 	uint8_t leaf_head_of_queue_lifetime;
 	uint8_t local_phy_errors_threshold;
 	uint8_t overrun_errors_threshold;
+	boolean_t use_mfttop;
 	uint32_t sminfo_polling_timeout;
 	uint32_t polling_retry_number;
 	uint32_t max_msg_fifo_timeout;
@@ -188,7 +191,7 @@ typedef struct osm_subn_opt {
 	uint16_t console_port;
 	char *port_prof_ignore_file;
 	char *hop_weights_file;
-	char *dimn_ports_file;
+	char *port_search_ordering_file;
 	boolean_t port_profile_switch_nodes;
 	boolean_t sweep_on_trap;
 	char *routing_engine_names;
@@ -199,11 +202,14 @@ typedef struct osm_subn_opt {
 	char *root_guid_file;
 	char *cn_guid_file;
 	char *io_guid_file;
+	boolean_t port_shifting;
+	uint32_t scatter_ports;
 	uint16_t max_reverse_hops;
 	char *ids_guid_file;
 	char *guid_routing_order_file;
 	char *sa_db_file;
 	boolean_t sa_db_dump;
+	char *torus_conf_file;
 	boolean_t do_mesh_analysis;
 	boolean_t exit_on_fatal;
 	boolean_t honor_guid2lid_file;
@@ -416,6 +422,9 @@ typedef struct osm_subn_opt {
 *		Name of the file that contains list of I/O node guids that
 *		will be used by fat-tree routing (provided by User)
 *
+*	port_shifting
+*		This option will turn on port_shifting in routing.
+*
 *	ids_guid_file
 *		Name of the file that contains list of ids which should be
 *		used by Up/Down algorithm instead of node GUIDs
@@ -430,6 +439,10 @@ typedef struct osm_subn_opt {
 *	sa_db_dump
 *		When TRUE causes OpenSM to dump SA DB at the end of every
 *		light sweep regardless the current verbosity level.
+*
+*	torus_conf_file
+*		Name of the file with extra configuration info for torus-2QoS
+*		routing engine.
 *
 *	exit_on_fatal
 *		If TRUE (default) - SM will exit on fatal subnet initialization
@@ -495,7 +508,11 @@ typedef struct osm_subn_opt {
 *		hardware specific work arounds
 *
 *	no_clients_rereg
-*		When TRUE disables clients reregistration request.
+*		When TRUE disables clients reregistration request
+*
+*	scatter_ports
+*		When not zero, randomize best possible ports chosen
+*		for a route. The value is used as a random key seed.
 *
 * SEE ALSO
 *	Subnet object
@@ -519,6 +536,7 @@ typedef struct osm_subn {
 	cl_qmap_t sw_guid_tbl;
 	cl_qmap_t node_guid_tbl;
 	cl_qmap_t port_guid_tbl;
+	cl_qmap_t alias_port_guid_tbl;
 	cl_qmap_t rtr_guid_tbl;
 	cl_qlist_t prefix_routes_list;
 	cl_qmap_t prtn_pkey_tbl;
@@ -529,6 +547,7 @@ typedef struct osm_subn {
 	ib_net16_t master_sm_base_lid;
 	ib_net16_t sm_base_lid;
 	ib_net64_t sm_port_guid;
+	uint8_t last_sm_port_state;
 	uint8_t sm_state;
 	osm_subn_opt_t opt;
 	struct osm_qos_policy *p_qos_policy;
@@ -536,6 +555,7 @@ typedef struct osm_subn {
 	uint16_t max_mcast_lid_ho;
 	uint8_t min_ca_mtu;
 	uint8_t min_ca_rate;
+	uint8_t min_data_vls;
 	boolean_t ignore_existing_lfts;
 	boolean_t subnet_initialization_error;
 	boolean_t force_heavy_sweep;
@@ -586,6 +606,10 @@ typedef struct osm_subn {
 *
 *	sm_port_guid
 *		This SM's own port GUID.
+*
+*	last_sm_port_state
+*		Last state of this SM's port.
+*		0 is down and 1 is up.
 *
 *	sm_state
 *		The high-level state of the SM.  This value is made available
@@ -922,7 +946,7 @@ struct osm_switch *osm_get_switch_by_guid(IN const osm_subn_t * p_subn,
 *	osm_get_node_by_guid
 *
 * DESCRIPTION
-*	The looks for the given node giud in the subnet table of nodes by guid.
+*	This looks for the given node guid in the subnet table of nodes by guid.
 *  NOTE: this code is not thread safe. Need to grab the lock before
 *  calling it.
 *
@@ -951,7 +975,7 @@ struct osm_node *osm_get_node_by_guid(IN osm_subn_t const *p_subn,
 *	osm_get_port_by_guid
 *
 * DESCRIPTION
-*	The looks for the given port guid in the subnet table of ports by guid.
+*	This looks for the given port guid in the subnet table of ports by guid.
 *  NOTE: this code is not thread safe. Need to grab the lock before
 *  calling it.
 *
@@ -1000,6 +1024,36 @@ struct osm_port *osm_get_port_by_lid_ho(const osm_subn_t * subn, uint16_t lid);
 *       Subnet object, osm_port_t
 *********/
 
+/****f* OpenSM: Subnet/osm_get_port_by_alias_guid
+* NAME
+*	osm_get_port_by_alias_guid
+*
+* DESCRIPTION
+*	This looks for the given port guid in the subnet table of ports by
+*	alias guid.
+*  NOTE: this code is not thread safe. Need to grab the lock before
+*  calling it.
+*
+* SYNOPSIS
+*/
+struct osm_port *osm_get_port_by_alias_guid(IN osm_subn_t const *p_subn,
+					    IN ib_net64_t guid);
+/*
+* PARAMETERS
+*	p_subn
+*		[in] Pointer to an osm_subn_t object
+*
+*	guid
+*		[in] The alias port guid in network order
+*
+* RETURN VALUES
+*	The port structure pointer if found. NULL otherwise.
+*
+* SEE ALSO
+*	Subnet object, osm_subn_construct, osm_subn_destroy,
+*	osm_port_t
+*********/
+
 /****f* OpenSM: Port/osm_get_port_by_lid
 * NAME
 *	osm_get_port_by_lid
@@ -1034,7 +1088,7 @@ static inline struct osm_port *osm_get_port_by_lid(IN osm_subn_t const * subn,
 *	osm_get_mgrp_by_mgid
 *
 * DESCRIPTION
-*	The looks for the given multicast group in the subnet table by mgid.
+*	This looks for the given multicast group in the subnet table by mgid.
 *	NOTE: this code is not thread safe. Need to grab the lock before
 *	calling it.
 *
@@ -1058,7 +1112,7 @@ struct osm_mgrp *osm_get_mgrp_by_mgid(IN osm_subn_t * subn, IN ib_gid_t * mgid);
 *	osm_get_mbox_by_mlid
 *
 * DESCRIPTION
-*	The looks for the given multicast group in the subnet table by mlid.
+*	This looks for the given multicast group in the subnet table by mlid.
 *	NOTE: this code is not thread safe. Need to grab the lock before
 *	calling it.
 *
@@ -1079,6 +1133,8 @@ static inline struct osm_mgrp_box *osm_get_mbox_by_mlid(osm_subn_t const *p_subn
 * RETURN VALUES
 *	The multicast group structure pointer if found. NULL otherwise.
 *********/
+
+int is_mlnx_ext_port_info_supported(ib_net16_t devid);
 
 /****f* OpenSM: Subnet/osm_subn_set_default_opt
 * NAME

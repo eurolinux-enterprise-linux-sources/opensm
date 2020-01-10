@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
@@ -51,10 +51,18 @@
 #include <iba/ib_types.h>
 #include <opensm/osm_switch.h>
 
+struct switch_port_path {
+	uint8_t port_num;
+	uint32_t path_count;
+	int found_sys_guid;
+	int found_node_guid;
+	uint32_t forwarded_to;
+};
+
 cl_status_t osm_switch_set_hops(IN osm_switch_t * p_sw, IN uint16_t lid_ho,
 				IN uint8_t port_num, IN uint8_t num_hops)
 {
-	if (lid_ho > p_sw->max_lid_ho)
+	if (!lid_ho || lid_ho > p_sw->max_lid_ho)
 		return -1;
 	if (!p_sw->hops[lid_ho]) {
 		p_sw->hops[lid_ho] = malloc(p_sw->num_ports);
@@ -78,8 +86,8 @@ void osm_switch_delete(IN OUT osm_switch_t ** pp_sw)
 	osm_mcast_tbl_destroy(&p_sw->mcast_tbl);
 	if (p_sw->p_prof)
 		free(p_sw->p_prof);
-	if (p_sw->dimn_ports)
-		free(p_sw->dimn_ports);
+	if (p_sw->search_ordering_ports)
+		free(p_sw->search_ordering_ports);
 	if (p_sw->lft)
 		free(p_sw->lft);
 	if (p_sw->new_lft)
@@ -177,6 +185,9 @@ switch_find_guid_common(IN const osm_switch_t * p_sw,
 
 	CL_ASSERT(p_sw);
 
+	if (!r)
+		goto out;
+
 	p_physp = osm_node_get_physp_ptr(p_sw->p_node, port_num);
 	p_rem_physp = osm_physp_get_remote(p_physp);
 	p_rem_node = osm_physp_get_node_ptr(p_rem_physp);
@@ -193,6 +204,7 @@ switch_find_guid_common(IN const osm_switch_t * p_sw,
 		}
 	}
 
+out:
 	return p_remote_guid;
 }
 
@@ -216,7 +228,10 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 				  IN osm_port_t * p_port, IN uint16_t lid_ho,
 				  IN unsigned start_from,
 				  IN boolean_t ignore_existing,
-				  IN boolean_t dor)
+				  IN boolean_t routing_for_lmc,
+				  IN boolean_t dor,
+				  IN boolean_t port_shifting,
+				  IN uint32_t scatter_ports)
 {
 	/*
 	   We support an enhanced LMC aware routing mode:
@@ -225,10 +240,10 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 	   and try and avoid routing again through the same
 	   system / node.
 
-	   If this procedure is provided with the tracking array
-	   and counter we can conduct this algorithm.
+	   Assume if routing_for_lmc is true that this procedure was
+	   provided the tracking array and counter via p_port->priv,
+	   and we can conduct this algorithm.
 	 */
-	boolean_t routing_for_lmc = (p_port->priv != NULL);
 	uint16_t base_lid;
 	uint8_t hops;
 	uint8_t least_hops;
@@ -258,6 +273,13 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 	osm_node_t *p_rem_node_first = NULL;
 	struct osm_remote_node *p_remote_guid = NULL;
 	struct osm_remote_node null_remote_node = {NULL, 0, 0};
+	struct switch_port_path port_paths[IB_NODE_NUM_PORTS_MAX];
+	unsigned int port_paths_total_paths = 0;
+	unsigned int port_paths_count = 0;
+	uint8_t scatter_possible_ports[IB_NODE_NUM_PORTS_MAX];
+	unsigned int scatter_possible_ports_count = 0;
+	int found_sys_guid = 0;
+	int found_node_guid = 0;
 
 	CL_ASSERT(lid_ho > 0);
 
@@ -368,6 +390,7 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 		check_count =
 		    osm_port_prof_path_count_get(&p_sw->p_prof[port_num]);
 
+
 		if (dor) {
 			/* Get the Remote Node */
 			p_rem_physp = osm_physp_get_remote(p_physp);
@@ -411,7 +434,10 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 					best_port_other_sys = port_num;
 					least_forwarded_to = 0;
 				}
+				found_sys_guid = 0;
 			} else {	/* same sys found - try node */
+
+
 				/* Else is the node guid already used ? */
 				p_remote_guid = switch_find_node_guid_count(p_sw,
 									    p_port->priv,
@@ -426,8 +452,26 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 				}
 				/* else prior sys and node guid already used */
 
+				if (!p_remote_guid)
+					found_node_guid = 0;
+				else
+					found_node_guid = 1;
+				found_sys_guid = 1;
 			}	/* same sys found */
 		}
+
+		port_paths[port_paths_count].port_num = port_num;
+		port_paths[port_paths_count].path_count = check_count;
+		if (routing_for_lmc) {
+			port_paths[port_paths_count].found_sys_guid = found_sys_guid;
+			port_paths[port_paths_count].found_node_guid = found_node_guid;
+		}
+		if (routing_for_lmc && p_remote_guid)
+			port_paths[port_paths_count].forwarded_to = p_remote_guid->forwarded_to;
+		else
+			port_paths[port_paths_count].forwarded_to = 0;
+		port_paths_total_paths += check_count;
+		port_paths_count++;
 
 		/* routing for LMC mode */
 		/*
@@ -437,10 +481,15 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 			port_found = TRUE;
 			best_port = port_num;
 			least_paths = check_count;
+			scatter_possible_ports_count = 0;
+			scatter_possible_ports[scatter_possible_ports_count++] = port_num;
 			if (routing_for_lmc
 			    && p_remote_guid
 			    && p_remote_guid->forwarded_to < least_forwarded_to)
 				least_forwarded_to = p_remote_guid->forwarded_to;
+		} else if (scatter_ports
+			   && check_count == least_paths) {
+			scatter_possible_ports[scatter_possible_ports_count++] = port_num;
 		} else if (routing_for_lmc
 			   && p_remote_guid
 			   && check_count == least_paths
@@ -453,18 +502,85 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 	if (port_found == FALSE)
 		return OSM_NO_PATH;
 
+	if (port_shifting && port_paths_count) {
+		/* In the port_paths[] array, we now have all the ports that we
+		 * can route out of.  Using some shifting math below, possibly
+		 * select a different one so that lids won't align in LFTs
+		 *
+		 * If lmc > 0, we need to loop through these ports to find the
+		 * least_forwarded_to port, best_port_other_sys, and
+		 * best_port_other_node just like before but through the different
+		 * ordering.
+		 */
+
+		least_paths = 0xFFFFFFFF;
+		least_paths_other_sys = 0xFFFFFFFF;
+		least_paths_other_nodes = 0xFFFFFFFF;
+	        least_forwarded_to = 0xFFFFFFFF;
+		best_port = 0;
+		best_port_other_sys = 0;
+		best_port_other_node = 0;
+
+		for (i = 0; i < port_paths_count; i++) {
+			unsigned int idx;
+
+			idx = (port_paths_total_paths/port_paths_count + i) % port_paths_count;
+
+			if (routing_for_lmc) {
+				if (!port_paths[idx].found_sys_guid
+				    && port_paths[idx].path_count < least_paths_other_sys) {
+					least_paths_other_sys = port_paths[idx].path_count;
+					best_port_other_sys = port_paths[idx].port_num;
+					least_forwarded_to = 0;
+				}
+				else if (!port_paths[idx].found_node_guid
+					 && port_paths[idx].path_count < least_paths_other_nodes) {
+					least_paths_other_nodes = port_paths[idx].path_count;
+					best_port_other_node = port_paths[idx].port_num;
+					least_forwarded_to = 0;
+				}
+			}
+
+			if (port_paths[idx].path_count < least_paths) {
+				best_port = port_paths[idx].port_num;
+				least_paths = port_paths[idx].path_count;
+				if (routing_for_lmc
+				    && (port_paths[idx].found_sys_guid
+					|| port_paths[idx].found_node_guid)
+				    && port_paths[idx].forwarded_to < least_forwarded_to)
+					least_forwarded_to = port_paths[idx].forwarded_to;
+			}
+			else if (routing_for_lmc
+				 && (port_paths[idx].found_sys_guid
+				     || port_paths[idx].found_node_guid)
+				 && port_paths[idx].path_count == least_paths
+				 && port_paths[idx].forwarded_to < least_forwarded_to) {
+				least_forwarded_to = port_paths[idx].forwarded_to;
+				best_port = port_paths[idx].port_num;
+			}
+
+		}
+	}
+
 	/*
 	   if we are in enhanced routing mode and the best port is not
 	   the local port 0
 	 */
-	if (routing_for_lmc && best_port) {
+	if (routing_for_lmc && best_port && !scatter_ports) {
 		/* Select the least hop port of the non used sys first */
 		if (best_port_other_sys)
 			best_port = best_port_other_sys;
 		else if (best_port_other_node)
 			best_port = best_port_other_node;
+	} else if (scatter_ports) {
+		/*
+		 * There is some danger that this random could "rebalance" the routes
+		 * every time, to combat this there is a global srandom that
+		 * occurs at the start of every sweep.
+		 */
+		unsigned int idx = random() % scatter_possible_ports_count;
+		best_port = scatter_possible_ports[idx];
 	}
-
 	return best_port;
 }
 

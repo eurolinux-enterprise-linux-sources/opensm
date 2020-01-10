@@ -1,4 +1,4 @@
-.TH OPENSM 8 "October 22, 2009" "OpenIB" "OpenIB Management"
+.TH OPENSM 8 "November 3, 2010" "OpenIB" "OpenIB Management"
 
 .SH NAME
 opensm \- InfiniBand subnet manager and administration (SM/SA)
@@ -25,6 +25,8 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
 [\-a | \-\-root_guid_file <path to file>]
 [\-u | \-\-cn_guid_file <path to file>]
 [\-G | \-\-io_guid_file <path to file>]
+[\-\-port\-shifting]
+[\-\-scatter\-ports]
 [\-H | \-\-max_reverse_hops <max reverse hops allowed>]
 [\-X | \-\-guid_routing_order_file <path to file>]
 [\-m | \-\-ids_guid_file <path to file>]
@@ -37,7 +39,8 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
 [\-console-port <port>]
 [\-i(gnore-guids) <equalize-ignore-guids-file>]
 [\-w | \-\-hop_weights_file <path to file>]
-[\-O | \-\-dimn_ports_file <path to file>]
+[\-O | \-\-port_search_ordering_file <path to file>]
+[\-O | \-\-dimn_ports_file <path to file>] (DEPRECATED)
 [\-f <log file path> | \-\-log_file <log file path> ]
 [\-L | \-\-log_limit <size in MB>] [\-e(rase_log_file)]
 [\-P(config) <partition config file> ]
@@ -51,6 +54,7 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
 [\-\-prefix_routes_file <path>]
 [\-\-consolidate_ipv6_snm_req]
 [\-\-log_prefix <prefix text>]
+[\-\-torus_config <path to file>]
 [\-v(erbose)] [\-V] [\-D <flags>] [\-d(ebug) <number>]
 [\-h(elp)] [\-?]
 
@@ -148,8 +152,10 @@ LID assignments resolving multiple use of same LID.
 This option chooses routing engine(s) to use instead of Min Hop
 algorithm (default).  Multiple routing engines can be specified
 separated by commas so that specific ordering of routing algorithms
-will be tried if earlier routing engines fail.
-Supported engines: minhop, updn, file, ftree, lash, dor
+will be tried if earlier routing engines fail.  If all configured
+routing engines fail, OpenSM will always attempt to route with Min Hop
+unless 'no_fallback' is included in the list of routing engines.
+Supported engines: minhop, updn, dnup, file, ftree, lash, dor, torus-2QoS.
 .TP
 \fB\-\-do_mesh_analysis\fR
 This option enables additional analysis for the lash routing engine to
@@ -205,6 +211,16 @@ to the guids provided in the given file (one to a line).
 I/O nodes are non-CN nodes allowed to use up to max_reverse_hops switches
 the wrong way around to improve connectivity.
 .TP
+\fB\-\-port\-shifting\fR
+This option enables a feature called \fBport shifting\fR.  In some
+fabrics, particularly cluster environments, routes commonly align and
+congest with other routes due to algorithmically unchanging traffic
+patterns.  This routing option will "shift" routing around in an
+attempt to alleviate this problem.
+.TP
+\fB\-\-scatter\-ports\fR
+This option will randomize port selecting in routing.
+.TP
 \fB\-H\fR, \fB\-\-max_reverse_hops\fR <file name>
 Set the maximum number of reverse hops an I/O node is allowed
 to make. A reverse hop is the use of a switch the wrong way around.
@@ -232,7 +248,7 @@ Without -s, OpenSM defaults to a sweep interval of
 \fB\-t\fR, \fB\-\-timeout\fR <value>
 This option specifies the time in milliseconds
 used for transaction timeouts.
-Specifying -t 0 disables timeouts.
+Timeout values should be > 0.
 Without -t, OpenSM defaults to a timeout value of
 200 milliseconds.
 .TP
@@ -250,10 +266,13 @@ SMPs.
 Without -maxsmps, OpenSM defaults to a maximum of
 4 outstanding SMPs.
 .TP
-\fB\-console [off | local | socket | loopback]\fR
-This option brings up the OpenSM console (default off).
-Note that the socket and loopback options will only be available
-if OpenSM was built with --enable-console-socket.
+\fB\-console [off | local | loopback | socket]\fR
+This option brings up the OpenSM console (default off).  Note, loopback and
+socket open a socket which can be connected to WITHOUT CREDENTIALS.  Loopback
+is safer if access to your SM host is controlled.  tcp_wrappers
+(hosts.[allow|deny]) is used with loopback and socket.  loopback and socket
+will only be available if OpenSM was built with --enable-console-loopback
+(default yes) and --enable-console-socket (default no) respectively.
 .TP
 \fB\-console-port\fR <port>
 Specify an alternate telnet port for the socket console (default 10000).
@@ -274,7 +293,29 @@ factor of 1.  Lines starting with # are comments.  Weights affect only the
 output route from the port, so many useful configurations will require weights
 to be specified in pairs.
 .TP
-\fB\-O\fR, \fB\-\-dimn_ports_file\fR <path to file>
+\fB\-O\fR, \fB\-\-port_search_ordering_file\fR <path to file>
+This option tweaks the routing. It suitable for two cases:
+1. While using DOR routing algorithm.
+This option provides a mapping between hypercube dimensions and ports
+on a per switch basis for the DOR routing engine.  The file consists
+of lines containing a switch node GUID (specified as a 64 bit hex
+number, with leading 0x) followed by a list of non-zero port numbers,
+separated by spaces, one switch per line.  The order for the port
+numbers is in one to one correspondence to the dimensions.  Ports not
+listed on a line are assigned to the remaining dimensions, in port
+order.  Anything after a # is a comment.
+2. While using general routing algorithm.
+This option provides the order of the ports that would be chosen for routing,
+from each switch rather than searching for an appropriate port from port 1 to N.
+The file consists of lines containing a switch node GUID (specified as a 64 bit
+hex number, with leading 0x) followed by a list of non-zero port numbers,
+separated by spaces, one switch per line.  In case of DOR, the order for the
+port numbers is in one to one correspondence to the dimensions.  Ports not
+listed on a line are assigned to the remaining dimensions, in port
+order.  Anything after a # is a comment.
+.TP
+\fB\-O\fR, \fB\-\-dimn_ports_file\fR <path to file> \fB(DEPRECATED)\fR
+This is a deprecated flag. Please use \fB-port_search_ordering_file\fR instead.
 This option provides a mapping between hypercube dimensions and ports
 on a per switch basis for the DOR routing engine.  The file consists
 of lines containing a switch node GUID (specified as a 64 bit hex
@@ -363,6 +404,11 @@ A suitable prefix can be used to identify the IB subnet in syslog messages
 when two or more instances of OpenSM run in a single node to manage multiple
 fabrics. For example, in a dual-fabric (or dual-rail) IB cluster, the prefix
 for the first fabric could be "mpi" and the other fabric could be "storage".
+.TP
+\fB\-\-torus_config\fR <path to torus\-2QoS config file>
+This option defines the file name for the extra configuration
+information needed for the torus-2QoS routing engine.   The default
+name is \fB\%@OPENSM_CONFIG_DIR@/@TORUS2QOS_CONF_FILE@\fP
 .TP
 \fB\-v\fR, \fB\-\-verbose\fR
 This option increases the log verbosity level.
@@ -477,45 +523,80 @@ parser.
 
 General file format:
 
-<Partition Definition>:<PortGUIDs list> ;
+<Partition Definition>:[<newline>]<Partition Properties>;
 
-Partition Definition:
+     Partition Definition:
+       [PartitionName][=PKey][,ipoib_bc_flags][,defmember=full|limited]
 
-[PartitionName][=PKey][,flag[=value]][,defmember=full|limited]
+        PartitionName  - string, will be used with logging. When omitted
+                         empty string will be used.
+        PKey           - P_Key value for this partition. Only low 15 bits will
+                         be used. When omitted will be autogenerated.
+        ipoib_bc_flags - used to indicate/specify IPoIB capability of this partition.
 
- PartitionName - string, will be used with logging. When omitted
-                 empty string will be used.
- PKey          - P_Key value for this partition. Only low 15 bits will
-                 be used. When omitted will be autogenerated.
- flag          - used to indicate IPoIB capability of this partition.
- defmember=full|limited - specifies default membership for port guid
-                 list. Default is limited.
+        defmember=full|limited - specifies default membership for port guid
+                        list. Default is limited.
 
-Currently recognized flags are:
+     ipoib_bc_flags:
+        ipoib_flag|[mgroup_flag]*
 
- ipoib       - indicates that this partition may be used for IPoIB, as
-               result IPoIB capable MC group will be created.
- rate=<val>  - specifies rate for this IPoIB MC group
-               (default is 3 (10GBps))
- mtu=<val>   - specifies MTU for this IPoIB MC group
-               (default is 4 (2048))
- sl=<val>    - specifies SL for this IPoIB MC group
-               (default is 0)
- scope=<val> - specifies scope for this IPoIB MC group
-               (default is 2 (link local)).  Multiple scope settings
-               are permitted for a partition.
+        ipoib_flag - indicates that this partition may be used for IPoIB, as
+                     a result the IPoIB broadcast group will be created with
+                     the flags given, if any.
 
-Note that values for rate, mtu, and scope should be specified as
-defined in the IBTA specification (for example, mtu=4 for 2048).
+     Partition Properties:
+       [<Port list>|<MCast Group>]* | <Port list>
 
-PortGUIDs list:
+     Port list:
+        <Port Specifier>[,<Port Specifier>]
 
- PortGUID         - GUID of partition member EndPort. Hexadecimal
-                    numbers should start from 0x, decimal numbers
-                    are accepted too.
- full or limited  - indicates full or limited membership for this
-                    port.  When omitted (or unrecognized) limited
-                    membership is assumed.
+     Port Specifier:
+        <PortGUID>[=[full|limited]]
+
+        PortGUID         - GUID of partition member EndPort. Hexadecimal
+                           numbers should start from 0x, decimal numbers
+                           are accepted too.
+        full or limited  - indicates full or limited membership for this
+                           port.  When omitted (or unrecognized) limited
+                           membership is assumed.
+
+     MCast Group:
+        mgid=gid[,mgroup_flag]*<newline>
+
+                         - gid specified is verified to be a Multicast address
+                           IP groups are verified to match the rate and mtu of the
+                           broadcast group.  The P_Key bits of the mgid for IP
+                           groups are verified to either match the P_Key specified
+                           in by "Partition Definition" or if they are 0x0000 the
+                           P_Key will be copied into those bits.
+
+     mgroup_flag:
+        rate=<val>  - specifies rate for this MC group
+                      (default is 3 (10GBps))
+        mtu=<val>   - specifies MTU for this MC group
+                      (default is 4 (2048))
+        sl=<val>    - specifies SL for this MC group
+                      (default is 0)
+        scope=<val> - specifies scope for this MC group
+                      (default is 2 (link local)).  Multiple scope settings
+                      are permitted for a partition.
+                      NOTE: This overwrites the scope nibble of the specified
+                            mgid.  Furthermore specifying multiple scope
+                            settings will result in multiple MC groups
+                            being created.
+        qkey=<val>      - specifies the Q_Key for this MC group
+                          (default: 0x0b1b for IP groups, 0 for other groups)
+        tclass=<val>    - specifies tclass for this MC group
+                          (default is 0)
+        FlowLabel=<val> - specifies FlowLabel for this MC group
+                          (default is 0)
+
+     newline: '\n'
+
+
+Note that values for rate, mtu, and scope, for both partitions and multicast
+groups, should be specified as defined in the IBTA specification (for example,
+mtu=4 for 2048).
 
 There are several useful keywords for PortGUID definition:
 
@@ -530,9 +611,6 @@ Empty list means no ports in this partition.
 Notes:
 
 White space is permitted between delimiters ('=', ',',':',';').
-
-The line can be wrapped after ':' followed after Partition Definition and
-between.
 
 PartitionName does not need to be unique, PKey does need to be unique.
 If PKey is repeated then those partition configurations will be merged
@@ -559,6 +637,15 @@ Examples:
  ShareIO = 0x80 : defmember=limited : 0x123456, 0x123457, 0x123458=full;
  ShareIO = 0x80 , defmember=full : 0x123459, 0x12345a;
  ShareIO = 0x80 , defmember=full : 0x12345b, 0x12345c=limited, 0x12345d;
+
+ # multicast groups added to default
+ Default=0x7fff,ipoib:
+        mgid=ff12:401b::0707,sl=1 # random IPv4 group
+        mgid=ff12:601b::16    # MLDv2-capable routers
+        mgid=ff12:401b::16    # IGMP
+        mgid=ff12:601b::2     # All routers
+        mgid=ff12::1,sl=1,Q_Key=0xDEADBEEF,rate=3,mtu=2 # random group
+        ALL=full;
 
 
 Note:
@@ -649,7 +736,7 @@ compiling opensm with -DROUTER_EXP which has been obsoleted.
 
 .SH ROUTING
 .PP
-OpenSM now offers five routing engines:
+OpenSM now offers seven routing engines:
 
 1.  Min Hop Algorithm - based on the minimum hops to each node where the
 path length is optimized.
@@ -659,24 +746,35 @@ node, but it is constrained to ranking rules. This algorithm should be chosen
 if the subnet is not a pure Fat Tree, and deadlock may occur due to a
 loop in the subnet.
 
-3.  Fat Tree Unicast routing algorithm - this algorithm optimizes routing
+3. DNUP Unicast routing algorithm - similar to UPDN but allows routing in
+fabrics which have some CA nodes attached closer to the roots than some switch
+nodes.
+
+4.  Fat Tree Unicast routing algorithm - this algorithm optimizes routing
 for congestion-free "shift" communication pattern.
 It should be chosen if a subnet is a symmetrical or almost symmetrical
 fat-tree of various types, not just K-ary-N-Trees: non-constant K, not
 fully staffed, any Constant Bisectional Bandwidth (CBB) ratio.
 Similar to UPDN, Fat Tree routing is constrained to ranking rules.
 
-4. LASH unicast routing algorithm - uses Infiniband virtual layers
+5. LASH unicast routing algorithm - uses Infiniband virtual layers
 (SL) to provide deadlock-free shortest-path routing while also
 distributing the paths between layers. LASH is an alternative
 deadlock-free topology-agnostic routing algorithm to the non-minimal
 UPDN algorithm avoiding the use of a potentially congested root node.
 
-5. DOR Unicast routing algorithm - based on the Min Hop algorithm, but
+6. DOR Unicast routing algorithm - based on the Min Hop algorithm, but
 avoids port equalization except for redundant links between the same
 two switches.  This provides deadlock free routes for hypercubes when
 the fabric is cabled as a hypercube and for meshes when cabled as a
 mesh (see details below).
+
+7. Torus-2QoS unicast routing algorithm - a DOR-based routing algorithm
+specialized for 2D/3D torus topologies.  Torus-2QoS provides deadlock-free
+routing while supporting two quality of service (QoS) levels.  In addition
+it is able to route around multiple failed fabric links or a single failed
+fabric switch without introducing deadlocks, and without changing path SL
+values granted before the failure.
 
 OpenSM also supports a file method which
 can load routes from a table. See \'Modular Routing Engine\' for more
@@ -699,7 +797,7 @@ decision is made as to what port should be used to get to that LID.
    This step is common to standard and Up/Down routing. Each port has a
 counter counting the number of target LIDs going through it.
    When there are multiple alternative ports with same MinHop to a LID,
-the one with less previously assigned ports is selected.
+the one with less previously assigned LIDs is selected.
    If LMC > 0, more checks are added: Within each group of LIDs assigned to
 same target port,
    a. use only ports which have same MinHop
@@ -821,6 +919,18 @@ format will be discarded.
 possible to specify CA guids; OpenSM will use the guid of the switch (if
 it exists) that connects the CA to the subnet as a root node.
 
+Purpose of DNUP Algorithm
+
+The DNUP algorithm is designed to serve a similar purpose to UPDN. However
+it is intended to work in network topologies which are unsuited to
+UPDN due to nodes being connected closer to the roots than some of
+the switches.  An example would be a fabric which contains nodes and
+uplinks connected to the same switch. The operation of DNUP is the
+same as UPDN with the exception of the ranking process.  In DNUP all
+switch nodes are ranked based solely on their distance from CA Nodes,
+all switch nodes directly connected to at least one CA are assigned a
+value of 1 all other switch nodes are assigned a value of one more than
+the minimum rank of all neighbor switch nodes.
 
 Fat-tree Routing Algorithm
 
@@ -997,6 +1107,14 @@ along the mesh dimension, or the -O option used as an override.
 
 Use '-R dor' option to activate the DOR algorithm.
 
+Torus-2QoS Routing Algorithm
+
+Torus-2QoS is routing algorithm designed for large-scale 2D/3D torus fabrics;
+see torus-2QoS(8) for full documentation.
+
+Use '-R torus-2QoS -Q' or '-R torus-2QoS,no_fallback -Q'
+to activate the torus-2QoS algorithm.
+
 
 Routing References
 
@@ -1106,6 +1224,10 @@ default QOS policy config file
 .B @OPENSM_CONFIG_DIR@/@PREFIX_ROUTES_FILE@
 default prefix routes file.
 
+.TP
+.B @OPENSM_CONFIG_DIR@/@TORUS2QOS_CONF_FILE@
+default torus-2QoS config file.
+
 .SH AUTHORS
 .TP
 Hal Rosenstock
@@ -1128,3 +1250,6 @@ Ira Weiny
 .TP
 Dale Purdy
 .RI < purdy@sgi.com >
+
+.SH SEE ALSO
+torus-2QoS(8), torus-2QoS.conf(5).

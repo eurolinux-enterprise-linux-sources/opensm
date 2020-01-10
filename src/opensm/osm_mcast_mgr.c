@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
@@ -147,7 +147,7 @@ static void mcast_mgr_purge_tree_node(IN osm_mtree_node_t * p_mtn)
 	free(p_mtn);
 }
 
-static void mcast_mgr_purge_tree(osm_sm_t * sm, IN osm_mgrp_box_t * mbox)
+void osm_purge_mtree(osm_sm_t * sm, IN osm_mgrp_box_t * mbox)
 {
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -736,7 +736,7 @@ static ib_api_status_t mcast_mgr_build_spanning_tree(osm_sm_t * sm,
 	   on multicast forwarding table information if the user wants to
 	   preserve existing multicast routes.
 	 */
-	mcast_mgr_purge_tree(sm, mbox);
+	osm_purge_mtree(sm, mbox);
 
 	/* build the first "subset" containing all member ports */
 	if (make_port_list(&port_list, mbox)) {
@@ -988,6 +988,7 @@ Exit:
 static ib_api_status_t mcast_mgr_process_mlid(osm_sm_t * sm, uint16_t mlid)
 {
 	ib_api_status_t status = IB_SUCCESS;
+	struct osm_routing_engine *re = sm->p_subn->p_osm->routing_engine_used;
 	osm_mgrp_box_t *mbox;
 
 	OSM_LOG_ENTER(sm->p_log);
@@ -1002,7 +1003,11 @@ static ib_api_status_t mcast_mgr_process_mlid(osm_sm_t * sm, uint16_t mlid)
 
 	mbox = osm_get_mbox_by_mlid(sm->p_subn, cl_hton16(mlid));
 	if (mbox) {
-		status = mcast_mgr_build_spanning_tree(sm, mbox);
+		if (re && re->mcast_build_stree)
+			status = re->mcast_build_stree(re->context, mbox);
+		else
+			status = mcast_mgr_build_spanning_tree(sm, mbox);
+
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A17: "
 				"Unable to create spanning tree (%s) for mlid "
@@ -1022,7 +1027,7 @@ static void mcast_mgr_set_mfttop(IN osm_sm_t * sm, IN osm_switch_t * p_sw)
 	osm_madw_context_t context;
 	ib_api_status_t status;
 	ib_switch_info_t si;
-	uint16_t mcast_top;
+	ib_net16_t mcast_top;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -1036,16 +1041,21 @@ static void mcast_mgr_set_mfttop(IN osm_sm_t * sm, IN osm_switch_t * p_sw)
 	p_path = osm_physp_get_dr_path_ptr(p_physp);
 	p_tbl = osm_switch_get_mcast_tbl_ptr(p_sw);
 
-	if (p_physp->port_info.capability_mask & IB_PORT_CAP_HAS_MCAST_FDB_TOP) {
+	if (sm->p_subn->opt.use_mfttop &&
+	    p_physp->port_info.capability_mask & IB_PORT_CAP_HAS_MCAST_FDB_TOP) {
 		/*
 		   Set the top of the multicast forwarding table.
 		 */
 		si = p_sw->switch_info;
-		if (p_tbl->max_block_in_use == -1)
-			mcast_top = cl_hton16(IB_LID_MCAST_START_HO - 1);
-		else
-			mcast_top = cl_hton16(IB_LID_MCAST_START_HO +
-					      (p_tbl->max_block_in_use + 1) * IB_MCAST_BLOCK_SIZE - 1);
+		if (sm->p_subn->first_time_master_sweep == TRUE)
+			mcast_top = cl_hton16(sm->mlids_init_max);
+		else {
+			if (p_tbl->max_block_in_use == -1)
+				mcast_top = cl_hton16(IB_LID_MCAST_START_HO - 1);
+			else
+				mcast_top = cl_hton16(IB_LID_MCAST_START_HO +
+						      (p_tbl->max_block_in_use + 1) * IB_MCAST_BLOCK_SIZE - 1);
+		}
 		if (mcast_top == si.mcast_top)
 			return;
 
@@ -1140,57 +1150,16 @@ static int alloc_mfts(osm_sm_t * sm)
 	return 0;
 }
 
-int osm_mcast_mgr_process(osm_sm_t * sm)
-{
-	int i, ret = 0;
-
-	OSM_LOG_ENTER(sm->p_log);
-
-	/* While holding the lock, iterate over all the established
-	   multicast groups, servicing each in turn.
-	   Then, download the multicast tables to the switches. */
-	CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
-
-	/* If there are no switches in the subnet we have nothing to do. */
-	if (cl_qmap_count(&sm->p_subn->sw_guid_tbl) == 0) {
-		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
-			"No switches in subnet. Nothing to do\n");
-		goto exit;
-	}
-
-	if (alloc_mfts(sm)) {
-		OSM_LOG(sm->p_log, OSM_LOG_ERROR,
-			"ERR 0A07: alloc_mfts failed\n");
-		ret = -1;
-		goto exit;
-	}
-
-	for (i = 0; i <= sm->p_subn->max_mcast_lid_ho - IB_LID_MCAST_START_HO;
-	     i++)
-		if (sm->p_subn->mboxes[i] || sm->mlids_req[i])
-			mcast_mgr_process_mlid(sm, i + IB_LID_MCAST_START_HO);
-
-	memset(sm->mlids_req, 0, sm->mlids_req_max);
-	sm->mlids_req_max = 0;
-
-	ret = mcast_mgr_set_mftables(sm);
-
-exit:
-	CL_PLOCK_RELEASE(sm->p_lock);
-
-	OSM_LOG_EXIT(sm->p_log);
-
-	return ret;
-}
-
 /**********************************************************************
-  This is the function that is invoked during idle time to handle the
-  process request for mcast groups where join/leave/delete was required.
+  This is the function that is invoked during idle time and sweep to
+  handle the process request for mcast groups where join/leave/delete
+  was required.
  **********************************************************************/
-int osm_mcast_mgr_process_mgroups(osm_sm_t * sm)
+int osm_mcast_mgr_process(osm_sm_t * sm, boolean_t config_all)
 {
 	int ret = 0;
 	unsigned i;
+	unsigned max_mlid;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -1210,14 +1179,16 @@ int osm_mcast_mgr_process_mgroups(osm_sm_t * sm)
 		goto exit;
 	}
 
-	for (i = 0; i <= sm->mlids_req_max; i++) {
-		if (!sm->mlids_req[i])
-			continue;
-		sm->mlids_req[i] = 0;
-		mcast_mgr_process_mlid(sm, i + IB_LID_MCAST_START_HO);
+	max_mlid = config_all ? sm->p_subn->max_mcast_lid_ho
+			- IB_LID_MCAST_START_HO : sm->mlids_req_max;
+	for (i = 0; i <= max_mlid; i++) {
+		if (sm->mlids_req[i] ||
+		    (config_all && sm->p_subn->mboxes[i])) {
+			sm->mlids_req[i] = 0;
+			mcast_mgr_process_mlid(sm, i + IB_LID_MCAST_START_HO);
+		}
 	}
 
-	memset(sm->mlids_req, 0, sm->mlids_req_max);
 	sm->mlids_req_max = 0;
 
 	ret = mcast_mgr_set_mftables(sm);

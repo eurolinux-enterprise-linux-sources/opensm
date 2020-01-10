@@ -1,17 +1,17 @@
 Name: opensm
-Version: 3.3.9
+Version: 3.3.13
 Release: 1%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 Group: System Environment/Daemons
 License: GPLv2 or BSD
 Url: http://www.openfabrics.org/
 Source0: http://www.openfabrics.org/downloads/management/%{name}-%{version}.tar.gz
-Source1: opensm.conf
-Source2: opensm.logrotate
-Source3: opensm.initd
-Source4: opensm.sysconfig
+Source1: opensm.logrotate
+Source2: opensm.initd
+Source3: opensm.sysconfig
+Patch0: opensm-3.3.13-prefix.patch
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.7, libtool, bison, flex, byacc
+BuildRequires: libibmad-devel = 1.3.8, libtool, bison, flex, byacc
 Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
 ExcludeArch: s390 s390x
 
@@ -47,10 +47,13 @@ Static version of opensm libraries
 
 %prep
 %setup -q
+%patch0 -p1 -b .prefix
 
 %build
 %configure --with-opensm-conf-sub-dir=rdma
 make %{?_smp_mflags}
+cd opensm
+./opensm -c ../opensm.conf
 
 %install
 rm -rf %{buildroot}
@@ -58,11 +61,11 @@ make install DESTDIR=%{buildroot}
 # remove unpackaged files from the buildroot
 rm -f %{buildroot}%{_libdir}/*.la
 rm -fr %{buildroot}%{_sysconfdir}/init.d
-install -D -m644 %{SOURCE1} %{buildroot}%{_sysconfdir}/rdma/opensm.conf
-install -D -m644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/opensm
-install -D -m755 %{SOURCE3} %{buildroot}%{_initddir}/opensm
-install -D -m644 %{SOURCE4} %{buildroot}%{_sysconfdir}/sysconfig/opensm
-mkdir -p ${RPM_BUILD_ROOT}/var/cache/opensm
+install -D -m644 opensm.conf %{buildroot}%{_sysconfdir}/rdma/opensm.conf
+install -D -m644 %{SOURCE1} %{buildroot}%{_sysconfdir}/logrotate.d/opensm
+install -D -m755 %{SOURCE2} %{buildroot}%{_initddir}/opensm
+install -D -m644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/opensm
+mkdir -p %{buildroot}/var/cache/opensm
 
 %clean
 rm -rf %{buildroot}
@@ -90,11 +93,11 @@ fi
 %dir /var/cache/opensm
 %{_sbindir}/*
 %{_initddir}/opensm
-%{_mandir}/man8/*
+%{_mandir}/*
 %config(noreplace) %{_sysconfdir}/logrotate.d/opensm
 %config(noreplace) %{_sysconfdir}/rdma/opensm.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/opensm
-%doc AUTHORS COPYING ChangeLog INSTALL README NEWS
+%doc doc/ AUTHORS COPYING ChangeLog INSTALL README NEWS
 
 %files libs
 %defattr(-,root,root,-)
@@ -110,6 +113,19 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Tue Feb 28 2012 Doug Ledford <dledford@redhat.com> - 3.3.13-1
+- Update to latest upstream release
+- Add patch to support specifying subnet_prefix on command lien
+- Update init script to pass unique subnet_prefix's when using the GUID
+  method of starting multiple instances
+- Fix up LSB init script headers
+- Resolves: bz754196
+
+* Thu Jan 26 2012 Doug Ledford <dledford@redhat.com> - 3.3.12-1
+- Generate the opensm.conf file instead of shipping a static one as a source
+- Update to latest upstream release (FDR link speed support)
+- Resolves: bz750609
+
 * Fri Jul 22 2011 Doug Ledford <dledford@redhat.com> - 3.3.9-1
 - Update to latest upstream version (3.3.5 -> 3.3.9)
 - Add /etc/sysconfig/opensm for use by opensm init script

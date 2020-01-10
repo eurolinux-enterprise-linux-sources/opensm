@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2006 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -135,7 +135,8 @@ static void dump_ucast_routes(cl_map_item_t * item, FILE * file, void *cxt)
 		"Switch 0x%016" PRIx64 "\nLID    : Port : Hops : Optimal\n",
 		cl_ntoh64(osm_node_get_node_guid(p_node)));
 
-	dor = (p_osm->routing_engine_used == OSM_ROUTING_ENGINE_TYPE_DOR);
+	dor = (p_osm->routing_engine_used &&
+	       p_osm->routing_engine_used->type == OSM_ROUTING_ENGINE_TYPE_DOR);
 
 	for (lid_ho = 1; lid_ho <= max_lid_ho; lid_ho++) {
 		fprintf(file, "0x%04X : ", lid_ho);
@@ -220,7 +221,9 @@ static void dump_ucast_routes(cl_map_item_t * item, FILE * file, void *cxt)
 			/* No LMC Optimization */
 			best_port = osm_switch_recommend_path(p_sw, p_port,
 							      lid_ho, 1, TRUE,
-							      dor);
+							      FALSE, dor,
+							      p_osm->subn.opt.port_shifting,
+							      p_osm->subn.opt.scatter_ports);
 			fprintf(file, "No %u hop path possible via port %u!",
 				best_hops, best_port);
 		}
@@ -365,6 +368,7 @@ static void dump_topology_node(cl_map_item_t * item, FILE * file, void *cxt)
 	osm_node_t *p_nbnode;
 	osm_physp_t *p_physp, *p_default_physp, *p_rphysp;
 	uint8_t link_speed_act;
+	char *link_speed_act_str;
 
 	if (!p_node->node_info.num_ports)
 		return;
@@ -441,6 +445,28 @@ static void dump_topology_node(cl_map_item_t * item, FILE * file, void *cxt)
 		port_state = ib_port_info_get_port_state(&p_physp->port_info);
 		link_speed_act =
 		    ib_port_info_get_link_speed_active(&p_physp->port_info);
+		if (link_speed_act == IB_LINK_SPEED_ACTIVE_2_5)
+			link_speed_act_str = "2.5";
+		else if (link_speed_act == IB_LINK_SPEED_ACTIVE_5)
+			link_speed_act_str = "5";
+		else if (link_speed_act == IB_LINK_SPEED_ACTIVE_10)
+			link_speed_act_str = "10";
+		else
+			link_speed_act_str = "??";
+
+		if (p_physp->ext_port_info.link_speed_active & FDR10)
+			link_speed_act_str = "FDR10";
+
+		if (p_default_physp->port_info.capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) {
+			link_speed_act =
+			    ib_port_info_get_link_speed_ext_active(&p_physp->port_info);
+			if (link_speed_act == IB_LINK_SPEED_EXT_ACTIVE_14)
+				link_speed_act_str = "14";
+			else if (link_speed_act == IB_LINK_SPEED_EXT_ACTIVE_25)
+				link_speed_act_str = "25";
+			else if (link_speed_act != IB_LINK_SPEED_EXT_ACTIVE_NONE)
+				link_speed_act_str = "??";
+		}
 
 		fprintf(file, "PHY=%s LOG=%s SPD=%s\n",
 			p_physp->port_info.link_width_active == 1 ? "1x" :
@@ -450,10 +476,62 @@ static void dump_topology_node(cl_map_item_t * item, FILE * file, void *cxt)
 			port_state == IB_LINK_ACTIVE ? "ACT" :
 			port_state == IB_LINK_ARMED ? "ARM" :
 			port_state == IB_LINK_INIT ? "INI" : "DWN",
-			link_speed_act == 1 ? "2.5" :
-			link_speed_act == 2 ? "5" :
-			link_speed_act == 4 ? "10" : "??");
+			link_speed_act_str);
 	}
+}
+
+static void dump_sl2vl_tbl(cl_map_item_t * item, FILE * file, void *cxt)
+{
+	osm_port_t *p_port = (osm_port_t *) item;
+	osm_node_t *p_node = p_port->p_node;
+	uint32_t in_port, out_port,
+		 num_ports = p_node->node_info.num_ports;
+	ib_net16_t base_lid = osm_port_get_base_lid(p_port);
+	osm_physp_t *p_physp;
+	ib_slvl_table_t *p_tbl;
+	int i, n;
+	char buf[1024];
+	char * header_line =	"#in out : 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15";
+	char * separator_line = "#--------------------------------------------------------";
+
+	if (!num_ports)
+		return;
+
+	fprintf(file, "%s 0x%016" PRIx64 ", base LID %d, "
+		"\"%s\"\n%s\n%s\n",
+		ib_get_node_type_str(p_node->node_info.node_type),
+		cl_ntoh64(p_port->guid), cl_ntoh16(base_lid),
+		p_node->print_desc, header_line, separator_line);
+
+	if (p_node->node_info.node_type == IB_NODE_TYPE_SWITCH) {
+		for (out_port = 0; out_port <= num_ports; out_port++){
+			p_physp = osm_node_get_physp_ptr(p_node, out_port);
+
+			/* no need to print SL2VL table for port that is down */
+			if (!p_physp->p_remote_physp)
+				continue;
+
+			for (in_port = 0; in_port <= num_ports; in_port++) {
+				p_tbl = osm_physp_get_slvl_tbl(p_physp, in_port);
+				for (i = 0, n = 0; i < 16; i++)
+					n += sprintf(buf + n, " %-2d",
+						ib_slvl_table_get(p_tbl, i));
+				fprintf(file, "%-3d %-3d :%s\n",
+					in_port, out_port, buf);
+			}
+		}
+	} else {
+		p_physp = p_port->p_physp;
+		CL_ASSERT(p_physp->p_remote_physp);
+		p_tbl = osm_physp_get_slvl_tbl(p_physp, 0);
+		for (i = 0, n = 0; i < 16; i++)
+			n += sprintf(buf + n, " %-2d",
+					ib_slvl_table_get(p_tbl, i));
+		fprintf(file, "%-3d %-3d :%s\n",
+			0, p_physp->port_num, buf);
+	}
+
+	fprintf(file, "%s\n\n", separator_line);
 }
 
 static void print_node_report(cl_map_item_t * item, FILE * file, void *cxt)
@@ -511,9 +589,12 @@ static void print_node_report(cl_map_item_t * item, FILE * file, void *cxt)
 				(ib_port_info_get_neighbor_mtu(p_pi)),
 				osm_get_lwa_str(p_pi->link_width_active),
 				osm_get_lsa_str
-				(ib_port_info_get_link_speed_active(p_pi)));
+				(ib_port_info_get_link_speed_active(p_pi),
+				 ib_port_info_get_link_speed_ext_active(p_pi),
+				 ib_port_info_get_port_state(p_pi),
+				 p_physp->ext_port_info.link_speed_active & FDR10));
 		else
-			fprintf(file, "      :     :     ");
+			fprintf(file, "      :     :      ");
 
 		if (osm_physp_get_port_guid(p_physp) == osm->subn.sm_port_guid)
 			fprintf(file, "* %016" PRIx64 " *",
@@ -597,7 +678,7 @@ static void print_report(osm_opensm_t * osm, FILE * file)
 	fprintf(file, "\n==================================================="
 		"====================================================\n"
 		"Vendor      : Ty : #  : Sta : LID  : LMC : MTU  : LWA :"
-		" LSA : Port GUID        : Neighbor Port (Port #)\n");
+		" LSA  : Port GUID        : Neighbor Port (Port #)\n");
 	dump_qmap(stdout, &osm->subn.node_guid_tbl, print_node_report, osm);
 }
 
@@ -623,6 +704,12 @@ void osm_dump_all(osm_opensm_t * osm)
 		if (osm_log_is_active(&osm->log, OSM_LOG_DEBUG))
 			dump_qmap(stdout, &osm->subn.sw_guid_tbl,
 				  dump_ucast_path_distribution, osm);
+
+		/* An attempt to get osm_switch_recommend_path to report the
+		   same routes that a sweep would assign. */
+		if (osm->subn.opt.scatter_ports)
+			srandom(osm->subn.opt.scatter_ports);
+
 		osm_dump_qmap_to_file(osm, "opensm.fdbs",
 				      &osm->subn.sw_guid_tbl,
 				      dump_ucast_routes, osm);
@@ -630,6 +717,13 @@ void osm_dump_all(osm_opensm_t * osm)
 		osm_dump_qmap_to_file(osm, "opensm.mcfdbs",
 				      &osm->subn.sw_guid_tbl,
 				      dump_mcast_routes, osm);
+		/* SL2VL tables */
+		if (osm->subn.opt.qos ||
+		    (osm->routing_engine_used &&
+		     osm->routing_engine_used->update_sl2vl))
+			osm_dump_qmap_to_file(osm, "opensm-sl2vl.dump",
+					      &osm->subn.port_guid_tbl,
+					      dump_sl2vl_tbl, osm);
 	}
 	osm_dump_qmap_to_file(osm, "opensm-subnet.lst",
 			      &osm->subn.node_guid_tbl, dump_topology_node,

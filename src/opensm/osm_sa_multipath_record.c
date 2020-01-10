@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2007 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -157,11 +157,11 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 					      OUT osm_path_parms_t * p_parms)
 {
 	const osm_node_t *p_node;
-	const osm_physp_t *p_physp;
+	const osm_physp_t *p_physp, *p_physp0;
 	const osm_physp_t *p_src_physp;
 	const osm_physp_t *p_dest_physp;
 	const osm_prtn_t *p_prtn = NULL;
-	const ib_port_info_t *p_pi;
+	const ib_port_info_t *p_pi, *p_pi0;
 	ib_slvl_table_t *p_slvl_tbl;
 	ib_api_status_t status = IB_SUCCESS;
 	uint8_t mtu;
@@ -189,7 +189,8 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 	p_pi = &p_physp->port_info;
 
 	mtu = ib_port_info_get_mtu_cap(p_pi);
-	rate = ib_port_info_compute_rate(p_pi);
+	rate = ib_port_info_compute_rate(p_pi,
+					 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 	/*
 	   Mellanox Tavor device performance is better using 1K MTU.
@@ -361,8 +362,13 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		if (rate > ib_port_info_compute_rate(p_pi))
-			rate = ib_port_info_compute_rate(p_pi);
+		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
+		p_pi0 = &p_physp0->port_info;
+		if (ib_path_compare_rates(rate,
+					  ib_port_info_compute_rate(p_pi,
+								    p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+			rate = ib_port_info_compute_rate(p_pi,
+							 p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 		/*
 		   Continue with the egress port on this switch.
@@ -384,8 +390,13 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		if (rate > ib_port_info_compute_rate(p_pi))
-			rate = ib_port_info_compute_rate(p_pi);
+		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
+		p_pi0 = &p_physp0->port_info;
+		if (ib_path_compare_rates(rate,
+					  ib_port_info_compute_rate(p_pi,
+								    p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+			rate = ib_port_info_compute_rate(p_pi,
+							 p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 		if (sa->p_subn->opt.qos) {
 			/*
@@ -417,8 +428,11 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 	if (mtu > ib_port_info_get_mtu_cap(p_pi))
 		mtu = ib_port_info_get_mtu_cap(p_pi);
 
-	if (rate > ib_port_info_compute_rate(p_pi))
-		rate = ib_port_info_compute_rate(p_pi);
+	if (ib_path_compare_rates(rate,
+				  ib_port_info_compute_rate(p_pi,
+							    p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
+		rate = ib_port_info_compute_rate(p_pi,
+						 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 		"Path min MTU = %u, min rate = %u\n", mtu, rate);
@@ -443,7 +457,7 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 			mtu = p_qos_level->mtu_limit;
 
 		if (p_qos_level->rate_limit_set
-		    && (rate > p_qos_level->rate_limit))
+		    && (ib_path_compare_rates(rate, p_qos_level->rate_limit) > 0))
 			rate = p_qos_level->rate_limit;
 
 		if (p_qos_level->sl_set) {
@@ -507,23 +521,22 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 		required_rate = ib_multipath_rec_rate(p_mpr);
 		switch (ib_multipath_rec_rate_sel(p_mpr)) {
 		case 0:	/* must be greater than */
-			if (rate <= required_rate)
+			if (ib_path_compare_rates(rate, required_rate) <= 0)
 				status = IB_NOT_FOUND;
 			break;
 
 		case 1:	/* must be less than */
-			if (rate >= required_rate) {
+			if (ib_path_compare_rates(rate, required_rate) >= 0) {
 				/* adjust the rate to use the highest rate
 				   lower then the required one */
-				if (required_rate > 2)
-					rate = required_rate - 1;
-				else
+				rate = ib_path_rate_get_prev(required_rate);
+				if (!rate)
 					status = IB_NOT_FOUND;
 			}
 			break;
 
 		case 2:	/* exact match */
-			if (rate < required_rate)
+			if (ib_path_compare_rates(rate, required_rate))
 				status = IB_NOT_FOUND;
 			else
 				rate = required_rate;
@@ -1481,6 +1494,7 @@ void osm_mpr_rcv_process(IN void *context, IN void *data)
 	cl_qlist_t pr_list;
 	ib_net16_t sa_status;
 	int nsrc, ndest;
+	uint8_t rate, mtu;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -1519,6 +1533,27 @@ void osm_mpr_rcv_process(IN void *context, IN void *data)
 
 	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
 		osm_dump_multipath_record(sa->p_log, p_mpr, OSM_LOG_DEBUG);
+
+	/* Validatg rate if supplied */
+	if ((p_sa_mad->comp_mask & IB_MPR_COMPMASK_RATESELEC) &&
+	    (p_sa_mad->comp_mask & IB_MPR_COMPMASK_RATE)) {
+		rate = ib_multipath_rec_rate(p_mpr);
+		if (!ib_rate_is_valid(rate)) {
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+	}
+	/* Validate MTU if supplied */
+	if ((p_sa_mad->comp_mask & IB_MPR_COMPMASK_MTUSELEC) &&
+	    (p_sa_mad->comp_mask & IB_MPR_COMPMASK_MTU)) {
+		mtu = ib_multipath_rec_mtu(p_mpr);
+		if (!ib_mtu_is_valid(mtu)) {
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+	}
 
 	cl_qlist_init(&pr_list);
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2007 The Regents of the University of California.
  * Copyright (c) 2007-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2009,2010 HNR Consulting. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -90,11 +90,17 @@ typedef enum {
 	PERFMGR_SWEEP_SUSPENDED
 } osm_perfmgr_sweep_state_t;
 
-/* Redirection information */
-typedef struct redir {
-	ib_net16_t redir_lid;
-	ib_net32_t redir_qp;
-} redir_t;
+typedef struct monitored_port {
+	uint16_t pkey_ix;
+	ib_net16_t orig_lid;
+	boolean_t redirection;
+	boolean_t valid;
+	/* Redirection fields from ClassPortInfo */
+	ib_gid_t gid;
+	ib_net16_t lid;
+	ib_net16_t pkey;
+	ib_net32_t qp;
+} monitored_port_t;
 
 /* Node to store information about nodes being monitored */
 typedef struct monitored_node {
@@ -104,7 +110,7 @@ typedef struct monitored_node {
 	boolean_t esp0;
 	char *name;
 	uint32_t num_ports;
-	redir_t redir_port[1];	/* redirection on a per port basis */
+	monitored_port_t port[1];
 } monitored_node_t;
 
 struct osm_opensm;
@@ -134,6 +140,8 @@ typedef struct osm_perfmgr {
 	uint32_t max_outstanding_queries;
 	cl_qmap_t monitored_map;	/* map the nodes being tracked */
 	monitored_node_t *remove_list;
+	ib_net64_t port_guid;
+	int16_t local_port;
 } osm_perfmgr_t;
 /*
 * FIELDS
@@ -159,8 +167,11 @@ inline static void osm_perfmgr_set_state(osm_perfmgr_t * p_perfmgr,
 					 osm_perfmgr_state_t state)
 {
 	p_perfmgr->state = state;
-	if (state == PERFMGR_STATE_ENABLED)
-		osm_sm_signal(p_perfmgr->sm, OSM_SIGNAL_PERFMGR_SWEEP);
+	if (state == PERFMGR_STATE_ENABLED) {
+		cl_timer_start(&p_perfmgr->sweep_timer, p_perfmgr->sweep_time_s * 1000);
+	} else {
+		cl_timer_stop(&p_perfmgr->sweep_timer);
+	}
 }
 
 inline static osm_perfmgr_state_t osm_perfmgr_get_state(osm_perfmgr_t * perfmgr)
@@ -168,7 +179,7 @@ inline static osm_perfmgr_state_t osm_perfmgr_get_state(osm_perfmgr_t * perfmgr)
 	return perfmgr->state;
 }
 
-inline static char *osm_perfmgr_get_state_str(osm_perfmgr_t * p_perfmgr)
+inline static const char *osm_perfmgr_get_state_str(osm_perfmgr_t * p_perfmgr)
 {
 	switch (p_perfmgr->state) {
 	case PERFMGR_STATE_DISABLE:
@@ -184,7 +195,7 @@ inline static char *osm_perfmgr_get_state_str(osm_perfmgr_t * p_perfmgr)
 	return "UNKNOWN";
 }
 
-inline static char *osm_perfmgr_get_sweep_state_str(osm_perfmgr_t * perfmgr)
+inline static const char *osm_perfmgr_get_sweep_state_str(osm_perfmgr_t * perfmgr)
 {
 	switch (perfmgr->sweep_state) {
 	case PERFMGR_SWEEP_SLEEP:

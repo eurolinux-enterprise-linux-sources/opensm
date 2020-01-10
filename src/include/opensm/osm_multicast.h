@@ -53,6 +53,7 @@
 #include <opensm/osm_mcm_port.h>
 #include <opensm/osm_subnet.h>
 #include <opensm/osm_log.h>
+#include <opensm/osm_sm.h>
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -177,6 +178,7 @@ osm_mgrp_t *osm_mgrp_new(IN osm_subn_t * subn, IN ib_net16_t mlid,
 * PARAMETERS
 *	subn
 *		[in] Pointer to osm_subn_t object.
+*
 *	mlid
 *		[in] Multicast LID for this multicast group.
 *
@@ -191,6 +193,38 @@ osm_mgrp_t *osm_mgrp_new(IN osm_subn_t * subn, IN ib_net16_t mlid,
 *
 * SEE ALSO
 *	Multicast Group, osm_mgrp_delete
+*********/
+
+/*
+ * Need a forward declaration to work around include loop:
+ * osm_sm.h <- osm_multicast.h
+ */
+struct osm_sm;
+
+/****f* OpenSM: Multicast Tree/osm_purge_mtree
+* NAME
+*	osm_purge_mtree
+*
+* DESCRIPTION
+*	Frees all the nodes in a multicast spanning tree
+*
+* SYNOPSIS
+*/
+void osm_purge_mtree(IN struct osm_sm * sm, IN osm_mgrp_box_t * mgb);
+/*
+* PARAMETERS
+*	sm
+*		[in] Pointer to osm_sm_t object.
+*	mgb
+*		[in] Pointer to an osm_mgrp_box_t object.
+*
+* RETURN VALUES
+*	None.
+*
+*
+* NOTES
+*
+* SEE ALSO
 *********/
 
 /****f* OpenSM: Multicast Group/osm_mgrp_is_guid
@@ -324,7 +358,7 @@ osm_mcm_port_t *osm_mgrp_add_port(osm_subn_t *subn, osm_log_t *log,
 *	osm_mgrp_get_mcm_port
 *
 * DESCRIPTION
-*	finds a port in the multicast group.
+*	Finds a port in the multicast group.
 *
 * SYNOPSIS
 */
@@ -336,7 +370,7 @@ osm_mcm_port_t *osm_mgrp_get_mcm_port(IN const osm_mgrp_t * p_mgrp,
 *		[in] Pointer to an osm_mgrp_t object.
 *
 *	port_guid
-*		[in] Port guid of the departing port.
+*		[in] Port guid.
 *
 * RETURN VALUES
 *	Pointer to the mcm port object when present or NULL otherwise.
@@ -346,9 +380,9 @@ osm_mcm_port_t *osm_mgrp_get_mcm_port(IN const osm_mgrp_t * p_mgrp,
 * SEE ALSO
 *********/
 
-/****f* OpenSM: Multicast Group/osm_mgrp_remove_port
+/****f* OpenSM: Multicast Group/osm_mgrp_delete_port
 * NAME
-*	osm_mgrp_remove_port
+*	osm_mgrp_delete_port
 *
 * DESCRIPTION
 *	Removes a port from the multicast group.

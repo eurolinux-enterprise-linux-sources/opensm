@@ -68,8 +68,7 @@
 extern void osm_drop_mgr_process(IN osm_sm_t * sm);
 extern int osm_qos_setup(IN osm_opensm_t * p_osm);
 extern int osm_pkey_mgr_process(IN osm_opensm_t * p_osm);
-extern int osm_mcast_mgr_process(IN osm_sm_t * sm);
-extern int osm_mcast_mgr_process_mgroups(IN osm_sm_t * sm);
+extern int osm_mcast_mgr_process(IN osm_sm_t * sm, boolean_t config_all);
 extern int osm_link_mgr_process(IN osm_sm_t * sm, IN uint8_t state);
 
 static void state_mgr_up_msg(IN const osm_sm_t * sm)
@@ -353,7 +352,11 @@ static boolean_t state_mgr_is_sm_port_down(IN osm_sm_t * sm)
 
 	CL_ASSERT(p_physp);
 
-	state = osm_physp_get_port_state(p_physp);
+	if (p_port->p_node->sw &&
+	    !ib_switch_info_is_enhanced_port0(&p_port->p_node->sw->switch_info))
+		state = IB_LINK_ACTIVE;	/* base SP0 */
+	else
+		state = osm_physp_get_port_state(p_physp);
 	CL_PLOCK_RELEASE(sm->p_lock);
 
 Exit:
@@ -1142,7 +1145,12 @@ static void do_sweep(osm_sm_t * sm)
 		/* Re-program the switches fully */
 		sm->p_subn->ignore_existing_lfts = TRUE;
 
-		osm_ucast_mgr_process(&sm->ucast_mgr);
+		if (osm_ucast_mgr_process(&sm->ucast_mgr)) {
+			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
+					"REROUTE FAILED");
+			return;
+		}
+		osm_qos_setup(sm->p_subn->p_osm);
 
 		/* Reset flag */
 		sm->p_subn->ignore_existing_lfts = FALSE;
@@ -1170,6 +1178,12 @@ repeat_discovery:
 	sm->p_subn->force_reroute = FALSE;
 	sm->p_subn->subnet_initialization_error = FALSE;
 
+	/* Reset tracking values in case limiting component got removed
+	 * from fabric. */
+	sm->p_subn->min_ca_mtu = IB_MAX_MTU;
+	sm->p_subn->min_ca_rate = IB_MAX_RATE;
+	sm->p_subn->min_data_vls = IB_MAX_NUM_VLS - 1;
+
 	/* rescan configuration updates */
 	if (!config_parsed && osm_subn_rescan_conf_files(sm->p_subn) < 0)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 331A: "
@@ -1184,8 +1198,12 @@ repeat_discovery:
 		return;
 
 	if (state_mgr_is_sm_port_down(sm) == TRUE) {
-		osm_log(sm->p_log, OSM_LOG_SYS, "SM port is down\n");
-		OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, "SM PORT DOWN");
+		if (sm->p_subn->last_sm_port_state) {
+			sm->p_subn->last_sm_port_state = 0;
+			osm_log(sm->p_log, OSM_LOG_SYS, "SM port is down\n");
+			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
+					"SM PORT DOWN");
+		}
 
 		/* Run the drop manager - we want to clear all records */
 		osm_drop_mgr_process(sm);
@@ -1196,6 +1214,13 @@ repeat_discovery:
 		osm_opensm_report_event(sm->p_subn->p_osm,
 				OSM_EVENT_ID_STATE_CHANGE, NULL);
 		return;
+	} else {
+		if (!sm->p_subn->last_sm_port_state) {
+			sm->p_subn->last_sm_port_state = 1;
+			osm_log(sm->p_log, OSM_LOG_SYS, "SM port is up\n");
+			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
+					"SM PORT UP");
+		}
 	}
 
 	status = state_mgr_sweep_hop_1(sm);
@@ -1274,8 +1299,6 @@ repeat_discovery:
 
 	osm_pkey_mgr_process(sm->p_subn->p_osm);
 
-	osm_qos_setup(sm->p_subn->p_osm);
-
 	/* try to restore SA DB (this should be before lid_mgr
 	   because we may want to disable clients reregistration
 	   when SA DB is restored) */
@@ -1309,12 +1332,16 @@ repeat_discovery:
 			"LID ASSIGNMENT COMPLETE - STARTING SWITCH TABLE CONFIG");
 
 	/*
-	 * Proceed with unicast forwarding table configuration.
+	 * Proceed with unicast forwarding table configuration; if it fails
+	 * return early to wait for a trap or the next sweep interval.
 	 */
 
 	if (!sm->ucast_mgr.cache_valid ||
 	    osm_ucast_cache_process(&sm->ucast_mgr))
-		osm_ucast_mgr_process(&sm->ucast_mgr);
+		if (osm_ucast_mgr_process(&sm->ucast_mgr))
+			return;
+
+	osm_qos_setup(sm->p_subn->p_osm);
 
 	if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
 		return;
@@ -1333,7 +1360,7 @@ repeat_discovery:
 			OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
 
 	if (!sm->p_subn->opt.disable_multicast) {
-		osm_mcast_mgr_process(sm);
+		osm_mcast_mgr_process(sm, TRUE);
 		if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
 			return;
 		OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
@@ -1415,7 +1442,7 @@ static void do_process_mgrp_queue(osm_sm_t * sm)
 	if (sm->p_subn->sm_state != IB_SMINFO_STATE_MASTER)
 		return;
 	if (!sm->p_subn->opt.disable_multicast) {
-		osm_mcast_mgr_process_mgroups(sm);
+		osm_mcast_mgr_process(sm, FALSE);
 		wait_for_pending_transactions(&sm->p_subn->p_osm->stats);
 	}
 }

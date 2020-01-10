@@ -126,13 +126,11 @@ static osm_switch_t *get_osm_switch_from_port(const osm_port_t * port)
 static int cycle_exists(cdg_vertex_t * start, cdg_vertex_t * current,
 			cdg_vertex_t * prev, int visit_num)
 {
-	cdg_vertex_t *h;
 	int i, new_visit_num;
 	int cycle_found = 0;
 
 	if (current != NULL && current->visiting_number > 0) {
 		if (visit_num > current->visiting_number && current->seen == 0) {
-			h = start;
 			cycle_found = 1;
 		}
 	} else {
@@ -180,7 +178,7 @@ static void remove_semipermanent_depend_for_sp(lash_t * p_lash, int sw,
 	int i_next_switch, output_link, i, next_link, i_next_next_switch,
 	    depend = 0;
 	cdg_vertex_t *v;
-	int found;
+	int __attribute__((unused)) found;
 
 	output_link = switches[sw]->routing_table[dest_switch].out_link;
 	i_next_switch = get_next_switch(p_lash, sw, output_link);
@@ -710,13 +708,13 @@ static int init_lash_structures(lash_t * p_lash)
 
 	/* initialise cdg_vertex_matrix[num_switches][num_switches][num_switches] */
 	p_lash->cdg_vertex_matrix =
-	    (cdg_vertex_t ****) malloc(vl_min * sizeof(cdg_vertex_t ****));
+	    (cdg_vertex_t ****) malloc(vl_min * sizeof(cdg_vertex_t ***));
 	if (p_lash->cdg_vertex_matrix == NULL)
 		goto Exit_Mem_Error;
 	for (i = 0; i < vl_min; i++) {
 		p_lash->cdg_vertex_matrix[i] =
 		    (cdg_vertex_t ***) malloc(num_switches *
-					      sizeof(cdg_vertex_t ***));
+					      sizeof(cdg_vertex_t **));
 
 		if (p_lash->cdg_vertex_matrix[i] == NULL)
 			goto Exit_Mem_Error;
@@ -1277,14 +1275,18 @@ static void lash_delete(void *context)
 	free(p_lash);
 }
 
-uint8_t osm_get_lash_sl(osm_opensm_t * p_osm, const osm_port_t * p_src_port,
-			const osm_port_t * p_dst_port)
+static uint8_t get_lash_sl(void *context, uint8_t path_sl_hint,
+			   const osm_port_t *p_src_port,
+			   const osm_port_t *p_dst_port)
 {
 	unsigned dst_id;
 	unsigned src_id;
 	osm_switch_t *p_sw;
+	lash_t *p_lash = context;
+	osm_opensm_t *p_osm = p_lash->p_osm;
 
-	if (p_osm->routing_engine_used != OSM_ROUTING_ENGINE_TYPE_LASH)
+	if (!(p_osm->routing_engine_used &&
+	      p_osm->routing_engine_used->type == OSM_ROUTING_ENGINE_TYPE_LASH))
 		return OSM_DEFAULT_SL;
 
 	p_sw = get_osm_switch_from_port(p_dst_port);
@@ -1311,7 +1313,8 @@ int osm_ucast_lash_setup(struct osm_routing_engine *r, osm_opensm_t *p_osm)
 
 	r->context = p_lash;
 	r->ucast_build_fwd_tables = lash_process;
-	r->delete = lash_delete;
+	r->path_sl = get_lash_sl;
+	r->destroy = lash_delete;
 
 	return 0;
 }

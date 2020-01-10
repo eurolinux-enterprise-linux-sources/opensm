@@ -578,6 +578,7 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 
 	boolean_t matched_by_sguid = FALSE,
 		  matched_by_dguid = FALSE,
+		  matched_by_sordguid = FALSE,
 		  matched_by_class = FALSE,
 		  matched_by_sid = FALSE,
 		  matched_by_pkey = FALSE;
@@ -598,9 +599,11 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 			continue;
 		}
 
-		/* If a match rule has Source groups, PR request source has to be in this list */
+		/* If a match rule has Source groups and no Destination groups,
+		 * PR request source has to be in this list */
 
-		if (cl_list_count(&p_qos_match_rule->source_group_list)) {
+		if (cl_list_count(&p_qos_match_rule->source_group_list)
+		    && !cl_list_count(&p_qos_match_rule->destination_group_list)) {
 			if (!__qos_policy_is_port_in_group_list(p_qos_policy,
 								p_src_physp,
 								&p_qos_match_rule->
@@ -612,9 +615,11 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 			matched_by_sguid = TRUE;
 		}
 
-		/* If a match rule has Destination groups, PR request dest. has to be in this list */
+		/* If a match rule has Destination groups and no Source groups,
+		 * PR request dest. has to be in this list */
 
-		if (cl_list_count(&p_qos_match_rule->destination_group_list)) {
+		if (cl_list_count(&p_qos_match_rule->destination_group_list)
+		    && !cl_list_count(&p_qos_match_rule->source_group_list)) {
 			if (!__qos_policy_is_port_in_group_list(p_qos_policy,
 								p_dest_physp,
 								&p_qos_match_rule->
@@ -624,6 +629,26 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 				continue;
 			}
 			matched_by_dguid = TRUE;
+		}
+
+		/* If a match rule has both Source and Destination groups,
+		 * PR request source or dest. must be in respective list
+		 */
+		if (cl_list_count(&p_qos_match_rule->source_group_list)
+		    && cl_list_count(&p_qos_match_rule->destination_group_list)) {
+			if (!__qos_policy_is_port_in_group_list(p_qos_policy,
+								p_src_physp,
+								&p_qos_match_rule->
+								source_group_list)
+			    && !__qos_policy_is_port_in_group_list(p_qos_policy,
+								   p_dest_physp,
+								   &p_qos_match_rule->
+								   destination_group_list))
+			{
+				list_iterator = cl_list_next(list_iterator);
+				continue;
+			}
+			matched_by_sordguid = TRUE;
 		}
 
 		/* If a match rule has QoS classes, PR request HAS
@@ -693,11 +718,12 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 
 	if (p_qos_match_rule)
 		OSM_LOG(p_log, OSM_LOG_DEBUG,
-			"request matched rule (%s) by:%s%s%s%s%s\n",
+			"request matched rule (%s) by:%s%s%s%s%s%s\n",
 			(p_qos_match_rule->use) ?
 				p_qos_match_rule->use : "no description",
 			(matched_by_sguid) ? " SGUID" : "",
 			(matched_by_dguid) ? " DGUID" : "",
+			(matched_by_sordguid) ? "SorDGUID" : "",
 			(matched_by_class) ? " QoS_Class" : "",
 			(matched_by_sid)   ? " ServiceID" : "",
 			(matched_by_pkey)  ? " PKey" : "");
@@ -770,9 +796,7 @@ static void __qos_policy_validate_pkey(
 			osm_qos_match_rule_t * p_qos_match_rule,
 			osm_prtn_t * p_prtn)
 {
-	uint8_t sl;
-	uint32_t flow;
-	uint8_t hop;
+	int i = 0;
 
 	if (!p_qos_policy || !p_qos_match_rule || !p_prtn)
 		return;
@@ -790,26 +814,30 @@ static void __qos_policy_validate_pkey(
 	p_prtn->sl = p_qos_match_rule->p_qos_level->sl;
 
 
-	/* If this partition is an IPoIB partition, there should
-	   be a matching MCast group. Fix this group's SL too */
-	if (!p_prtn->mgrp)
-		return;
+	/* If this partition has default MCast groups.
+	 * Fix those group's SL too */
+	for (i = 0; i < p_prtn->nmgrps; i++)
+	{
+		uint8_t sl;
+		uint32_t flow;
+		uint8_t hop;
 
-	CL_ASSERT((cl_ntoh16(p_prtn->mgrp->mcmember_rec.pkey) & 0x7fff) ==
-		  (cl_ntoh16(p_prtn->pkey) & 0x7fff));
+		CL_ASSERT((cl_ntoh16(p_prtn->mgrps[i]->mcmember_rec.pkey) & 0x7fff) ==
+			  (cl_ntoh16(p_prtn->pkey) & 0x7fff));
 
-	ib_member_get_sl_flow_hop(p_prtn->mgrp->mcmember_rec.sl_flow_hop,
-				  &sl, &flow, &hop);
-	if (sl != p_prtn->sl) {
-		char gid_str[INET6_ADDRSTRLEN];
-		OSM_LOG(&p_qos_policy->p_subn->p_osm->log, OSM_LOG_DEBUG,
-			"Updating MCGroup (MGID %s) SL to "
-			"match partition SL (%u)\n",
-			inet_ntop(AF_INET6, p_prtn->mgrp->mcmember_rec.mgid.raw,
-				  gid_str, sizeof gid_str),
-			p_prtn->sl);
-		p_prtn->mgrp->mcmember_rec.sl_flow_hop =
-			ib_member_set_sl_flow_hop(p_prtn->sl, flow, hop);
+		ib_member_get_sl_flow_hop(p_prtn->mgrps[i]->mcmember_rec.sl_flow_hop,
+					  &sl, &flow, &hop);
+		if (sl != p_prtn->sl) {
+			char gid_str[INET6_ADDRSTRLEN];
+			OSM_LOG(&p_qos_policy->p_subn->p_osm->log, OSM_LOG_DEBUG,
+				"Updating MCGroup (MGID %s) SL to "
+				"match partition SL (%u)\n",
+				inet_ntop(AF_INET6, p_prtn->mgrps[i]->mcmember_rec.mgid.raw,
+					  gid_str, sizeof gid_str),
+				p_prtn->sl);
+			p_prtn->mgrps[i]->mcmember_rec.sl_flow_hop =
+				ib_member_set_sl_flow_hop(p_prtn->sl, flow, hop);
+		}
 	}
 }
 

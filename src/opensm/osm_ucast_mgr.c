@@ -254,7 +254,10 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 	 */
 	port = osm_switch_recommend_path(p_sw, p_port, lid_ho, start_from,
 					 p_mgr->p_subn->ignore_existing_lfts,
-					 p_mgr->is_dor);
+					 p_mgr->p_subn->opt.lmc,
+					 p_mgr->is_dor,
+					 p_mgr->p_subn->opt.port_shifting,
+					 p_mgr->p_subn->opt.scatter_ports);
 
 	if (port == OSM_NO_PATH) {
 		/* do not try to overwrite the ppro of non existing port ... */
@@ -317,8 +320,6 @@ static void alloc_ports_priv(osm_ucast_mgr_t * mgr)
 	     item = cl_qmap_next(item)) {
 		port = (osm_port_t *) item;
 		lmc = ib_port_info_get_lmc(&port->p_physp->port_info);
-		if (!lmc)
-			continue;
 		r = malloc(sizeof(*r) + sizeof(r->guids[0]) * (1 << lmc));
 		if (!r) {
 			OSM_LOG(mgr->p_log, OSM_LOG_ERROR, "ERR 3A09: "
@@ -365,8 +366,7 @@ static void ucast_mgr_process_tbl(IN cl_map_item_t * p_map_item,
 	/* Initialize LIDs in buffer to invalid port number. */
 	memset(p_sw->new_lft, OSM_NO_PATH, p_sw->max_lid_ho + 1);
 
-	if (p_mgr->p_subn->opt.lmc)
-		alloc_ports_priv(p_mgr);
+	alloc_ports_priv(p_mgr);
 
 	/*
 	   Iterate through every port setting LID routes for each
@@ -383,8 +383,7 @@ static void ucast_mgr_process_tbl(IN cl_map_item_t * p_map_item,
 		}
 	}
 
-	if (p_mgr->p_subn->opt.lmc)
-		free_ports_priv(p_mgr);
+	free_ports_priv(p_mgr);
 
 	OSM_LOG_EXIT(p_mgr->p_log);
 }
@@ -491,12 +490,12 @@ static void set_default_hop_wf(cl_map_item_t * p_map_item, void *ctx)
 	}
 }
 
-static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
+static int set_search_ordering_ports(void *ctx, uint64_t guid, char *p)
 {
 	osm_subn_t *p_subn = ctx;
 	osm_node_t *node = osm_get_node_by_guid(p_subn, cl_hton64(guid));
 	osm_switch_t *sw;
-	uint8_t *dimn_ports = NULL;
+	uint8_t *search_ordering_ports = NULL;
 	uint8_t port;
 	unsigned int *ports = NULL;
 	const int bpw = sizeof(*ports)*8;
@@ -510,20 +509,20 @@ static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
 		return 0;
 	}
 
-	if (sw->dimn_ports) {
+	if (sw->search_ordering_ports) {
 		OSM_LOG(&p_subn->p_osm->log, OSM_LOG_VERBOSE,
 			"switch with guid 0x%016" PRIx64 " already listed\n",
 			guid);
 		return 0;
 	}
 
-	dimn_ports = malloc(sizeof(*dimn_ports)*sw->num_ports);
-	if (!dimn_ports) {
+	search_ordering_ports = malloc(sizeof(*search_ordering_ports)*sw->num_ports);
+	if (!search_ordering_ports) {
 		OSM_LOG(&p_subn->p_osm->log, OSM_LOG_ERROR,
-			"ERR 3A07: cannot allocate memory for dimn_ports\n");
+			"ERR 3A07: cannot allocate memory for search_ordering_ports\n");
 		return -1;
 	}
-	memset(dimn_ports, 0, sizeof(*dimn_ports)*sw->num_ports);
+	memset(search_ordering_ports, 0, sizeof(*search_ordering_ports)*sw->num_ports);
 
 	/* the ports array is for record keeping of which ports have
 	 * been seen */
@@ -532,6 +531,7 @@ static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
 	if (!ports) {
 		OSM_LOG(&p_subn->p_osm->log, OSM_LOG_ERROR,
 			"ERR 3A08: cannot allocate memory for ports\n");
+		free(search_ordering_ports);
 		return -1;
 	}
 	memset(ports, 0, words*sizeof(*ports));
@@ -545,7 +545,7 @@ static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
 			OSM_LOG(&p_subn->p_osm->log, OSM_LOG_VERBOSE,
 				"bad port %d specified for guid 0x%016" PRIx64 "\n",
 				port, guid);
-			free(dimn_ports);
+			free(search_ordering_ports);
 			free(ports);
 			return 0;
 		}
@@ -554,13 +554,13 @@ static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
 			OSM_LOG(&p_subn->p_osm->log, OSM_LOG_VERBOSE,
 				"port %d already specified for guid 0x%016" PRIx64 "\n",
 				port, guid);
-			free(dimn_ports);
+			free(search_ordering_ports);
 			free(ports);
 			return 0;
 		}
 
 		ports[port/bpw] |= (1u << (port%bpw));
-		dimn_ports[i++] = port;
+		search_ordering_ports[i++] = port;
 
 		p = e;
 		while (isspace(*p)) {
@@ -570,17 +570,17 @@ static int set_dimn_ports(void *ctx, uint64_t guid, char *p)
 
 	if (i > 1) {
 		for (port = 1; port < sw->num_ports; port++) {
-			/* fill out the rest of the dimn_ports array
+			/* fill out the rest of the search_ordering_ports array
 			 * in sequence using the remaining unspecified
 			 * ports.
 			 */
 			if (!(ports[port/bpw] & (1u << (port%bpw)))) {
-				dimn_ports[i++] = port;
+				search_ordering_ports[i++] = port;
 			}
 		}
-		sw->dimn_ports = dimn_ports;
+		sw->search_ordering_ports = search_ordering_ports;
 	} else {
-		free(dimn_ports);
+		free(search_ordering_ports);
 	}
 
 	free(ports);
@@ -686,21 +686,21 @@ static int ucast_mgr_setup_all_switches(osm_subn_t * p_subn)
 					  (p_sw->p_node)));
 			return -1;
 		}
-		if (p_sw->dimn_ports) {
-			free(p_sw->dimn_ports);
-			p_sw->dimn_ports = NULL;
+		if (p_sw->search_ordering_ports) {
+			free(p_sw->search_ordering_ports);
+			p_sw->search_ordering_ports = NULL;
 		}
 	}
 
-	if (p_subn->opt.dimn_ports_file) {
+	if (p_subn->opt.port_search_ordering_file) {
 		OSM_LOG(&p_subn->p_osm->log, OSM_LOG_DEBUG,
 			"Fetching dimension ports file \'%s\'\n",
-			p_subn->opt.dimn_ports_file);
-		if (parse_node_map(p_subn->opt.dimn_ports_file,
-				   set_dimn_ports, p_subn)) {
+			p_subn->opt.port_search_ordering_file);
+		if (parse_node_map(p_subn->opt.port_search_ordering_file,
+				   set_search_ordering_ports, p_subn)) {
 			OSM_LOG(&p_subn->p_osm->log, OSM_LOG_ERROR, "ERR 3A05: "
-				"cannot parse dimn_ports_file \'%s\'\n",
-				p_subn->opt.dimn_ports_file);
+				"cannot parse port_search_ordering_file \'%s\'\n",
+				p_subn->opt.port_search_ordering_file);
 		}
 	}
 
@@ -797,6 +797,8 @@ static void add_sw_endports_to_order_list(osm_switch_t * sw,
 			port = osm_get_port_by_guid(m->p_subn,
 						    p->p_remote_physp->
 						    port_guid);
+			if (!port)
+				continue;
 			cl_qlist_insert_tail(&m->port_order_list,
 					     &port->list_item);
 			port->flag = 1;
@@ -1038,6 +1040,10 @@ static int ucast_mgr_route(struct osm_routing_engine *r, osm_opensm_t * osm)
 	OSM_LOG(&osm->log, OSM_LOG_VERBOSE,
 		"building routing with \'%s\' routing algorithm...\n", r->name);
 
+	/* Set the before each lft build to keep the routes in place between sweeps */
+	if(osm->subn.opt.scatter_ports)
+		srandom(osm->subn.opt.scatter_ports);
+
 	if (!r->build_lid_matrices ||
 	    (ret = r->build_lid_matrices(r->context)) > 0)
 		ret = osm_ucast_mgr_build_lid_matrices(&osm->sm.ucast_mgr);
@@ -1058,7 +1064,7 @@ static int ucast_mgr_route(struct osm_routing_engine *r, osm_opensm_t * osm)
 		return ret;
 	}
 
-	osm->routing_engine_used = osm_routing_engine_type(r->name);
+	osm->routing_engine_used = r;
 
 	osm_ucast_mgr_set_fwd_tables(&osm->sm.ucast_mgr);
 
@@ -1070,6 +1076,7 @@ int osm_ucast_mgr_process(IN osm_ucast_mgr_t * p_mgr)
 	osm_opensm_t *p_osm;
 	struct osm_routing_engine *p_routing_eng;
 	cl_qmap_t *p_sw_guid_tbl;
+	int failed = 0;
 
 	OSM_LOG_ENTER(p_mgr->p_log);
 
@@ -1086,32 +1093,46 @@ int osm_ucast_mgr_process(IN osm_ucast_mgr_t * p_mgr)
 	    ucast_mgr_setup_all_switches(p_mgr->p_subn) < 0)
 		goto Exit;
 
-	p_osm->routing_engine_used = OSM_ROUTING_ENGINE_TYPE_NONE;
+	failed = -1;
+	p_osm->routing_engine_used = NULL;
 	while (p_routing_eng) {
-		if (!ucast_mgr_route(p_routing_eng, p_osm))
+		failed = ucast_mgr_route(p_routing_eng, p_osm);
+		if (!failed)
 			break;
 		p_routing_eng = p_routing_eng->next;
 	}
 
-	if (p_osm->routing_engine_used == OSM_ROUTING_ENGINE_TYPE_NONE) {
+	if (!p_osm->routing_engine_used &&
+	    p_osm->no_fallback_routing_engine != TRUE) {
 		/* If configured routing algorithm failed, use default MinHop */
-		osm_ucast_mgr_build_lid_matrices(p_mgr);
-		ucast_mgr_build_lfts(p_mgr);
-		osm_ucast_mgr_set_fwd_tables(p_mgr);
-		p_osm->routing_engine_used = OSM_ROUTING_ENGINE_TYPE_MINHOP;
+		struct osm_routing_engine *r = p_osm->default_routing_engine;
+
+		r->build_lid_matrices(r->context);
+		failed = r->ucast_build_fwd_tables(r->context);
+		if (!failed) {
+			p_osm->routing_engine_used = r;
+			osm_ucast_mgr_set_fwd_tables(p_mgr);
+		}
 	}
 
-	OSM_LOG(p_mgr->p_log, OSM_LOG_INFO,
-		"%s tables configured on all switches\n",
-		osm_routing_engine_type_str(p_osm->routing_engine_used));
+	if (p_osm->routing_engine_used) {
+		OSM_LOG(p_mgr->p_log, OSM_LOG_INFO,
+			"%s tables configured on all switches\n",
+			osm_routing_engine_type_str(p_osm->
+						    routing_engine_used->type));
 
-	if (p_mgr->p_subn->opt.use_ucast_cache)
-		p_mgr->cache_valid = TRUE;
-
+		if (p_mgr->p_subn->opt.use_ucast_cache)
+			p_mgr->cache_valid = TRUE;
+	} else {
+		p_mgr->p_subn->subnet_initialization_error = TRUE;
+		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR,
+			"No routing engine able to successfully configure "
+			" switch tables on current fabric\n");
+	}
 Exit:
 	CL_PLOCK_RELEASE(p_mgr->p_lock);
 	OSM_LOG_EXIT(p_mgr->p_log);
-	return 0;
+	return failed;
 }
 
 static int ucast_build_lid_matrices(void *context)

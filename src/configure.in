@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.57)
-AC_INIT(opensm, 3.3.9, linux-rdma@vger.kernel.org)
+AC_INIT(opensm, 3.3.13, linux-rdma@vger.kernel.org)
 AC_CONFIG_SRCDIR([opensm/osm_opensm.c])
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -197,6 +197,10 @@ AC_DEFINE_UNQUOTED(HAVE_DEFAULT_QOS_POLICY_FILE,
 	[Define a QOS policy config file])
 AC_SUBST(QOS_POLICY_FILE)
 
+dnl For now, this does not need to be configurable
+TORUS2QOS_CONF_FILE=torus-2QoS.conf
+AC_SUBST(TORUS2QOS_CONF_FILE)
+
 dnl Check for a different prefix-routes file
 PREFIX_ROUTES_FILE=prefix-routes.conf
 AC_MSG_CHECKING(for --with-prefix-routes-conf)
@@ -227,7 +231,7 @@ dnl Checks for headers and libraries
 OPENIB_APP_OSMV_CHECK_HEADER
 OPENIB_APP_OSMV_CHECK_LIB
 
-AC_CONFIG_FILES([man/opensm.8 scripts/opensm.init scripts/redhat-opensm.init scripts/sldd.sh])
+AC_CONFIG_FILES([man/opensm.8 man/torus-2QoS.8 man/torus-2QoS.conf.5 scripts/opensm.init scripts/redhat-opensm.init scripts/sldd.sh])
 
 dnl Create the following Makefiles
 AC_OUTPUT([include/opensm/osm_version.h Makefile include/Makefile complib/Makefile libvendor/Makefile opensm/Makefile osmeventplugin/Makefile osmtest/Makefile opensm.spec])

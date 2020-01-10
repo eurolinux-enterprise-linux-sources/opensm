@@ -42,8 +42,12 @@ DIST_COMMON = $(opensminclude_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in ChangeLog osm_qos_parser_l.c \
 	osm_qos_parser_y.c osm_qos_parser_y.h
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/config/osmvsel.m4 \
-	$(top_srcdir)/configure.in
+am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
+	$(top_srcdir)/config/ltoptions.m4 \
+	$(top_srcdir)/config/ltsugar.m4 \
+	$(top_srcdir)/config/ltversion.m4 \
+	$(top_srcdir)/config/lt~obsolete.m4 \
+	$(top_srcdir)/config/osmvsel.m4 $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -94,7 +98,8 @@ am_opensm_OBJECTS = main.$(OBJEXT) osm_console_io.$(OBJEXT) \
 	osm_node_info_rcv.$(OBJEXT) osm_opensm.$(OBJEXT) \
 	osm_pkey.$(OBJEXT) osm_pkey_mgr.$(OBJEXT) \
 	osm_pkey_rcv.$(OBJEXT) osm_port.$(OBJEXT) \
-	osm_port_info_rcv.$(OBJEXT) osm_remote_sm.$(OBJEXT) \
+	osm_port_info_rcv.$(OBJEXT) \
+	osm_mlnx_ext_port_info_rcv.$(OBJEXT) osm_remote_sm.$(OBJEXT) \
 	osm_req.$(OBJEXT) osm_resp.$(OBJEXT) osm_sa.$(OBJEXT) \
 	osm_sa_class_port_info.$(OBJEXT) osm_sa_informinfo.$(OBJEXT) \
 	osm_sa_lft_record.$(OBJEXT) osm_sa_mft_record.$(OBJEXT) \
@@ -116,7 +121,8 @@ am_opensm_OBJECTS = main.$(OBJEXT) osm_console_io.$(OBJEXT) \
 	osm_router.$(OBJEXT) osm_trap_rcv.$(OBJEXT) \
 	osm_ucast_mgr.$(OBJEXT) osm_ucast_updn.$(OBJEXT) \
 	osm_ucast_lash.$(OBJEXT) osm_ucast_file.$(OBJEXT) \
-	osm_ucast_ftree.$(OBJEXT) osm_vl15intf.$(OBJEXT) \
+	osm_ucast_ftree.$(OBJEXT) osm_torus.$(OBJEXT) \
+	osm_ucast_dnup.$(OBJEXT) osm_vl15intf.$(OBJEXT) \
 	osm_vl_arb_rcv.$(OBJEXT) st.$(OBJEXT) osm_perfmgr.$(OBJEXT) \
 	osm_perfmgr_db.$(OBJEXT) osm_event_plugin.$(OBJEXT) \
 	osm_dump.$(OBJEXT) osm_ucast_cache.$(OBJEXT) \
@@ -169,6 +175,7 @@ CYGPATH_W = @CYGPATH_W@
 DEFAULT_EVENT_PLUGIN = @DEFAULT_EVENT_PLUGIN@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -195,6 +202,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -226,6 +234,7 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
 TARBALL = @TARBALL@
+TORUS2QOS_CONF_FILE = @TORUS2QOS_CONF_FILE@
 VERSION = @VERSION@
 YACC = @YACC@
 YFLAGS = @YFLAGS@
@@ -235,6 +244,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
@@ -267,7 +277,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -306,7 +315,7 @@ opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
 		 osm_mcm_port.c osm_mesh.c osm_mtree.c osm_multicast.c osm_node.c \
 		 osm_node_desc_rcv.c osm_node_info_rcv.c \
 		 osm_opensm.c osm_pkey.c osm_pkey_mgr.c osm_pkey_rcv.c \
-		 osm_port.c osm_port_info_rcv.c \
+		 osm_port.c osm_port_info_rcv.c osm_mlnx_ext_port_info_rcv.c \
 		 osm_remote_sm.c osm_req.c \
 		 osm_resp.c osm_sa.c osm_sa_class_port_info.c \
 		 osm_sa_informinfo.c osm_sa_lft_record.c osm_sa_mft_record.c \
@@ -324,8 +333,8 @@ opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
 		 osm_prtn.c osm_prtn_config.c osm_qos.c osm_router.c \
 		 osm_trap_rcv.c osm_ucast_mgr.c osm_ucast_updn.c \
 		 osm_ucast_lash.c osm_ucast_file.c osm_ucast_ftree.c \
-		 osm_vl15intf.c osm_vl_arb_rcv.c \
-		 st.c osm_perfmgr.c osm_perfmgr_db.c \
+		 osm_torus.c osm_ucast_dnup.c osm_vl15intf.c \
+		 osm_vl_arb_rcv.c st.c osm_perfmgr.c osm_perfmgr_db.c \
 		 osm_event_plugin.c osm_dump.c osm_ucast_cache.c \
 		 osm_qos_parser_y.y osm_qos_parser_l.l osm_qos_policy.c
 
@@ -537,6 +546,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_mcast_tbl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_mcm_port.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_mesh.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_mlnx_ext_port_info_rcv.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_mtree.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_multicast.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_node.Po@am__quote@
@@ -589,8 +599,10 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_subnet.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_sw_info_rcv.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_switch.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_torus.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_trap_rcv.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_ucast_cache.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_ucast_dnup.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_ucast_file.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_ucast_ftree.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/osm_ucast_lash.Po@am__quote@

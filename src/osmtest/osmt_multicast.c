@@ -1,7 +1,8 @@
 /*
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2005,2008 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2010 HNR Consulting. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -65,7 +66,6 @@ static void __osmt_print_all_multicast_records(IN osmtest_t * const p_osmt)
 	memset(&user, 0, sizeof(user));
 
 	user.attr_id = IB_MAD_ATTR_MCMEMBER_RECORD;
-	user.attr_offset = ib_get_attr_offset(sizeof(*mcast_record));
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
 	req.timeout_ms = p_osmt->opt.transaction_timeout;
@@ -167,7 +167,6 @@ ib_api_status_t osmt_query_mcast(IN osmtest_t * const p_osmt)
 
 	context.p_osmt = p_osmt;
 	user.attr_id = IB_MAD_ATTR_MCMEMBER_RECORD;
-	user.attr_offset = ib_get_attr_offset(sizeof(ib_member_rec_t));
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
 	req.timeout_ms = p_osmt->opt.transaction_timeout;
@@ -303,14 +302,12 @@ osmt_send_mcast_request(IN osmtest_t * const p_osmt,
 		req.query_type = OSMV_QUERY_USER_DEFINED;
 		user.method = IB_MAD_METHOD_GET;
 		user.attr_id = IB_MAD_ATTR_MCMEMBER_RECORD;
-		user.attr_offset = ib_get_attr_offset(sizeof(ib_member_rec_t));
 	} else if (is_set == 0xff) {
 		OSM_LOG(&p_osmt->log, OSM_LOG_VERBOSE,
 			"Set USER DEFINED QUERY\n");
 		req.query_type = OSMV_QUERY_USER_DEFINED;
 		user.method = IB_MAD_METHOD_SET;
 		user.attr_id = IB_MAD_ATTR_MCMEMBER_RECORD;
-		user.attr_offset = ib_get_attr_offset(sizeof(ib_member_rec_t));
 	}
 
 	/* TODO : Check the validity of all user fields in order to use
@@ -388,7 +385,7 @@ void osmt_init_mc_query_rec(IN osmtest_t * const p_osmt,
 	/*  uint8_t     mtu; - keep it zero means - anything you have please. */
 	/*  uint8_t     tclass; can leave as zero for now (between subnets) */
 	/*  ib_net16_t  pkey; leave as zero */
-	p_mc_req->rate = IB_LINK_WIDTH_ACTIVE_4X;
+	p_mc_req->rate = IB_PATH_RECORD_RATE_2_5_GBS;
 	/*  uint8_t     pkt_life; zero means greater than zero ... */
 	/*  ib_net32_t  sl_flow_hop; keep it all zeros */
 	/*  we want to use a link local scope: 0x02 */
@@ -522,7 +519,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO, "GetTable of all current MCGs...\n");
 	status = osmt_query_mcast(p_osmt);
 	if (status != IB_SUCCESS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 2FF "
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02FF "
 			"GetTable of all records has failed!\n");
 		goto Exit;
 	}
@@ -680,7 +677,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
 	if (status == IB_SUCCESS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 2E0 "
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02E0 "
 			"SubnAdmGet with invalid mlid 0x%x succeeded\n",
 			cl_ntoh16(mc_req_rec.mlid));
 		status = IB_ERROR;
@@ -709,7 +706,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
 	if (status == IB_SUCCESS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 2E4 "
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02E4 "
 			"SubnAdmGet with invalid port guid succeeded\n");
 		status = IB_ERROR;
 		goto Exit;
@@ -732,7 +729,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 
 	comp_mask = IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID |
 	    /* IB_MCR_COMPMASK_QKEY |  */
-	    /* IB_MCR_COMPMASK_PKEY | intentionaly missed to raise the error */
+	    /* IB_MCR_COMPMASK_PKEY | intentionally missed to raise the error */
 	    IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
 
@@ -741,13 +738,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EE: "
-			"Expectedd REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EE: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -758,6 +757,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* no MGID */
 	memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask =
@@ -772,13 +772,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02ED: "
-			"Expectedd REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02ED: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -793,12 +795,13 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		"Checking Join with insufficient comp mask - flow label (o15.0.1.3)...\n");
 
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask =
 	    IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID |
 	    IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL |
-	    /* IB_MCR_COMPMASK_FLOW | intentionaly missed to raise the error */
+	    /* IB_MCR_COMPMASK_FLOW | intentionally missed to raise the error */
 	    IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
 
@@ -807,13 +810,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EC: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EC: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -824,6 +829,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		"Checking Join with insufficient comp mask - tclass (o15.0.1.3)...\n");
 
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask =
@@ -838,13 +844,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EA: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02EA: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -857,13 +865,14 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* no MGID */
 	/* memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t)); */
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask = IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID |
-	    /* IB_MCR_COMPMASK_QKEY | intentionaly missed to raise the error */
+	    /* IB_MCR_COMPMASK_QKEY | intentionally missed to raise the error */
 	    IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL |
 	    IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE |
-	    /* IB_MCR_COMPMASK_TCLASS |  intentionaly missed to raise the error */
+	    /* IB_MCR_COMPMASK_TCLASS |  intentionally missed to raise the error */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_START "\n");
@@ -871,25 +880,27 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02E9: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02E9: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
 
 	/* o15.0.1.8: */
-	/* - Request join with irrelevant RATE : get a ERR_INSUFFICIENT_COMPONENTS */
+	/* - Request join with unrealistic RATE : get REQ INVALID status */
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
 		"Checking Join with unrealistic rate (o15.0.1.8)...\n");
 
 	/* impossible requested rate */
 	mc_req_rec.rate =
-	    IB_LINK_WIDTH_ACTIVE_12X | IB_PATH_SELECTOR_GREATER_THAN << 6;
+	    IB_PATH_RECORD_RATE_56_GBS | IB_PATH_SELECTOR_GREATER_THAN << 6;
 
 	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
@@ -911,11 +922,11 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 
 	/* Check Valid value which is unreasonable now */
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
-		"Checking Join with unrealistic rate 120GB (o15.0.1.8)...\n");
+		"Checking Join with unrealistic rate 300GB (o15.0.1.8)...\n");
 
 	/* impossible requested rate */
 	mc_req_rec.rate =
-	    IB_PATH_RECORD_RATE_120_GBS | IB_PATH_SELECTOR_GREATER_THAN << 6;
+	    IB_PATH_RECORD_RATE_300_GBS | IB_PATH_SELECTOR_GREATER_THAN << 6;
 
 	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
@@ -1076,6 +1087,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* no MGID */
 	memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask =
@@ -1090,13 +1102,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A8: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A8: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -1145,13 +1159,15 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A7: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A7: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
@@ -1168,6 +1184,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* no MGID */
 	memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	comp_mask =
@@ -1183,31 +1200,29 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					 sa_mad);
 	OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, EXPECTING_ERRORS_END "\n");
 
-	if (status != IB_REMOTE_ERROR ||
-	    ((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
-	    IB_SA_MAD_STATUS_INSUF_COMPS) {
-		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A6: "
-			"Expected REMOTE ERROR IB_SA_MAD_STATUS_INSUF_COMPS got:%s/%s\n",
-			ib_get_err_str(status),
+	if (((ib_net16_t) (sa_mad->status & IB_SMP_STATUS_MASK)) !=
+	     IB_SA_MAD_STATUS_INSUF_COMPS)
+		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
+			"Expected IB_SA_MAD_STATUS_INSUF_COMPS got:%s\n",
 			ib_get_mad_status_str((ib_mad_t *) sa_mad));
+	if (status != IB_REMOTE_ERROR) {
+		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02A6: "
+			"Expected REMOTE ERROR got:%s\n",
+			ib_get_err_str(status));
 		status = IB_ERROR;
 		goto Exit;
 	}
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
 		"Checking Create given MGID=0 valid Set several options :\n\t\t"
-		"First above min RATE, Second less than max RATE\n\t\t"
-		"Third above min MTU, Second less than max MTU\n\t\t"
+		"First any RATE, Second less than max RATE\n\t\t"
+		"Third above min MTU, Fourth less than max MTU\n\t\t"
 		"Fifth exact MTU & RATE feasible, Sixth exact RATE feasible\n\t\t"
 		"Seventh exact MTU feasible (o15.0.1.4)...\n");
 
 	/* Good Flow - mgid is 0 while giving all required fields for join : P_Key, Q_Key, SL, FlowLabel, Tclass */
 
-	mc_req_rec.rate =
-	    IB_LINK_WIDTH_ACTIVE_1X | IB_PATH_SELECTOR_GREATER_THAN << 6;
-
-	comp_mask = IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
-	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
+	comp_mask = IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS;	/* all above are required */
 
 	status = osmt_send_mcast_request(p_osmt, 1, &mc_req_rec, comp_mask,
 					 sa_mad);
@@ -1228,7 +1243,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* Good Flow - mgid is 0 while giving all required fields for join : P_Key, Q_Key, SL, FlowLabel, Tclass */
 
 	mc_req_rec.rate =
-	    IB_LINK_WIDTH_ACTIVE_12X | IB_PATH_SELECTOR_LESS_THAN << 6;
+	    IB_PATH_RECORD_RATE_60_GBS | IB_PATH_SELECTOR_LESS_THAN << 6;
 
 	comp_mask = IB_MCR_COMPMASK_MGID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
@@ -1410,6 +1425,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* no MGID */
 	memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
 	/* Request Join */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 
 	mc_req_rec.pkt_life = 0 | IB_PATH_SELECTOR_GREATER_THAN << 6;
@@ -1436,6 +1452,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	/* o15.0.1.6: */
 	/* - Create a new MCG with valid requested MGID. */
 	osmt_init_mc_query_rec(p_osmt, &mc_req_rec);
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	mc_req_rec.mgid = good_mgid;
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
@@ -1961,7 +1978,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 
 	mc_req_rec.mgid = good_mgid;
 	mc_req_rec.rate =
-	    IB_LINK_WIDTH_ACTIVE_1X | IB_PATH_SELECTOR_LESS_THAN << 6;
+	    IB_PATH_RECORD_RATE_2_5_GBS | IB_PATH_SELECTOR_LESS_THAN << 6;
 	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
 
@@ -2035,11 +2052,8 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
 		"Checking partial JoinState delete request - removing NonMember (o15.0.1.14)...\n");
 
-	mc_req_rec.rate =
-	    IB_LINK_WIDTH_ACTIVE_1X | IB_PATH_SELECTOR_GREATER_THAN << 6;
 	mc_req_rec.mgid = good_mgid;
-	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
-	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
+	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS;	/* all above are required */
 	/* link-local scope, non member (so we should not be able to delete) */
 	/* but the NonMember bit should be gone */
 	mc_req_rec.scope_state = 0x22;
@@ -2202,6 +2216,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		"\t\twith unrealistic MTU greater than 4096 (o15.0.1.8)...\n");
 
 	/* First create new mgrp */
+	mc_req_rec.pkey = IB_DEFAULT_PKEY;
 	ib_member_set_join_state(&mc_req_rec, IB_MC_REC_STATE_FULL_MEMBER);
 	mc_req_rec.mtu = IB_MTU_LEN_1024 | IB_PATH_SELECTOR_EXACTLY << 6;
 	memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
@@ -2289,6 +2304,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	}
 
 	if (remote_port_guid != 0x0) {
+		mc_req_rec.pkey = IB_DEFAULT_PKEY;
 		ib_member_set_join_state(&mc_req_rec,
 					 IB_MC_REC_STATE_FULL_MEMBER);
 		memset(&mc_req_rec.mgid, 0, sizeof(ib_gid_t));
@@ -2412,7 +2428,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 					      cl_ntoh16(p_mc_res->mlid),
 					      p_mc_res);
 			} else if (cur_mlid > cl_ntoh16(max_mlid)) {
-				OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 2E1 "
+				OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02E1 "
 					"Successful Join with greater mlid than switches support (MulticastFDBCap) 0x%04X\n",
 					cur_mlid);
 				status = IB_ERROR;

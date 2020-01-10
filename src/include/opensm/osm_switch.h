@@ -100,7 +100,7 @@ typedef struct osm_switch {
 	uint16_t num_hops;
 	uint8_t **hops;
 	osm_port_profile_t *p_prof;
-	uint8_t *dimn_ports;
+	uint8_t *search_ordering_ports;
 	uint8_t *lft;
 	uint8_t *new_lft;
 	uint16_t lft_size;
@@ -575,7 +575,7 @@ boolean_t osm_switch_get_lft_block(IN const osm_switch_t * p_sw,
 *
 *	p_block
 *		[out] Pointer to the 64 byte array to store the
-*		forwarding table clock specified by block_id.
+*		forwarding table block specified by block_id.
 *
 * RETURN VALUES
 *	Returns true if there are more blocks necessary to
@@ -885,9 +885,9 @@ static inline uint8_t osm_switch_get_dimn_port(IN const osm_switch_t * p_sw,
 					       IN uint8_t port_num)
 {
 	CL_ASSERT(p_sw);
-	if (p_sw->dimn_ports == NULL)
+	if (p_sw->search_ordering_ports == NULL)
 		return port_num;
-	return p_sw->dimn_ports[port_num];
+	return p_sw->search_ordering_ports[port_num];
 }
 /*
 * PARAMETERS
@@ -918,7 +918,10 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 				  IN osm_port_t * p_port, IN uint16_t lid_ho,
 				  IN unsigned start_from,
 				  IN boolean_t ignore_existing,
-				  IN boolean_t dor);
+				  IN boolean_t routing_for_lmc,
+				  IN boolean_t dor,
+				  IN boolean_t port_shifting,
+				  IN uint32_t scatter_ports);
 /*
 * PARAMETERS
 *	p_sw
@@ -940,8 +943,25 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 *		If false, the switch will choose an existing route if one
 *		exists, otherwise will choose the optimal route.
 *
+*	routing_for_lmc
+*		[in] We support an enhanced LMC aware routing mode:
+*		In the case of LMC > 0, we can track the remote side
+*		system and node for all of the lids of the target
+*		and try and avoid routing again through the same
+*		system / node.
+*
+*		Assume if routing_for_lmc is TRUE that this procedure
+*		was provided with the tracking array and counter via
+*		p_port->priv, and we can conduct this algorithm.
+*
 *	dor
 *		[in] If TRUE, Dimension Order Routing will be done.
+*
+*	port_shifting
+*		[in] If TRUE, port_shifting will be done.
+*
+* 	scatter_ports
+* 		[in] If not zero, randomize the selection of the best ports.
 *
 * RETURN VALUE
 *	Returns the recommended port on which to route this LID.

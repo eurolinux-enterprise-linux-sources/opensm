@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2005,2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -126,6 +126,7 @@ typedef struct osm_sm {
 	cl_dispatcher_t *p_disp;
 	cl_plock_t *p_lock;
 	atomic32_t sm_trans_id;
+	uint16_t mlids_init_max;
 	unsigned mlids_req_max;
 	uint8_t *mlids_req;
 	osm_sm_mad_ctrl_t mad_ctrl;
@@ -143,6 +144,7 @@ typedef struct osm_sm {
 	cl_disp_reg_handle_t slvl_disp_h;
 	cl_disp_reg_handle_t vla_disp_h;
 	cl_disp_reg_handle_t pkey_disp_h;
+	cl_disp_reg_handle_t mlnx_epi_disp_h;
 } osm_sm_t;
 /*
 * FIELDS

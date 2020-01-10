@@ -24,7 +24,7 @@
 /* #undef ENABLE_OSM_DEFAULT_EVENT_PLUGIN */
 
 /* Define as 1 if you want to enable the performance manager */
-/* #undef ENABLE_OSM_PERF_MGR */
+#define ENABLE_OSM_PERF_MGR 1
 
 /* Define as 1 if you want to enable the performance manager profiling code */
 /* #undef ENABLE_OSM_PERF_MGR_PROFILE */

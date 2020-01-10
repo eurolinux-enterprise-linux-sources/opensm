@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
  *
@@ -53,6 +53,7 @@
 #endif
 
 #include <complib/cl_types.h>
+#include <iba/ib_types.h>
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -157,6 +158,17 @@ BEGIN_C_DECLS
 * SYNOPSIS
 */
 #define OSM_DEFAULT_SL 0
+/********/
+/****s* OpenSM: Base/OSM_DEFAULT_SCATTER_PORTS
+* NAME
+*	OSM_DEFAULT_SCATTER_PORTS
+*
+* DESCRIPTION
+*	Default Scatter Ports value used by OpenSM.
+*
+* SYNOPSIS
+*/
+#define OSM_DEFAULT_SCATTER_PORTS 0
 /********/
 /****s* OpenSM: Base/OSM_DEFAULT_SM_PRIORITY
 * NAME
@@ -269,6 +281,24 @@ BEGIN_C_DECLS
 #else
 #define OSM_DEFAULT_QOS_POLICY_FILE "/etc/opensm/qos-policy.conf"
 #endif
+/***********/
+
+/****d* OpenSM: Base/OSM_DEFAULT_TORUS_CONF_FILE
+* NAME
+*	OSM_DEFAULT_TORUS_CONF_FILE
+*
+* DESCRIPTION
+*	Specifies the default file name for extra torus-2QoS configuration
+*
+* SYNOPSIS
+*/
+#ifdef __WIN__
+#define OSM_DEFAULT_TORUS_CONF_FILE strcat(GetOsmCachePath(), "osm-torus-2QoS.conf")
+#elif defined(OPENSM_CONFIG_DIR)
+#define OSM_DEFAULT_TORUS_CONF_FILE OPENSM_CONFIG_DIR "/torus-2QoS.conf"
+#else
+#define OSM_DEFAULT_TORUS_CONF_FILE "/etc/opensm/torus-2QoS.conf"
+#endif /* __WIN__ */
 /***********/
 
 /****d* OpenSM: Base/OSM_DEFAULT_PREFIX_ROUTES_FILE
@@ -795,11 +825,35 @@ typedef enum _osm_thread_state {
 * Name
 *
 * DESCRIPTION
-*	Hierarchy info suppported
+*	Hierarchy info supported
 *
 * SYNOPSIS
 */
 #define OSM_CAP2_IS_HIERARCHY_SUPPORTED (1 << 4)
+/***********/
+
+/****d* OpenSM: Base/OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED
+* Name
+*	OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED
+*
+* DESCRIPTION
+*	Full PortInfoRecords supported
+*
+* SYNOPSIS
+*/
+#define OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED (1 << 6)
+/***********/
+
+/****d* OpenSM: Base/OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED
+* Name
+*	OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED
+*
+* DESCRIPTION
+*	Extended Link Speeds supported
+*
+* SYNOPSIS
+*/
+#define OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED (1 << 7)
 /***********/
 
 /****d* OpenSM: Base/osm_signal_t
@@ -818,7 +872,7 @@ typedef enum _osm_thread_state {
 #define OSM_SIGNAL_SWEEP			1
 #define OSM_SIGNAL_IDLE_TIME_PROCESS_REQUEST	2
 #define OSM_SIGNAL_PERFMGR_SWEEP		3
-#define OSM_SIGNAL_MAX				3
+#define OSM_SIGNAL_MAX				4
 
 typedef unsigned int osm_signal_t;
 /***********/
@@ -899,6 +953,11 @@ typedef enum _osm_sm_signal {
 #define OSM_VENDOR_ID_SUPERMICRO    0x003048
 #define OSM_VENDOR_ID_HP3           0x0019BB
 #define OSM_VENDOR_ID_HP4           0x00237D
+#define OSM_VENDOR_ID_OPENIB        0x001405
+
+/* IPoIB Broadcast Defaults */
+#define OSM_IPOIB_BROADCAST_MGRP_QKEY 0x0b1b
+extern const ib_gid_t osm_ipoib_broadcast_mgid;
 
 /**********/
 

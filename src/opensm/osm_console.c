@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2005-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2009,2010 HNR Consulting. All rights reserved.
+ * Copyright (c) 2010,2011 Mellanox Technologies LTD. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -44,7 +45,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <regex.h>
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 #include <arpa/inet.h>
 #endif
 #include <unistd.h>
@@ -71,7 +72,7 @@ static struct {
 	time_t previous;
 	void (*loop_function) (osm_opensm_t * p_osm, FILE * out);
 } loop_command = {
-on: 0, delay_s: 2, loop_function:NULL};
+.on = 0, .delay_s = 2, .loop_function = NULL};
 
 static const struct command console_cmds[];
 
@@ -231,7 +232,7 @@ static void help_update_desc(FILE *out, int detail)
 static void help_perfmgr(FILE * out, int detail)
 {
 	fprintf(out,
-		"perfmgr [enable|disable|clear_counters|dump_counters|print_counters|sweep_time[seconds]]\n");
+		"perfmgr [enable|disable|clear_counters|dump_counters|print_counters|dump_redir|clear_redir|sweep_time[seconds]]\n");
 	if (detail) {
 		fprintf(out,
 			"perfmgr -- print the performance manager state\n");
@@ -245,6 +246,10 @@ static void help_perfmgr(FILE * out, int detail)
 			"   [dump_counters [mach]] -- dump the counters (optionally in [mach]ine readable format)\n");
 		fprintf(out,
 			"   [print_counters <nodename|nodeguid>] -- print the counters for the specified node\n");
+		fprintf(out,
+			"   [dump_redir [<nodename|nodeguid>]] -- dump the redirection table\n");
+		fprintf(out,
+			"   [clear_redir [<nodename|nodeguid>]] -- clear the redirection table\n");
 	}
 }
 #endif				/* ENABLE_OSM_PERF_MGR */
@@ -382,6 +387,8 @@ static void print_status(osm_opensm_t * p_osm, FILE * out)
 	cl_list_item_t *item;
 
 	if (out) {
+		const char *re_str;
+
 		cl_plock_acquire(&p_osm->lock);
 		fprintf(out, "   OpenSM Version       : %s\n", p_osm->osm_version);
 		fprintf(out, "   SM State             : %s\n",
@@ -390,9 +397,11 @@ static void print_status(osm_opensm_t * p_osm, FILE * out)
 			p_osm->subn.opt.sm_priority);
 		fprintf(out, "   SA State             : %s\n",
 			sa_state_str(p_osm->sa.state));
-		fprintf(out, "   Routing Engine       : %s\n",
-			osm_routing_engine_type_str(p_osm->
-						    routing_engine_used));
+
+		re_str = p_osm->routing_engine_used ?
+			osm_routing_engine_type_str(p_osm->routing_engine_used->type) :
+			osm_routing_engine_type_str(OSM_ROUTING_ENGINE_TYPE_NONE);
+		fprintf(out, "   Routing Engine       : %s\n", re_str);
 
 		fprintf(out, "   Loaded event plugins :");
 		if (cl_qlist_head(&p_osm->plugin_list) ==
@@ -641,6 +650,9 @@ typedef struct {
 	uint64_t ports_sdr;
 	uint64_t ports_ddr;
 	uint64_t ports_qdr;
+	uint64_t ports_fdr10;
+	uint64_t ports_fdr;
+	uint64_t ports_edr;
 	uint64_t ports_unknown_speed;
 	uint64_t ports_reduced_speed;
 	port_report_t *reduced_speed_ports;
@@ -653,6 +665,8 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 {
 	fabric_stats_t *fs = (fabric_stats_t *) context;
 	osm_node_t *node = (osm_node_t *) p_map_item;
+	osm_physp_t *physp0;
+	ib_port_info_t *pi0;
 	uint8_t num_ports = osm_node_get_num_physp(node);
 	uint8_t port = 0;
 
@@ -663,9 +677,16 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 
 	fs->total_nodes++;
 
+	if (osm_node_get_type(node) == IB_NODE_TYPE_SWITCH) {
+		physp0 = osm_node_get_physp_ptr(node, 0);
+		pi0 = &physp0->port_info;
+	} else
+		pi0 = NULL;
+
 	for (port = 1; port < num_ports; port++) {
 		osm_physp_t *phys = osm_node_get_physp_ptr(node, port);
 		ib_port_info_t *pi = NULL;
+		ib_mlnx_ext_port_info_t *epi = NULL;
 		uint8_t active_speed = 0;
 		uint8_t enabled_speed = 0;
 		uint8_t active_width = 0;
@@ -676,7 +697,10 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 		if (!phys)
 			continue;
 
-		pi = &(phys->port_info);
+		pi = &phys->port_info;
+		epi = &phys->ext_port_info;
+		if (!pi0)
+			pi0 = pi;
 		active_speed = ib_port_info_get_link_speed_active(pi);
 		enabled_speed = ib_port_info_get_link_speed_enabled(pi);
 		active_width = pi->link_width_active;
@@ -706,11 +730,49 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			fs->ports_ddr++;
 			break;
 		case IB_LINK_SPEED_ACTIVE_10:
-			fs->ports_qdr++;
+			if (!(pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) ||
+			    ((pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) &&
+			    !ib_port_info_get_link_speed_ext_active(pi))) {
+				if (epi->link_speed_active & FDR10)
+					fs->ports_fdr10++;
+				else {
+					fs->ports_qdr++;
+					/* check for speed reduced from FDR10 */
+					if (epi->link_speed_enabled & FDR10) {
+						__tag_port_report(&(fs->reduced_speed_ports),
+								  cl_ntoh64(node->node_info.node_guid),
+								  port, node->print_desc);
+						fs->ports_reduced_speed++;
+					}
+				}
+			}
 			break;
 		default:
 			fs->ports_unknown_speed++;
 			break;
+		}
+		if (pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS &&
+		    ib_port_info_get_link_speed_ext_sup(pi) &&
+		    (enabled_speed = pi->link_speed_ext_enabled) != IB_LINK_SPEED_EXT_DISABLE &&
+		    active_speed == IB_LINK_SPEED_ACTIVE_10) {
+			active_speed = ib_port_info_get_link_speed_ext_active(pi);
+			if ((enabled_speed ^ active_speed) > active_speed) {
+				__tag_port_report(&(fs->reduced_speed_ports),
+						  cl_ntoh64(node->node_info.node_guid),
+						  port, node->print_desc);
+				fs->ports_reduced_speed++;
+			}
+			switch (active_speed) {
+			case IB_LINK_SPEED_EXT_ACTIVE_14:
+				fs->ports_fdr++;
+				break;
+			case IB_LINK_SPEED_EXT_ACTIVE_25:
+				fs->ports_edr++;
+				break;
+			default:
+				fs->ports_unknown_speed++;
+				break;
+			}
 		}
 		switch (active_width) {
 		case IB_LINK_WIDTH_ACTIVE_1X:
@@ -805,6 +867,10 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		fprintf(out, "   %" PRIu64 " at 5.0 Gbps\n", fs.ports_ddr);
 	if (fs.ports_qdr)
 		fprintf(out, "   %" PRIu64 " at 10.0 Gbps\n", fs.ports_qdr);
+	if (fs.ports_fdr)
+		fprintf(out, "   %" PRIu64 " at 14.0625 Gbps\n", fs.ports_fdr);
+	if (fs.ports_edr)
+		fprintf(out, "   %" PRIu64 " at 25.78125 Gbps\n", fs.ports_edr);
 
 	if (fs.ports_disabled + fs.ports_reduced_speed + fs.ports_reduced_width
 	    > 0) {
@@ -1179,6 +1245,152 @@ static void update_desc_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 }
 
 #ifdef ENABLE_OSM_PERF_MGR
+static monitored_node_t *find_node_by_name(osm_opensm_t * p_osm,
+					   char *nodename)
+{
+	cl_map_item_t *item;
+	monitored_node_t *node;
+
+	item = cl_qmap_head(&p_osm->perfmgr.monitored_map);
+	while (item != cl_qmap_end(&p_osm->perfmgr.monitored_map)) {
+		node = (monitored_node_t *)item;
+		if (strcmp(node->name, nodename) == 0)
+			return node;
+		item = cl_qmap_next(item);
+	}
+
+	return NULL;
+}
+
+static monitored_node_t *find_node_by_guid(osm_opensm_t * p_osm,
+					   uint64_t guid)
+{
+	cl_map_item_t *node;
+
+	node = cl_qmap_get(&p_osm->perfmgr.monitored_map, guid);
+	if (node != cl_qmap_end(&p_osm->perfmgr.monitored_map))
+		return (monitored_node_t *)node;
+
+	return NULL;
+}
+
+static void dump_redir_entry(monitored_node_t *p_mon_node, FILE * out)
+{
+	int port, redir;
+
+	/* only display monitored nodes with redirection info */
+	redir = 0;
+	for (port = (p_mon_node->esp0) ? 0 : 1;
+	     port < p_mon_node->num_ports; port++) {
+		if (p_mon_node->port[port].redirection) {
+			if (!redir) {
+				fprintf(out, "   Node GUID       ESP0   Name\n");
+				fprintf(out, "   ---------       ----   ----\n");
+				fprintf(out, "   0x%" PRIx64 " %d      %s\n",
+					p_mon_node->guid, p_mon_node->esp0,
+					p_mon_node->name);
+				fprintf(out, "\n   Port Valid  LIDs     PKey  QP    PKey Index\n");
+				fprintf(out, "   ---- -----  ----     ----  --    ----------\n");
+				redir = 1;
+			}
+			fprintf(out, "   %d    %d      %u->%u  0x%x 0x%x   %d\n",
+				port, p_mon_node->port[port].valid,
+				cl_ntoh16(p_mon_node->port[port].orig_lid),
+				cl_ntoh16(p_mon_node->port[port].lid),
+				cl_ntoh16(p_mon_node->port[port].pkey),
+				cl_ntoh32(p_mon_node->port[port].qp),
+				p_mon_node->port[port].pkey_ix);
+		}
+	}
+	if (redir)
+		fprintf(out, "\n");
+}
+
+static void dump_redir(osm_opensm_t * p_osm, char *nodename, FILE * out)
+{
+	monitored_node_t *p_mon_node;
+	uint64_t guid;
+
+	if (!p_osm->subn.opt.perfmgr_redir)
+		fprintf(out, "Perfmgr redirection not enabled\n");
+
+	fprintf(out, "\nRedirection Table\n");
+	fprintf(out, "-----------------\n");
+	cl_plock_acquire(&p_osm->lock);
+	if (nodename) {
+		guid = strtoull(nodename, NULL, 0);
+		if (guid == 0 && errno)
+			p_mon_node = find_node_by_name(p_osm, nodename);
+		else
+			p_mon_node = find_node_by_guid(p_osm, guid);
+		if (p_mon_node)
+			dump_redir_entry(p_mon_node, out);
+		else {
+			if (guid == 0 && errno)
+				fprintf(out, "Node %s not found...\n", nodename);
+			else
+				fprintf(out, "Node 0x%" PRIx64 " not found...\n", guid);
+		}
+	} else {
+		p_mon_node = (monitored_node_t *) cl_qmap_head(&p_osm->perfmgr.monitored_map);
+		while (p_mon_node != (monitored_node_t *) cl_qmap_end(&p_osm->perfmgr.monitored_map)) {
+			dump_redir_entry(p_mon_node, out);
+			p_mon_node = (monitored_node_t *) cl_qmap_next((const cl_map_item_t *)p_mon_node);
+		}
+	}
+	cl_plock_release(&p_osm->lock);
+}
+
+static void clear_redir_entry(monitored_node_t *p_mon_node)
+{
+	int port;
+	ib_net16_t orig_lid;
+
+	for (port = (p_mon_node->esp0) ? 0 : 1;
+	     port < p_mon_node->num_ports; port++) {
+		if (p_mon_node->port[port].redirection) {
+			orig_lid = p_mon_node->port[port].orig_lid;
+			memset(&p_mon_node->port[port], 0,
+			       sizeof(monitored_port_t));
+			p_mon_node->port[port].valid = TRUE;
+			p_mon_node->port[port].orig_lid = orig_lid;
+		}
+	}
+}
+
+static void clear_redir(osm_opensm_t * p_osm, char *nodename, FILE * out)
+{
+	monitored_node_t *p_mon_node;
+	uint64_t guid;
+
+	if (!p_osm->subn.opt.perfmgr_redir)
+		fprintf(out, "Perfmgr redirection not enabled\n");
+
+	cl_plock_acquire(&p_osm->lock);
+	if (nodename) {
+		guid = strtoull(nodename, NULL, 0);
+		if (guid == 0 && errno)
+			p_mon_node = find_node_by_name(p_osm, nodename);
+		else
+			p_mon_node = find_node_by_guid(p_osm, guid);
+		if (p_mon_node)
+			clear_redir_entry(p_mon_node);
+		else {
+			if (guid == 0 && errno)
+				fprintf(out, "Node %s not found...\n", nodename);
+			else
+				fprintf(out, "Node 0x%" PRIx64 " not found...\n", guid);
+		}
+	} else {
+		p_mon_node = (monitored_node_t *) cl_qmap_head(&p_osm->perfmgr.monitored_map);
+		while (p_mon_node != (monitored_node_t *) cl_qmap_end(&p_osm->perfmgr.monitored_map)) {
+			clear_redir_entry(p_mon_node);
+			p_mon_node = (monitored_node_t *) cl_qmap_next((const cl_map_item_t *)p_mon_node);
+		}
+	}
+	cl_plock_release(&p_osm->lock);
+}
+
 static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 {
 	char *p_cmd;
@@ -1211,6 +1423,12 @@ static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 				fprintf(out,
 					"print_counters requires a node name or node GUID to be specified\n");
 			}
+		} else if (strcmp(p_cmd, "dump_redir") == 0) {
+			p_cmd = name_token(p_last);
+			dump_redir(p_osm, p_cmd, out);
+		} else if (strcmp(p_cmd, "clear_redir") == 0) {
+			p_cmd = name_token(p_last);
+			clear_redir(p_osm, p_cmd, out);
 		} else if (strcmp(p_cmd, "sweep_time") == 0) {
 			p_cmd = next_token(p_last);
 			if (p_cmd) {
@@ -1262,8 +1480,8 @@ typedef struct _regexp_list {
 
 static void dump_portguid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 {
-	cl_qmap_t *p_port_guid_tbl;
-	osm_port_t *p_port, *p_next_port;
+	cl_qmap_t *p_alias_port_guid_tbl;
+	osm_alias_guid_t *p_alias_guid, *p_next_alias_guid;
 	regexp_list_t *p_regexp, *p_head_regexp = NULL;
 	FILE *output = out;
 
@@ -1312,22 +1530,23 @@ static void dump_portguid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 
 	/* Subnet doesn't need to be updated so we can carry on */
 
+	p_alias_port_guid_tbl = &(p_osm->sm.p_subn->alias_port_guid_tbl);
 	CL_PLOCK_ACQUIRE(p_osm->sm.p_lock);
-	p_port_guid_tbl = &(p_osm->sm.p_subn->port_guid_tbl);
 
-	p_next_port = (osm_port_t *) cl_qmap_head(p_port_guid_tbl);
-	while (p_next_port != (osm_port_t *) cl_qmap_end(p_port_guid_tbl)) {
+	p_next_alias_guid = (osm_alias_guid_t *) cl_qmap_head(p_alias_port_guid_tbl);
+	while (p_next_alias_guid != (osm_alias_guid_t *) cl_qmap_end(p_alias_port_guid_tbl)) {
 
-		p_port = p_next_port;
-		p_next_port =
-		    (osm_port_t *) cl_qmap_next(&p_next_port->map_item);
+		p_alias_guid = p_next_alias_guid;
+		p_next_alias_guid =
+		    (osm_alias_guid_t *) cl_qmap_next(&p_next_alias_guid->map_item);
 
 		for (p_regexp = p_head_regexp; p_regexp != NULL;
 		     p_regexp = p_regexp->next)
-			if (regexec(&p_regexp->exp, p_port->p_node->print_desc,
+			if (regexec(&p_regexp->exp,
+				    p_alias_guid->p_base_port->p_node->print_desc,
 				    0, NULL, 0) == 0) {
 				fprintf(output, "0x%" PRIxLEAST64 "\n",
-					cl_ntoh64(p_port->p_physp->port_guid));
+					cl_ntoh64(p_alias_guid->alias_guid));
 				break;
 			}
 	}
@@ -1458,7 +1677,7 @@ int osm_console(osm_opensm_t * p_osm)
 	if (poll(fds, nfds, 1000) <= 0)
 		return 0;
 
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 	if (pollfd[0].revents & POLLIN) {
 		int new_fd = 0;
 		struct sockaddr_in sin;
@@ -1516,7 +1735,7 @@ int osm_console(osm_opensm_t * p_osm)
 	}
 	/* input fd is closed (hanged up) */
 	if (pollfd[1].revents & POLLHUP) {
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 		/* If we are using a socket, we close the current connection */
 		if (p_oct->socket >= 0) {
 			cio_close(p_oct, &p_osm->log);

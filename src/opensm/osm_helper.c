@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
@@ -439,6 +439,27 @@ static const char *ib_sa_attr_str[] = {
 
 #define OSM_SA_ATTR_STR_UNKNOWN_VAL (ARR_SIZE(ib_sa_attr_str) - 1)
 
+static int ordered_rates[] = {
+	0, 0,	/*  0, 1 - reserved */
+	1,	/*  2 - 2.5 Gbps */
+	3,	/*  3 - 10  Gbps */
+	6,	/*  4 - 30  Gbps */
+	2,	/*  5 - 5   Gbps */
+	5,	/*  6 - 20  Gbps */
+	8,	/*  7 - 40  Gbps */
+	9,	/*  8 - 60  Gbps */
+	11,	/*  9 - 80  Gbps */
+	12,	/* 10 - 120 Gbps */
+	4,	/* 11 -  14 Gbps (17 Gbps equiv) */
+	10,	/* 12 -  56 Gbps (68 Gbps equiv) */
+	14,	/* 13 - 112 Gbps (136 Gbps equiv) */
+	15,	/* 14 - 158 Gbps (204 Gbps equiv) */
+	7,	/* 15 -  25 Gbps (31.25 Gbps equiv) */
+	13,	/* 16 - 100 Gbps (125 Gbps equiv) */
+	16,	/* 17 - 200 Gbps (250 Gbps equiv) */
+	17	/* 18 - 300 Gbps (375 Gbps equiv) */
+};
+
 static int sprint_uint8_arr(char *buf, size_t size,
 			    const uint8_t * arr, size_t len)
 {
@@ -480,6 +501,9 @@ const char *ib_get_sm_method_str(IN uint8_t method)
 const char *ib_get_sm_attr_str(IN ib_net16_t attr)
 {
 	uint16_t host_attr = cl_ntoh16(attr);
+
+	if (attr == IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO)
+		return "MLNXExtendedPortInfo";
 
 	if (host_attr > OSM_SM_ATTR_STR_UNKNOWN_VAL)
 		host_attr = OSM_SM_ATTR_STR_UNKNOWN_VAL;
@@ -654,15 +678,15 @@ static void dbg_get_capabilities_str(IN char *p_buf, IN uint32_t buf_size,
 				&total_len) != IB_SUCCESS)
 			return;
 	}
-	if (p_pi->capability_mask & IB_PORT_CAP_RESV14) {
+	if (p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) {
 		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
-				"IB_PORT_CAP_RESV14\n",
+				"IB_PORT_CAP_HAS_EXT_SPEEDS\n",
 				&total_len) != IB_SUCCESS)
 			return;
 	}
-	if (p_pi->capability_mask & IB_PORT_CAP_RESV15) {
+	if (p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) {
 		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
-				"IB_PORT_CAP_RESV15\n",
+				"IB_PORT_CAP_HAS_CAP_MASK2\n",
 				&total_len) != IB_SUCCESS)
 			return;
 	}
@@ -774,45 +798,49 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 
 		osm_log(p_log, log_level,
 			"PortInfo dump:\n"
-			"\t\t\t\tport number.............%u\n"
-			"\t\t\t\tnode_guid...............0x%016" PRIx64 "\n"
-			"\t\t\t\tport_guid...............0x%016" PRIx64 "\n"
-			"\t\t\t\tm_key...................0x%016" PRIx64 "\n"
-			"\t\t\t\tsubnet_prefix...........0x%016" PRIx64 "\n"
-			"\t\t\t\tbase_lid................%u\n"
-			"\t\t\t\tmaster_sm_base_lid......%u\n"
-			"\t\t\t\tcapability_mask.........0x%X\n"
-			"\t\t\t\tdiag_code...............0x%X\n"
-			"\t\t\t\tm_key_lease_period......0x%X\n"
-			"\t\t\t\tlocal_port_num..........%u\n"
-			"\t\t\t\tlink_width_enabled......0x%X\n"
-			"\t\t\t\tlink_width_supported....0x%X\n"
-			"\t\t\t\tlink_width_active.......0x%X\n"
-			"\t\t\t\tlink_speed_supported....0x%X\n"
-			"\t\t\t\tport_state..............%s\n"
-			"\t\t\t\tstate_info2.............0x%X\n"
-			"\t\t\t\tm_key_protect_bits......0x%X\n"
-			"\t\t\t\tlmc.....................0x%X\n"
-			"\t\t\t\tlink_speed..............0x%X\n"
-			"\t\t\t\tmtu_smsl................0x%X\n"
-			"\t\t\t\tvl_cap_init_type........0x%X\n"
-			"\t\t\t\tvl_high_limit...........0x%X\n"
-			"\t\t\t\tvl_arb_high_cap.........0x%X\n"
-			"\t\t\t\tvl_arb_low_cap..........0x%X\n"
-			"\t\t\t\tinit_rep_mtu_cap........0x%X\n"
-			"\t\t\t\tvl_stall_life...........0x%X\n"
-			"\t\t\t\tvl_enforce..............0x%X\n"
-			"\t\t\t\tm_key_violations........0x%X\n"
-			"\t\t\t\tp_key_violations........0x%X\n"
-			"\t\t\t\tq_key_violations........0x%X\n"
-			"\t\t\t\tguid_cap................0x%X\n"
-			"\t\t\t\tclient_reregister.......0x%X\n"
-			"\t\t\t\tmcast_pkey_trap_suppr...0x%X\n"
-			"\t\t\t\tsubnet_timeout..........0x%X\n"
-			"\t\t\t\tresp_time_value.........0x%X\n"
-			"\t\t\t\terror_threshold.........0x%X\n"
-			"\t\t\t\tmax_credit_hint.........0x%X\n"
-			"\t\t\t\tlink_round_trip_latency.0x%X\n",
+			"\t\t\t\tport number..............%u\n"
+			"\t\t\t\tnode_guid................0x%016" PRIx64 "\n"
+			"\t\t\t\tport_guid................0x%016" PRIx64 "\n"
+			"\t\t\t\tm_key....................0x%016" PRIx64 "\n"
+			"\t\t\t\tsubnet_prefix............0x%016" PRIx64 "\n"
+			"\t\t\t\tbase_lid.................%u\n"
+			"\t\t\t\tmaster_sm_base_lid.......%u\n"
+			"\t\t\t\tcapability_mask..........0x%X\n"
+			"\t\t\t\tdiag_code................0x%X\n"
+			"\t\t\t\tm_key_lease_period.......0x%X\n"
+			"\t\t\t\tlocal_port_num...........%u\n"
+			"\t\t\t\tlink_width_enabled.......0x%X\n"
+			"\t\t\t\tlink_width_supported.....0x%X\n"
+			"\t\t\t\tlink_width_active........0x%X\n"
+			"\t\t\t\tlink_speed_supported.....0x%X\n"
+			"\t\t\t\tport_state...............%s\n"
+			"\t\t\t\tstate_info2..............0x%X\n"
+			"\t\t\t\tm_key_protect_bits.......0x%X\n"
+			"\t\t\t\tlmc......................0x%X\n"
+			"\t\t\t\tlink_speed...............0x%X\n"
+			"\t\t\t\tmtu_smsl.................0x%X\n"
+			"\t\t\t\tvl_cap_init_type.........0x%X\n"
+			"\t\t\t\tvl_high_limit............0x%X\n"
+			"\t\t\t\tvl_arb_high_cap..........0x%X\n"
+			"\t\t\t\tvl_arb_low_cap...........0x%X\n"
+			"\t\t\t\tinit_rep_mtu_cap.........0x%X\n"
+			"\t\t\t\tvl_stall_life............0x%X\n"
+			"\t\t\t\tvl_enforce...............0x%X\n"
+			"\t\t\t\tm_key_violations.........0x%X\n"
+			"\t\t\t\tp_key_violations.........0x%X\n"
+			"\t\t\t\tq_key_violations.........0x%X\n"
+			"\t\t\t\tguid_cap.................0x%X\n"
+			"\t\t\t\tclient_reregister........0x%X\n"
+			"\t\t\t\tmcast_pkey_trap_suppr....0x%X\n"
+			"\t\t\t\tsubnet_timeout...........0x%X\n"
+			"\t\t\t\tresp_time_value..........0x%X\n"
+			"\t\t\t\terror_threshold..........0x%X\n"
+			"\t\t\t\tmax_credit_hint..........0x%X\n"
+			"\t\t\t\tlink_round_trip_latency..0x%X\n"
+			"\t\t\t\tcapability_mask2.........0x%X\n"
+			"\t\t\t\tlink_speed_ext_active....0x%X\n"
+			"\t\t\t\tlink_speed_ext_supported.0x%X\n"
+			"\t\t\t\tlink_speed_ext_enabled...0x%X\n",
 			port_num, cl_ntoh64(node_guid), cl_ntoh64(port_guid),
 			cl_ntoh64(p_pi->m_key), cl_ntoh64(p_pi->subnet_prefix),
 			cl_ntoh16(p_pi->base_lid),
@@ -835,9 +863,14 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 			cl_ntoh16(p_pi->q_key_violations), p_pi->guid_cap,
 			ib_port_info_get_client_rereg(p_pi),
 			ib_port_info_get_mcast_pkey_trap_suppress(p_pi),
-			ib_port_info_get_timeout(p_pi), p_pi->resp_time_value,
+			ib_port_info_get_timeout(p_pi),
+			ib_port_info_get_resp_time_value(p_pi),
 			p_pi->error_threshold, cl_ntoh16(p_pi->max_credit_hint),
-			cl_ntoh32(p_pi->link_rt_latency));
+			cl_ntoh32(p_pi->link_rt_latency),
+			cl_ntoh16(p_pi->capability_mask2),
+			ib_port_info_get_link_speed_ext_active(p_pi),
+			ib_port_info_get_link_speed_ext_sup(p_pi),
+			p_pi->link_speed_ext_enabled);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -845,6 +878,27 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 						 p_pi);
 			osm_log(p_log, log_level, "%s", buf);
 		}
+	}
+}
+
+void osm_dump_mlnx_ext_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
+				 IN ib_net64_t port_guid, IN uint8_t port_num,
+				 IN const ib_mlnx_ext_port_info_t * p_pi,
+				 IN osm_log_level_t log_level)
+{
+	if (osm_log_is_active(p_log, log_level)) {
+		osm_log(p_log, log_level,
+			"MLNX ExtendedPortInfo dump:\n"
+			"\t\t\t\tport number..............%u\n"
+			"\t\t\t\tnode_guid................0x%016" PRIx64 "\n"
+			"\t\t\t\tport_guid................0x%016" PRIx64 "\n"
+			"\t\t\t\tStateChangeEnable........0x%X\n"
+			"\t\t\t\tLinkSpeedSupported.......0x%X\n"
+			"\t\t\t\tLinkSpeedEnabled.........0x%X\n"
+			"\t\t\t\tLinkSpeedActive..........0x%X\n",
+			port_num, cl_ntoh64(node_guid), cl_ntoh64(port_guid),
+			p_pi->state_change_enable, p_pi->link_speed_supported,
+			p_pi->link_speed_enabled, p_pi->link_speed_active);
 	}
 }
 
@@ -859,43 +913,51 @@ void osm_dump_portinfo_record(IN osm_log_t * p_log,
 		osm_log(p_log, log_level,
 			"PortInfo Record dump:\n"
 			"\t\t\t\tRID\n"
-			"\t\t\t\tEndPortLid..............%u\n"
-			"\t\t\t\tPortNum.................%u\n"
-			"\t\t\t\tReserved................0x%X\n"
+			"\t\t\t\tEndPortLid...............%u\n"
+			"\t\t\t\tPortNum..................%u\n"
+			"\t\t\t\tOptions..................0x%X\n"
 			"\t\t\t\tPortInfo dump:\n"
-			"\t\t\t\tm_key...................0x%016" PRIx64 "\n"
-			"\t\t\t\tsubnet_prefix...........0x%016" PRIx64 "\n"
-			"\t\t\t\tbase_lid................%u\n"
-			"\t\t\t\tmaster_sm_base_lid......%u\n"
-			"\t\t\t\tcapability_mask.........0x%X\n"
-			"\t\t\t\tdiag_code...............0x%X\n"
-			"\t\t\t\tm_key_lease_period......0x%X\n"
-			"\t\t\t\tlocal_port_num..........%u\n"
-			"\t\t\t\tlink_width_enabled......0x%X\n"
-			"\t\t\t\tlink_width_supported....0x%X\n"
-			"\t\t\t\tlink_width_active.......0x%X\n"
-			"\t\t\t\tlink_speed_supported....0x%X\n"
-			"\t\t\t\tport_state..............%s\n"
-			"\t\t\t\tstate_info2.............0x%X\n"
-			"\t\t\t\tm_key_protect_bits......0x%X\n"
-			"\t\t\t\tlmc.....................0x%X\n"
-			"\t\t\t\tlink_speed..............0x%X\n"
-			"\t\t\t\tmtu_smsl................0x%X\n"
-			"\t\t\t\tvl_cap_init_type........0x%X\n"
-			"\t\t\t\tvl_high_limit...........0x%X\n"
-			"\t\t\t\tvl_arb_high_cap.........0x%X\n"
-			"\t\t\t\tvl_arb_low_cap..........0x%X\n"
-			"\t\t\t\tinit_rep_mtu_cap........0x%X\n"
-			"\t\t\t\tvl_stall_life...........0x%X\n"
-			"\t\t\t\tvl_enforce..............0x%X\n"
-			"\t\t\t\tm_key_violations........0x%X\n"
-			"\t\t\t\tp_key_violations........0x%X\n"
-			"\t\t\t\tq_key_violations........0x%X\n"
-			"\t\t\t\tguid_cap................0x%X\n"
-			"\t\t\t\tsubnet_timeout..........0x%X\n"
-			"\t\t\t\tresp_time_value.........0x%X\n"
-			"\t\t\t\terror_threshold.........0x%X\n",
-			cl_ntoh16(p_pir->lid), p_pir->port_num, p_pir->resv,
+			"\t\t\t\tm_key....................0x%016" PRIx64 "\n"
+			"\t\t\t\tsubnet_prefix............0x%016" PRIx64 "\n"
+			"\t\t\t\tbase_lid.................%u\n"
+			"\t\t\t\tmaster_sm_base_lid.......%u\n"
+			"\t\t\t\tcapability_mask..........0x%X\n"
+			"\t\t\t\tdiag_code................0x%X\n"
+			"\t\t\t\tm_key_lease_period.......0x%X\n"
+			"\t\t\t\tlocal_port_num...........%u\n"
+			"\t\t\t\tlink_width_enabled.......0x%X\n"
+			"\t\t\t\tlink_width_supported.....0x%X\n"
+			"\t\t\t\tlink_width_active........0x%X\n"
+			"\t\t\t\tlink_speed_supported.....0x%X\n"
+			"\t\t\t\tport_state...............%s\n"
+			"\t\t\t\tstate_info2..............0x%X\n"
+			"\t\t\t\tm_key_protect_bits.......0x%X\n"
+			"\t\t\t\tlmc......................0x%X\n"
+			"\t\t\t\tlink_speed...............0x%X\n"
+			"\t\t\t\tmtu_smsl.................0x%X\n"
+			"\t\t\t\tvl_cap_init_type.........0x%X\n"
+			"\t\t\t\tvl_high_limit............0x%X\n"
+			"\t\t\t\tvl_arb_high_cap..........0x%X\n"
+			"\t\t\t\tvl_arb_low_cap...........0x%X\n"
+			"\t\t\t\tinit_rep_mtu_cap.........0x%X\n"
+			"\t\t\t\tvl_stall_life............0x%X\n"
+			"\t\t\t\tvl_enforce...............0x%X\n"
+			"\t\t\t\tm_key_violations.........0x%X\n"
+			"\t\t\t\tp_key_violations.........0x%X\n"
+			"\t\t\t\tq_key_violations.........0x%X\n"
+			"\t\t\t\tguid_cap.................0x%X\n"
+			"\t\t\t\tclient_reregister........0x%X\n"
+			"\t\t\t\tmcast_pkey_trap_suppr....0x%X\n"
+			"\t\t\t\tsubnet_timeout...........0x%X\n"
+			"\t\t\t\tresp_time_value..........0x%X\n"
+			"\t\t\t\terror_threshold..........0x%X\n"
+			"\t\t\t\tmax_credit_hint..........0x%X\n"
+			"\t\t\t\tlink_round_trip_latency..0x%X\n"
+			"\t\t\t\tcapability_mask2.........0x%X\n"
+			"\t\t\t\tlink_speed_ext_active....0x%X\n"
+			"\t\t\t\tlink_speed_ext_supported.0x%X\n"
+			"\t\t\t\tlink_speed_ext_enabled...0x%X\n",
+			cl_ntoh16(p_pir->lid), p_pir->port_num, p_pir->options,
 			cl_ntoh64(p_pi->m_key), cl_ntoh64(p_pi->subnet_prefix),
 			cl_ntoh16(p_pi->base_lid),
 			cl_ntoh16(p_pi->master_sm_base_lid),
@@ -915,8 +977,16 @@ void osm_dump_portinfo_record(IN osm_log_t * p_log,
 			cl_ntoh16(p_pi->m_key_violations),
 			cl_ntoh16(p_pi->p_key_violations),
 			cl_ntoh16(p_pi->q_key_violations), p_pi->guid_cap,
-			ib_port_info_get_timeout(p_pi), p_pi->resp_time_value,
-			p_pi->error_threshold);
+			ib_port_info_get_client_rereg(p_pi),
+			ib_port_info_get_mcast_pkey_trap_suppress(p_pi),
+			ib_port_info_get_timeout(p_pi),
+			ib_port_info_get_resp_time_value(p_pi),
+			p_pi->error_threshold, cl_ntoh16(p_pi->max_credit_hint),
+			cl_ntoh32(p_pi->link_rt_latency),
+			cl_ntoh16(p_pi->capability_mask2),
+			ib_port_info_get_link_speed_ext_active(p_pi),
+			ib_port_info_get_link_speed_ext_sup(p_pi),
+			p_pi->link_speed_ext_enabled);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -924,6 +994,33 @@ void osm_dump_portinfo_record(IN osm_log_t * p_log,
 						 p_pi);
 			osm_log(p_log, log_level, "%s", buf);
 		}
+	}
+}
+
+void osm_dump_guid_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
+			IN ib_net64_t port_guid, IN uint8_t block_num,
+			IN const ib_guid_info_t * p_gi,
+			IN osm_log_level_t log_level)
+{
+	if (osm_log_is_active(p_log, log_level)) {
+		osm_log(p_log, log_level,
+			"GUIDInfo dump:\n"
+			"\t\t\t\tblock number............%u\n"
+			"\t\t\t\tnode_guid...............0x%016" PRIx64 "\n"
+			"\t\t\t\tport_guid...............0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 0..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 1..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 2..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 3..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 4..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 5..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 6..................0x%016" PRIx64 "\n"
+			"\t\t\t\tGUID 7..................0x%016" PRIx64 "\n",
+			block_num, cl_ntoh64(node_guid), cl_ntoh64(port_guid),
+			cl_ntoh64(p_gi->guid[0]), cl_ntoh64(p_gi->guid[1]),
+			cl_ntoh64(p_gi->guid[2]), cl_ntoh64(p_gi->guid[3]),
+			cl_ntoh64(p_gi->guid[4]), cl_ntoh64(p_gi->guid[5]),
+			cl_ntoh64(p_gi->guid[6]), cl_ntoh64(p_gi->guid[7]));
 	}
 }
 
@@ -1980,9 +2077,8 @@ static const char *sm_signal_str[] = {
 	"OSM_SIGNAL_NONE",	/* 0 */
 	"OSM_SIGNAL_SWEEP",	/* 1 */
 	"OSM_SIGNAL_IDLE_TIME_PROCESS_REQUEST",	/* 2 */
-	"OSM_SIGNAL_EXIT_STBY",	/* 3 */
-	"OSM_SIGNAL_PERFMGR_SWEEP",	/* 4 */
-	"UNKNOWN SIGNAL!!"	/* 5 */
+	"OSM_SIGNAL_PERFMGR_SWEEP",	/* 3 */
+	"UNKNOWN SIGNAL!!"	/* 4 */
 };
 
 const char *osm_get_sm_signal_str(IN osm_signal_t signal)
@@ -2027,6 +2123,7 @@ static const char *disp_msg_str[] = {
 	"OSM_MSG_MAD_MULTIPATH_RECORD",
 #endif
 	"OSM_MSG_MAD_PORT_COUNTERS",
+	"OSM_MSG_MAD_MLNX_EXT_PORT_INFO",
 	"UNKNOWN!!"
 };
 
@@ -2095,6 +2192,7 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 	static const char *xsigo_str = "Xsigo";
 	static const char *dell_str = "Dell";
 	static const char *supermicro_str = "SuperMicro";
+	static const char *openib_str = "OpenIB";
 	static const char *unknown_str = "Unknown";
 
 	switch ((uint32_t) (guid_ho >> (5 * 8))) {
@@ -2153,6 +2251,8 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 		return dell_str;
 	case OSM_VENDOR_ID_SUPERMICRO:
 		return supermicro_str;
+	case OSM_VENDOR_ID_OPENIB:
+		return openib_str;
 	default:
 		return unknown_str;
 	}
@@ -2196,34 +2296,48 @@ const char *osm_get_lwa_str(IN uint8_t lwa)
 }
 
 static const char *lsa_str_fixed_width[] = {
-	"???",
-	"2.5",
-	"5  ",
-	"???",
-	"10 "
+	"Ext ",
+	"2.5 ",
+	"5   ",
+	"????",
+	"10  "
 };
 
-const char *osm_get_lsa_str(IN uint8_t lsa)
+static const char *lsea_str_fixed_width[] = {
+	"Std ",
+	"14  ",
+	"25  "
+};
+
+const char *osm_get_lsa_str(IN uint8_t lsa, IN uint8_t lsea, IN uint8_t state,
+			    IN uint8_t fdr10)
 {
-	if (lsa > 4)
-		return lsa_str_fixed_width[0];
-	else
-		return lsa_str_fixed_width[lsa];
+	if (lsa > IB_LINK_SPEED_ACTIVE_10)
+		return lsa_str_fixed_width[3];
+	if (lsea == IB_LINK_SPEED_EXT_ACTIVE_NONE) {
+		if (fdr10)
+			return "FDR10";
+		else
+			return lsa_str_fixed_width[lsa];
+	}
+	if (lsea > IB_LINK_SPEED_EXT_ACTIVE_25)
+		return lsa_str_fixed_width[3];
+	return lsea_str_fixed_width[lsea];
 }
 
 static const char *sm_mgr_signal_str[] = {
 	"OSM_SM_SIGNAL_NONE",	/* 0 */
-	"OSM_SM_SIGNAL_DISCOVERY_COMPLETED",	/* 2 */
-	"OSM_SM_SIGNAL_POLLING_TIMEOUT",	/* 3 */
-	"OSM_SM_SIGNAL_DISCOVER",	/* 4 */
-	"OSM_SM_SIGNAL_DISABLE",	/* 5 */
-	"OSM_SM_SIGNAL_HANDOVER",	/* 6 */
-	"OSM_SM_SIGNAL_HANDOVER_SENT",	/* 7 */
-	"OSM_SM_SIGNAL_ACKNOWLEDGE",	/* 8 */
-	"OSM_SM_SIGNAL_STANDBY",	/* 9 */
-	"OSM_SM_SIGNAL_MASTER_OR_HIGHER_SM_DETECTED",	/* 10 */
-	"OSM_SM_SIGNAL_WAIT_FOR_HANDOVER",	/* 11 */
-	"UNKNOWN STATE!!"	/* 12 */
+	"OSM_SM_SIGNAL_DISCOVERY_COMPLETED",	/* 1 */
+	"OSM_SM_SIGNAL_POLLING_TIMEOUT",	/* 2 */
+	"OSM_SM_SIGNAL_DISCOVER",	/* 3 */
+	"OSM_SM_SIGNAL_DISABLE",	/* 4 */
+	"OSM_SM_SIGNAL_HANDOVER",	/* 5 */
+	"OSM_SM_SIGNAL_HANDOVER_SENT",	/* 6 */
+	"OSM_SM_SIGNAL_ACKNOWLEDGE",	/* 7 */
+	"OSM_SM_SIGNAL_STANDBY",	/* 8 */
+	"OSM_SM_SIGNAL_MASTER_OR_HIGHER_SM_DETECTED",	/* 9 */
+	"OSM_SM_SIGNAL_WAIT_FOR_HANDOVER",	/* 10 */
+	"UNKNOWN STATE!!"	/* 11 */
 };
 
 const char *osm_get_sm_mgr_signal_str(IN osm_sm_signal_t signal)
@@ -2246,4 +2360,77 @@ const char *osm_get_sm_mgr_state_str(IN uint16_t state)
 	return state < ARR_SIZE(sm_mgr_state_str) ?
 	    sm_mgr_state_str[state] :
 	    sm_mgr_state_str[ARR_SIZE(sm_mgr_state_str) - 1];
+}
+
+int ib_mtu_is_valid(IN const int mtu)
+{
+	if (mtu < IB_MIN_MTU || mtu > IB_MAX_MTU)
+		return 0;
+	return 1;
+}
+
+int ib_rate_is_valid(IN const int rate)
+{
+	if (rate < IB_MIN_RATE || rate > IB_MAX_RATE)
+		return 0;
+	return 1;
+}
+
+int ib_path_compare_rates(IN const int rate1, IN const int rate2)
+{
+	int orate1 = 0, orate2 = 0;
+
+	CL_ASSERT(rate1 >= IB_MIN_RATE && rate1 <= IB_MAX_RATE);
+	CL_ASSERT(rate2 >= IB_MIN_RATE && rate2 <= IB_MAX_RATE);
+
+	if (rate1 <= IB_MAX_RATE)
+		orate1 = ordered_rates[rate1];
+	if (rate2 <= IB_MAX_RATE)
+		orate2 = ordered_rates[rate2];
+	if (orate1 < orate2)
+		return -1;
+	if (orate1 == orate2)
+		return 0;
+	return 1;
+}
+
+static int find_ordered_rate(IN const int rate)
+{
+	int i;
+
+	for (i = IB_MIN_RATE; i <= IB_MAX_RATE; i++) {
+		if (ordered_rates[i] == rate)
+			return i;
+	}
+	return 0;
+}
+
+int ib_path_rate_get_prev(IN const int rate)
+{
+	int orate;
+
+	CL_ASSERT(rate >= IB_MIN_RATE && rate <= IB_MAX_RATE);
+
+	if (rate <= IB_MIN_RATE)
+		return 0;
+	if (rate > IB_MAX_RATE)
+		return 0;
+	orate = ordered_rates[rate];
+	orate--;
+	return find_ordered_rate(orate);
+}
+
+int ib_path_rate_get_next(IN const int rate)
+{
+	int orate;
+
+	CL_ASSERT(rate >= IB_MIN_RATE && rate <= IB_MAX_RATE);
+
+	if (rate < IB_MIN_RATE)
+		return 0;
+	if (rate >= IB_MAX_RATE)
+		return 0;
+	orate = ordered_rates[rate];
+	orate++;
+	return find_ordered_rate(orate);
 }

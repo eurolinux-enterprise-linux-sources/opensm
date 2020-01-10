@@ -2,7 +2,7 @@
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2007 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
- * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2009,2010 HNR Consulting. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -181,7 +181,6 @@ const osmtest_token_t token_array[] = {
 	{OSMTEST_TOKEN_RATE, 4, "RATE"},
 	{OSMTEST_TOKEN_PKT_LIFE, 8, "PKT_LIFE"},
 	{OSMTEST_TOKEN_PREFERENCE, 10, "PREFERENCE"},
-	{OSMTEST_TOKEN_MKEY, 4, "M_KEY"},
 	{OSMTEST_TOKEN_SUBN_PREF, 13, "SUBNET_PREFIX"},
 	{OSMTEST_TOKEN_BASE_LID, 8, "BASE_LID"},
 	{OSMTEST_TOKEN_SM_BASE_LID, 18, "MASTER_SM_BASE_LID"},
@@ -213,6 +212,7 @@ const osmtest_token_t token_array[] = {
 	{OSMTEST_TOKEN_SUBN_TIMEOUT, 14, "subnet_timeout"},
 	{OSMTEST_TOKEN_RESP_TIME_VAL, 15, "resp_time_value"},
 	{OSMTEST_TOKEN_ERR_THRESHOLD, 15, "error_threshold"},
+	{OSMTEST_TOKEN_MKEY, 4, "M_KEY"}, /* must be after the other mkey... tokens. */
 	{OSMTEST_TOKEN_MTU, 3, "MTU"},	/*  must be after the other mtu... tokens. */
 	{OSMTEST_TOKEN_FROMLID, 8, "from_lid"},
 	{OSMTEST_TOKEN_FROMPORTNUM, 13, "from_port_num"},
@@ -220,8 +220,6 @@ const osmtest_token_t token_array[] = {
 	{OSMTEST_TOKEN_TOLID, 6, "to_lid"},
 	{OSMTEST_TOKEN_UNKNOWN, 0, ""}	/* must be last entry */
 };
-
-#define IB_MAD_STATUS_CLASS_MASK       (CL_HTON16(0xFF00))
 
 static const char ib_mad_status_str_busy[] = "IB_MAD_STATUS_BUSY";
 static const char ib_mad_status_str_redirect[] = "IB_MAD_STATUS_REDIRECT";
@@ -563,7 +561,6 @@ osmtest_get_all_recs(IN osmtest_t * const p_osmt,
 
 	p_context->p_osmt = p_osmt;
 	user.attr_id = attr_id;
-	user.attr_offset = ib_get_attr_offset((uint16_t) attr_size);
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
 	req.timeout_ms = p_osmt->opt.transaction_timeout;
@@ -719,7 +716,6 @@ osmtest_get_node_rec(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.comp_mask = IB_NR_COMPMASK_NODEGUID;
 	user.attr_id = IB_MAD_ATTR_NODE_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -793,7 +789,6 @@ osmtest_get_node_rec_by_lid(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.comp_mask = IB_NR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_NODE_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -868,7 +863,7 @@ osmtest_get_path_rec_by_guid_pair(IN osmtest_t * const p_osmt,
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_VERBOSE,
 		"Query for path from 0x%" PRIx64 " to 0x%" PRIx64 "\n",
-		sguid, dguid);
+		cl_ntoh64(sguid), cl_ntoh64(dguid));
 
 	status = osmv_query_sa(p_osmt->h_bind, &req);
 	if (status != IB_SUCCESS) {
@@ -931,9 +926,11 @@ osmtest_get_path_rec_by_gid_pair(IN osmtest_t * const p_osmt,
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_VERBOSE,
 		"Query for path from 0x%016" PRIx64 " 0x%016" PRIx64
-		" to 0x%016" PRIx64 " 0x%016" PRIx64 "\n", sgid.unicast.prefix,
-		sgid.unicast.interface_id, dgid.unicast.prefix,
-		dgid.unicast.interface_id);
+		" to 0x%016" PRIx64 " 0x%016" PRIx64 "\n",
+		cl_ntoh64(sgid.unicast.prefix),
+		cl_ntoh64(sgid.unicast.interface_id),
+		cl_ntoh64(dgid.unicast.prefix),
+		cl_ntoh64(dgid.unicast.interface_id));
 
 	status = osmv_query_sa(p_osmt->h_bind, &req);
 	if (status != IB_SUCCESS) {
@@ -1057,7 +1054,6 @@ osmtest_get_port_rec(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.comp_mask = IB_PIR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_PORTINFO_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -1989,7 +1985,8 @@ osmtest_get_path_rec_by_lid_pair(IN osmtest_t * const p_osmt,
 	req.sm_key = 0;
 
 	OSM_LOG(&p_osmt->log, OSM_LOG_VERBOSE,
-		"Query for path from 0x%X to 0x%X\n", slid, dlid);
+		"Query for path from 0x%X to 0x%X\n",
+		cl_ntoh16(slid), cl_ntoh16(dlid));
 	status = osmv_query_sa(p_osmt->h_bind, &req);
 	if (status != IB_SUCCESS) {
 		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 0053: "
@@ -4179,7 +4176,6 @@ osmtest_get_link_rec_by_lid(IN osmtest_t * const p_osmt,
 	if (to_lid)
 		user.comp_mask |= IB_LR_COMPMASK_TO_LID;
 	user.attr_id = IB_MAD_ATTR_LINK_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4257,7 +4253,6 @@ osmtest_get_guidinfo_rec_by_lid(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.comp_mask = IB_GIR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_GUIDINFO_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4336,7 +4331,6 @@ osmtest_get_pkeytbl_rec_by_lid(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.comp_mask = IB_PKEY_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_PKEY_TBL_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4415,7 +4409,6 @@ osmtest_get_sw_info_rec_by_lid(IN osmtest_t * const p_osmt,
 	if (lid)
 		user.comp_mask = IB_SWIR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_SWITCH_INFO_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4494,7 +4487,6 @@ osmtest_get_lft_rec_by_lid(IN osmtest_t * const p_osmt,
 	if (lid)
 		user.comp_mask = IB_LFTR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_LFT_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4573,7 +4565,6 @@ osmtest_get_mft_rec_by_lid(IN osmtest_t * const p_osmt,
 	if (lid)
 		user.comp_mask = IB_MFTR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_MFT_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -4645,7 +4636,6 @@ osmtest_sminfo_record_request(IN osmtest_t * const p_osmt,
 
 	p_context->p_osmt = p_osmt;
 	user.attr_id = IB_MAD_ATTR_SMINFO_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	p_sm_info_opt = p_options;
 	if (p_sm_info_opt->sm_guid != 0) {
 		record.sm_info.guid = p_sm_info_opt->sm_guid;
@@ -4745,7 +4735,6 @@ osmtest_informinfo_request(IN osmtest_t * const p_osmt,
 	p_context->p_osmt = p_osmt;
 	user.attr_id = attr_id;
 	if (attr_id == IB_MAD_ATTR_INFORM_INFO_RECORD) {
-		user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 		p_inform_info_rec_opt = p_options;
 		if (p_inform_info_rec_opt->subscriber_gid.unicast.prefix != 0 &&
 		    p_inform_info_rec_opt->subscriber_gid.unicast.
@@ -4759,7 +4748,6 @@ osmtest_informinfo_request(IN osmtest_t * const p_osmt,
 		user.comp_mask |= IB_IIR_COMPMASK_ENUM;
 		user.p_attr = &record;
 	} else {
-		user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(rec));
 		/* comp mask bits below are for InformInfoRecord rather than InformInfo */
 		/* as currently no comp mask bits defined for InformInfo!!! */
 		user.comp_mask = IB_IIR_COMPMASK_SUBSCRIBE;
@@ -4908,7 +4896,6 @@ osmtest_validate_single_node_rec_lid(IN osmtest_t * const p_osmt,
 	context.p_osmt = p_osmt;
 	user.comp_mask = IB_NR_COMPMASK_LID;
 	user.attr_id = IB_MAD_ATTR_NODE_RECORD;
-	user.attr_offset = ib_get_attr_offset((uint16_t) sizeof(record));
 	user.p_attr = &record;
 
 	req.query_type = OSMV_QUERY_USER_DEFINED;
@@ -7381,7 +7368,7 @@ ib_api_status_t osmtest_run(IN osmtest_t * const p_osmt)
 				}
 #else
 				OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
-					"The event forwarding flow "
+					"Trap 64/65 flow "
 					"is not implemented yet!\n");
 				status = IB_SUCCESS;
 				goto Exit;

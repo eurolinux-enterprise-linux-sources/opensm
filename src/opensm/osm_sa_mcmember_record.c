@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  *
@@ -285,7 +285,7 @@ static boolean_t validate_more_comp_fields(osm_log_t * p_log,
 		rate_mgrp = (uint8_t) (p_mgrp->mcmember_rec.rate & 0x3F);
 		switch (rate_sel) {
 		case 0:	/* Greater than RATE specified */
-			if (rate_mgrp <= rate_required) {
+			if (ib_path_compare_rates(rate_mgrp, rate_required) <= 0) {
 				OSM_LOG(p_log, OSM_LOG_VERBOSE,
 					"Requested mcast group has RATE %x, "
 					"which is not greater than %x\n",
@@ -294,7 +294,7 @@ static boolean_t validate_more_comp_fields(osm_log_t * p_log,
 			}
 			break;
 		case 1:	/* Less than RATE specified */
-			if (rate_mgrp >= rate_required) {
+			if (ib_path_compare_rates(rate_mgrp, rate_required) >= 0) {
 				OSM_LOG(p_log, OSM_LOG_VERBOSE,
 					"Requested mcast group has RATE %x, "
 					"which is not less than %x\n",
@@ -303,7 +303,7 @@ static boolean_t validate_more_comp_fields(osm_log_t * p_log,
 			}
 			break;
 		case 2:	/* Exactly RATE specified */
-			if (rate_mgrp != rate_required) {
+			if (ib_path_compare_rates(rate_mgrp, rate_required)) {
 				OSM_LOG(p_log, OSM_LOG_VERBOSE,
 					"Requested mcast group has RATE %x, "
 					"which is not equal to %x\n",
@@ -327,6 +327,7 @@ static boolean_t validate_port_caps(osm_log_t * p_log,
 				    const osm_mgrp_t * p_mgrp,
 				    const osm_physp_t * p_physp)
 {
+	const ib_port_info_t *p_pi;
 	uint8_t mtu_required;
 	uint8_t mtu_mgrp;
 	uint8_t rate_required;
@@ -341,9 +342,11 @@ static boolean_t validate_port_caps(osm_log_t * p_log,
 		return FALSE;
 	}
 
-	rate_required = ib_port_info_compute_rate(&p_physp->port_info);
+	p_pi = &p_physp->port_info;
+	rate_required = ib_port_info_compute_rate(p_pi,
+						  p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 	rate_mgrp = (uint8_t) (p_mgrp->mcmember_rec.rate & 0x3F);
-	if (rate_required < rate_mgrp) {
+	if (ib_path_compare_rates(rate_required, rate_mgrp) < 0) {
 		OSM_LOG(p_log, OSM_LOG_VERBOSE,
 			"Port's RATE %x is less than %x\n",
 			rate_required, rate_mgrp);
@@ -612,7 +615,7 @@ static ib_api_status_t validate_requested_mgid(IN osm_sa_t * sa,
 
 	/*
 	 * For SA assigned MGIDs (signature 0xA01B):
-	 * There is no real way to make sure the Unique MGID Prefix is really unique.
+	 * There is no real way to make sure the GID Prefix is really unique.
 	 * If we could enforce using the Subnet Prefix for that purpose it would
 	 * have been nice. But the spec does not require it.
 	 */
@@ -635,6 +638,7 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 	uint8_t mtu_required, mtu, port_mtu;
 	uint8_t rate_sel = 2;	/* exactly */
 	uint8_t rate_required, rate, port_rate;
+	const ib_port_info_t *p_pi;
 	osm_log_t *p_log = sa->p_log;
 
 	OSM_LOG_ENTER(sa->p_log);
@@ -652,7 +656,8 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 	 * masked in.
 	 */
 
-	port_mtu = p_physp ? ib_port_info_get_mtu_cap(&p_physp->port_info) : 0;
+	p_pi = &p_physp->port_info;
+	port_mtu = p_physp ? ib_port_info_get_mtu_cap(p_pi) : 0;
 	if (!(comp_mask & IB_MCR_COMPMASK_MTU) ||
 	    !(comp_mask & IB_MCR_COMPMASK_MTU_SEL) ||
 	    (mtu_sel = (p_mcm_rec->mtu >> 6)) == 3)
@@ -689,7 +694,7 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 		default:
 			break;
 		}
-		/* make sure it still be in the range */
+		/* make sure it still is in the range */
 		if (mtu < IB_MIN_MTU || mtu > IB_MAX_MTU) {
 			OSM_LOG(p_log, OSM_LOG_VERBOSE,
 				"Calculated MTU %x is out of range\n", mtu);
@@ -699,7 +704,8 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 	p_mcm_rec->mtu = (mtu_sel << 6) | mtu;
 
 	port_rate =
-	    p_physp ? ib_port_info_compute_rate(&p_physp->port_info) : 0;
+	    p_physp ? ib_port_info_compute_rate(p_pi,
+						p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) : 0;
 	if (!(comp_mask & IB_MCR_COMPMASK_RATE)
 	    || !(comp_mask & IB_MCR_COMPMASK_RATE_SEL)
 	    || (rate_sel = (p_mcm_rec->rate >> 6)) == 3)
@@ -709,7 +715,7 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 		rate = rate_required;
 		switch (rate_sel) {
 		case 0:	/* Greater than RATE specified */
-			if (port_rate && rate_required >= port_rate) {
+			if (ib_path_compare_rates(rate_required, port_rate) >= 0) {
 				OSM_LOG(p_log, OSM_LOG_VERBOSE,
 					"Requested RATE %x >= the port\'s rate:%x\n",
 					rate_required, port_rate);
@@ -718,19 +724,20 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 			/* we provide the largest RATE possible if we can */
 			if (port_rate)
 				rate = port_rate;
-			else if (rate_required < sa->p_subn->min_ca_rate)
+			else if (ib_path_compare_rates(rate_required,
+						       sa->p_subn->min_ca_rate) < 0)
 				rate = sa->p_subn->min_ca_rate;
 			else
-				rate++;
+				rate = ib_path_rate_get_next(rate);
 			break;
 		case 1:	/* Less than RATE specified */
 			/* use the smaller of the two:
 			   a. one lower then the required
 			   b. the rate of the requesting port (if exists) */
-			if (port_rate && rate_required > port_rate)
+			if (ib_path_compare_rates(rate_required, port_rate) > 0)
 				rate = port_rate;
 			else
-				rate--;
+				rate = ib_path_rate_get_prev(rate);
 			break;
 		case 2:	/* Exactly RATE specified */
 		default:
@@ -769,7 +776,6 @@ static unsigned build_new_mgid(osm_sa_t * sa, ib_net64_t comp_mask,
 	mgid->raw[2] = 0xa0;
 	mgid->raw[3] = 0x1b;
 
-	/* HACK: use the SA port gid to make it globally unique */
 	memcpy(&mgid->raw[4], &sa->p_subn->opt.subnet_prefix, sizeof(uint64_t));
 
 	for (i = 0; i < 1000; i++) {
@@ -893,7 +899,6 @@ static void mcmr_rcv_leave_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	ib_sa_mad_t *p_sa_mad;
 	ib_member_rec_t *p_recvd_mcmember_rec;
 	ib_member_rec_t mcmember_rec;
-	ib_net64_t portguid;
 	osm_mcm_port_t *p_mcm_port;
 
 	OSM_LOG_ENTER(sa->p_log);
@@ -921,8 +926,6 @@ static void mcmr_rcv_leave_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
-
-	portguid = p_recvd_mcmember_rec->port_gid.unicast.interface_id;
 
 	/* check validity of the delete request o15-0.1.14 */
 	if (!validate_delete(sa, p_mgrp, osm_madw_get_mad_addr_ptr(p_madw),
@@ -1015,6 +1018,15 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		CL_PLOCK_RELEASE(sa->p_lock);
 		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
 			"Port and requester don't share pkey\n");
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
+		goto Exit;
+	}
+
+	if (p_sa_mad->comp_mask & IB_MCR_COMPMASK_PKEY &&
+	    ib_pkey_is_invalid(p_recvd_mcmember_rec->pkey)) {
+		CL_PLOCK_RELEASE(sa->p_lock);
+		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+			"Invalid PKey supplied in request\n");
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
@@ -1425,6 +1437,34 @@ Exit:
 	OSM_LOG_EXIT(sa->p_log);
 }
 
+static uint8_t rate_is_valid(IN const ib_sa_mad_t *p_sa_mad,
+			     IN const ib_member_rec_t *p_recvd_mcmember_rec)
+{
+	uint8_t rate;
+
+	/* Validate rate if supplied */
+	if ((p_sa_mad->comp_mask & IB_MCR_COMPMASK_RATE_SEL) &&
+	    (p_sa_mad->comp_mask & IB_MCR_COMPMASK_RATE)) {
+		rate = (uint8_t) (p_recvd_mcmember_rec->rate & 0x3F);
+		return ib_rate_is_valid(rate);
+	}
+	return 1;
+}
+
+static int mtu_is_valid(IN const ib_sa_mad_t *p_sa_mad,
+			IN const ib_member_rec_t *p_recvd_mcmember_rec)
+{
+	uint8_t mtu;
+
+	/* Validate MTU if supplied */
+	if ((p_sa_mad->comp_mask & IB_MCR_COMPMASK_MTU_SEL) &&
+	    (p_sa_mad->comp_mask & IB_MCR_COMPMASK_MTU)) {
+		mtu = (uint8_t) (p_recvd_mcmember_rec->mtu & 0x3F);
+		return ib_mtu_is_valid(mtu);
+	}
+	return 1;
+}
+
 void osm_mcmr_rcv_process(IN void *context, IN void *data)
 {
 	osm_sa_t *sa = context;
@@ -1462,6 +1502,12 @@ void osm_mcmr_rcv_process(IN void *context, IN void *data)
 					  p_recvd_mcmember_rec->port_gid.raw,
 					  gid_str2, sizeof gid_str2));
 			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_INSUF_COMPS);
+			goto Exit;
+		}
+		if (!rate_is_valid(p_sa_mad, p_recvd_mcmember_rec) ||
+		    !mtu_is_valid(p_sa_mad, p_recvd_mcmember_rec)) {
+			osm_sa_send_error(sa, p_madw,
 					  IB_SA_MAD_STATUS_REQ_INVALID);
 			goto Exit;
 		}
@@ -1479,6 +1525,12 @@ void osm_mcmr_rcv_process(IN void *context, IN void *data)
 				cl_ntoh64(p_sa_mad->comp_mask),
 				CL_NTOH64(JOIN_MC_COMP_MASK));
 			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_INSUF_COMPS);
+			goto Exit;
+		}
+		if (!rate_is_valid(p_sa_mad, p_recvd_mcmember_rec) ||
+		    !mtu_is_valid(p_sa_mad, p_recvd_mcmember_rec)) {
+			osm_sa_send_error(sa, p_madw,
 					  IB_SA_MAD_STATUS_REQ_INVALID);
 			goto Exit;
 		}
@@ -1490,6 +1542,13 @@ void osm_mcmr_rcv_process(IN void *context, IN void *data)
 		break;
 	case IB_MAD_METHOD_GET:
 	case IB_MAD_METHOD_GETTABLE:
+		if (!rate_is_valid(p_sa_mad, p_recvd_mcmember_rec) ||
+		    !mtu_is_valid(p_sa_mad, p_recvd_mcmember_rec)) {
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+
 		/*
 		 * Querying a Multicast Group
 		 */

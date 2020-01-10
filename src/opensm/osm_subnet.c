@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
@@ -70,6 +70,7 @@
 #include <opensm/osm_perfmgr.h>
 #include <opensm/osm_event_plugin.h>
 #include <opensm/osm_qos_policy.h>
+#include <opensm/osm_service.h>
 
 static const char null_str[] = "(null)";
 
@@ -309,6 +310,8 @@ static const opt_rec_t opt_tbl[] = {
 	{ "lmc_esp0", OPT_OFFSET(lmc_esp0), opts_parse_boolean, NULL, 1 },
 	{ "max_op_vls", OPT_OFFSET(max_op_vls), opts_parse_uint8, NULL, 1 },
 	{ "force_link_speed", OPT_OFFSET(force_link_speed), opts_parse_uint8, NULL, 1 },
+	{ "force_link_speed_ext", OPT_OFFSET(force_link_speed_ext), opts_parse_uint8, NULL, 1 },
+	{ "fdr10", OPT_OFFSET(fdr10), opts_parse_uint8, NULL, 1 },
 	{ "reassign_lids", OPT_OFFSET(reassign_lids), opts_parse_boolean, NULL, 1 },
 	{ "ignore_other_sm", OPT_OFFSET(ignore_other_sm), opts_parse_boolean, NULL, 1 },
 	{ "single_thread", OPT_OFFSET(single_thread), opts_parse_boolean, NULL, 0 },
@@ -321,12 +324,14 @@ static const opt_rec_t opt_tbl[] = {
 	{ "leaf_head_of_queue_lifetime", OPT_OFFSET(leaf_head_of_queue_lifetime), opts_parse_uint8, NULL, 1 },
 	{ "local_phy_errors_threshold", OPT_OFFSET(local_phy_errors_threshold), opts_parse_uint8, NULL, 1 },
 	{ "overrun_errors_threshold", OPT_OFFSET(overrun_errors_threshold), opts_parse_uint8, NULL, 1 },
+	{ "use_mfttop", OPT_OFFSET(use_mfttop), opts_parse_boolean, NULL, 1},
 	{ "sminfo_polling_timeout", OPT_OFFSET(sminfo_polling_timeout), opts_parse_uint32, opts_setup_sminfo_polling_timeout, 1 },
 	{ "polling_retry_number", OPT_OFFSET(polling_retry_number), opts_parse_uint32, NULL, 1 },
 	{ "force_heavy_sweep", OPT_OFFSET(force_heavy_sweep), opts_parse_boolean, NULL, 1 },
 	{ "port_prof_ignore_file", OPT_OFFSET(port_prof_ignore_file), opts_parse_charp, NULL, 0 },
 	{ "hop_weights_file", OPT_OFFSET(hop_weights_file), opts_parse_charp, NULL, 0 },
-	{ "dimn_ports_file", OPT_OFFSET(dimn_ports_file), opts_parse_charp, NULL, 0 },
+	{ "dimn_ports_file", OPT_OFFSET(port_search_ordering_file), opts_parse_charp, NULL, 0 },
+	{ "port_search_ordering_file", OPT_OFFSET(port_search_ordering_file), opts_parse_charp, NULL, 0 },
 	{ "port_profile_switch_nodes", OPT_OFFSET(port_profile_switch_nodes), opts_parse_boolean, NULL, 1 },
 	{ "sweep_on_trap", OPT_OFFSET(sweep_on_trap), opts_parse_boolean, NULL, 1 },
 	{ "routing_engine", OPT_OFFSET(routing_engine_names), opts_parse_charp, NULL, 0 },
@@ -347,11 +352,14 @@ static const opt_rec_t opt_tbl[] = {
 	{ "root_guid_file", OPT_OFFSET(root_guid_file), opts_parse_charp, NULL, 0 },
 	{ "cn_guid_file", OPT_OFFSET(cn_guid_file), opts_parse_charp, NULL, 0 },
 	{ "io_guid_file", OPT_OFFSET(io_guid_file), opts_parse_charp, NULL, 0 },
+	{ "port_shifting", OPT_OFFSET(port_shifting), opts_parse_boolean, NULL, 1 },
+	{ "scatter_ports", OPT_OFFSET(scatter_ports), opts_parse_uint32, NULL, 1 },
 	{ "max_reverse_hops", OPT_OFFSET(max_reverse_hops), opts_parse_uint16, NULL, 0 },
 	{ "ids_guid_file", OPT_OFFSET(ids_guid_file), opts_parse_charp, NULL, 0 },
 	{ "guid_routing_order_file", OPT_OFFSET(guid_routing_order_file), opts_parse_charp, NULL, 0 },
 	{ "sa_db_file", OPT_OFFSET(sa_db_file), opts_parse_charp, NULL, 0 },
 	{ "sa_db_dump", OPT_OFFSET(sa_db_dump), opts_parse_boolean, NULL, 1 },
+	{ "torus_config", OPT_OFFSET(torus_conf_file), opts_parse_charp, NULL, 1 },
 	{ "do_mesh_analysis", OPT_OFFSET(do_mesh_analysis), opts_parse_boolean, NULL, 1 },
 	{ "exit_on_fatal", OPT_OFFSET(exit_on_fatal), opts_parse_boolean, NULL, 1 },
 	{ "honor_guid2lid_file", OPT_OFFSET(honor_guid2lid_file), opts_parse_boolean, NULL, 1 },
@@ -416,6 +424,7 @@ void osm_subn_construct(IN osm_subn_t * p_subn)
 	cl_qmap_init(&p_subn->sw_guid_tbl);
 	cl_qmap_init(&p_subn->node_guid_tbl);
 	cl_qmap_init(&p_subn->port_guid_tbl);
+	cl_qmap_init(&p_subn->alias_port_guid_tbl);
 	cl_qmap_init(&p_subn->sm_guid_tbl);
 	cl_qlist_init(&p_subn->sa_sr_list);
 	cl_qlist_init(&p_subn->sa_infr_list);
@@ -425,15 +434,59 @@ void osm_subn_construct(IN osm_subn_t * p_subn)
 	cl_fmap_init(&p_subn->mgrp_mgid_tbl, compar_mgids);
 }
 
+static void subn_destroy_qos_options(osm_qos_options_t *opt)
+{
+	free(opt->vlarb_high);
+	free(opt->vlarb_low);
+	free(opt->sl2vl);
+}
+
+static void subn_opt_destroy(IN osm_subn_opt_t * p_opt)
+{
+	free(p_opt->console);
+	free(p_opt->port_prof_ignore_file);
+	free(p_opt->hop_weights_file);
+	free(p_opt->port_search_ordering_file);
+	free(p_opt->routing_engine_names);
+	free(p_opt->log_file);
+	free(p_opt->partition_config_file);
+	free(p_opt->qos_policy_file);
+	free(p_opt->dump_files_dir);
+	free(p_opt->lid_matrix_dump_file);
+	free(p_opt->lfts_file);
+	free(p_opt->root_guid_file);
+	free(p_opt->cn_guid_file);
+	free(p_opt->io_guid_file);
+	free(p_opt->ids_guid_file);
+	free(p_opt->guid_routing_order_file);
+	free(p_opt->sa_db_file);
+	free(p_opt->torus_conf_file);
+#ifdef ENABLE_OSM_PERF_MGR
+	free(p_opt->event_db_dump_file);
+#endif /* ENABLE_OSM_PERF_MGR */
+	free(p_opt->event_plugin_name);
+	free(p_opt->event_plugin_options);
+	free(p_opt->node_name_map_name);
+	free(p_opt->prefix_routes_file);
+	free(p_opt->log_prefix);
+	subn_destroy_qos_options(&p_opt->qos_options);
+	subn_destroy_qos_options(&p_opt->qos_ca_options);
+	subn_destroy_qos_options(&p_opt->qos_sw0_options);
+	subn_destroy_qos_options(&p_opt->qos_swe_options);
+	subn_destroy_qos_options(&p_opt->qos_rtr_options);
+}
+
 void osm_subn_destroy(IN osm_subn_t * p_subn)
 {
 	int i;
 	osm_node_t *p_node, *p_next_node;
+	osm_alias_guid_t *p_alias_guid, *p_next_alias_guid;
 	osm_port_t *p_port, *p_next_port;
 	osm_switch_t *p_sw, *p_next_sw;
 	osm_remote_sm_t *p_rsm, *p_next_rsm;
 	osm_prtn_t *p_prtn, *p_next_prtn;
 	osm_infr_t *p_infr, *p_next_infr;
+	osm_svcr_t *p_svcr, *p_next_svcr;
 
 	/* it might be a good idea to de-allocate all known objects */
 	p_next_node = (osm_node_t *) cl_qmap_head(&p_subn->node_guid_tbl);
@@ -442,6 +495,14 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 		p_node = p_next_node;
 		p_next_node = (osm_node_t *) cl_qmap_next(&p_node->map_item);
 		osm_node_delete(&p_node);
+	}
+
+	p_next_alias_guid = (osm_alias_guid_t *) cl_qmap_head(&p_subn->alias_port_guid_tbl);
+	while (p_next_alias_guid !=
+	       (osm_alias_guid_t *) cl_qmap_end(&p_subn->alias_port_guid_tbl)) {
+		p_alias_guid = p_next_alias_guid;
+		p_next_alias_guid = (osm_alias_guid_t *) cl_qmap_next(&p_alias_guid->map_item);
+		osm_alias_guid_delete(&p_alias_guid);
 	}
 
 	p_next_port = (osm_port_t *) cl_qmap_head(&p_subn->port_guid_tbl);
@@ -472,7 +533,7 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 	       (osm_prtn_t *) cl_qmap_end(&p_subn->prtn_pkey_tbl)) {
 		p_prtn = p_next_prtn;
 		p_next_prtn = (osm_prtn_t *) cl_qmap_next(&p_prtn->map_item);
-		osm_prtn_delete(&p_prtn);
+		osm_prtn_delete(p_subn, &p_prtn);
 	}
 
 	cl_fmap_remove_all(&p_subn->mgrp_mgid_tbl);
@@ -490,6 +551,14 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 		osm_infr_delete(p_infr);
 	}
 
+	p_next_svcr = (osm_svcr_t *) cl_qlist_head(&p_subn->sa_sr_list);
+	while (p_next_svcr !=
+	       (osm_svcr_t *) cl_qlist_end(&p_subn->sa_sr_list)) {
+		p_svcr = p_next_svcr;
+		p_next_svcr = (osm_svcr_t *) cl_qlist_next(&p_svcr->list_item);
+		osm_svcr_delete(p_svcr);
+	}
+
 	cl_ptr_vector_destroy(&p_subn->port_lid_tbl);
 
 	osm_qos_policy_destroy(p_subn->p_qos_policy);
@@ -498,6 +567,9 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 		cl_list_item_t *item = cl_qlist_remove_head(&p_subn->prefix_routes_list);
 		free(item);
 	}
+
+	subn_opt_destroy(&p_subn->opt);
+	free(p_subn->opt.file_opts);
 }
 
 ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
@@ -529,11 +601,13 @@ ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
 	p_subn->max_mcast_lid_ho = IB_LID_MCAST_END_HO;
 	p_subn->min_ca_mtu = IB_MAX_MTU;
 	p_subn->min_ca_rate = IB_MAX_RATE;
+	p_subn->min_data_vls = IB_MAX_NUM_VLS - 1;
 	p_subn->ignore_existing_lfts = TRUE;
 
 	/* we assume master by default - so we only need to set it true if STANDBY */
 	p_subn->coming_out_of_standby = FALSE;
 	p_subn->sweeping_enabled = TRUE;
+	p_subn->last_sm_port_state = 1;
 
 	return IB_SUCCESS;
 }
@@ -618,6 +692,17 @@ osm_port_t *osm_get_port_by_guid(IN osm_subn_t const *p_subn, IN ib_net64_t guid
 	return p_port;
 }
 
+osm_port_t *osm_get_port_by_alias_guid(IN osm_subn_t const *p_subn,
+				       IN ib_net64_t guid)
+{
+	osm_alias_guid_t *p_alias_guid;
+
+	p_alias_guid = (osm_alias_guid_t *) cl_qmap_get(&(p_subn->alias_port_guid_tbl), guid);
+	if (p_alias_guid == (osm_alias_guid_t *) cl_qmap_end(&(p_subn->alias_port_guid_tbl)))
+		return NULL;
+	return p_alias_guid->p_base_port;
+}
+
 osm_port_t *osm_get_port_by_lid_ho(IN osm_subn_t const * subn, IN uint16_t lid)
 {
 	if (lid < cl_ptr_vector_get_size(&subn->port_lid_tbl))
@@ -635,13 +720,16 @@ osm_mgrp_t *osm_get_mgrp_by_mgid(IN osm_subn_t * subn, IN ib_gid_t * mgid)
 	return NULL;
 }
 
-static void subn_set_default_qos_options(IN osm_qos_options_t * opt)
+int is_mlnx_ext_port_info_supported(ib_net16_t devid)
 {
-	opt->max_vls = OSM_DEFAULT_QOS_MAX_VLS;
-	opt->high_limit = OSM_DEFAULT_QOS_HIGH_LIMIT;
-	opt->vlarb_high = OSM_DEFAULT_QOS_VLARB_HIGH;
-	opt->vlarb_low = OSM_DEFAULT_QOS_VLARB_LOW;
-	opt->sl2vl = OSM_DEFAULT_QOS_SL2VL;
+	uint16_t devid_ho;
+
+	devid_ho = cl_ntoh16(devid);
+	if (devid_ho == 0xc738)
+		return 1;
+	if (devid_ho >= 0x1003 && devid_ho <= 0x1010)
+		return 1;
+	return 0;
 }
 
 static void subn_init_qos_options(osm_qos_options_t *opt, osm_qos_options_t *f)
@@ -686,6 +774,8 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->lmc_esp0 = FALSE;
 	p_opt->max_op_vls = OSM_DEFAULT_MAX_OP_VLS;
 	p_opt->force_link_speed = 15;
+	p_opt->force_link_speed_ext = 31;
+	p_opt->fdr10 = 1;
 	p_opt->reassign_lids = FALSE;
 	p_opt->ignore_other_sm = FALSE;
 	p_opt->single_thread = FALSE;
@@ -700,6 +790,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	    OSM_DEFAULT_LEAF_HEAD_OF_QUEUE_LIFE;
 	p_opt->local_phy_errors_threshold = OSM_DEFAULT_ERROR_THRESHOLD;
 	p_opt->overrun_errors_threshold = OSM_DEFAULT_ERROR_THRESHOLD;
+	p_opt->use_mfttop = TRUE;
 	p_opt->sminfo_polling_timeout =
 	    OSM_SM_DEFAULT_POLLING_TIMEOUT_MILLISECS;
 	p_opt->polling_retry_number = OSM_SM_DEFAULT_POLLING_RETRY_NUMBER;
@@ -736,7 +827,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->accum_log_file = TRUE;
 	p_opt->port_prof_ignore_file = NULL;
 	p_opt->hop_weights_file = NULL;
-	p_opt->dimn_ports_file = NULL;
+	p_opt->port_search_ordering_file = NULL;
 	p_opt->port_profile_switch_nodes = FALSE;
 	p_opt->sweep_on_trap = TRUE;
 	p_opt->use_ucast_cache = FALSE;
@@ -747,11 +838,14 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->root_guid_file = NULL;
 	p_opt->cn_guid_file = NULL;
 	p_opt->io_guid_file = NULL;
+	p_opt->port_shifting = FALSE;
+	p_opt->scatter_ports = OSM_DEFAULT_SCATTER_PORTS;
 	p_opt->max_reverse_hops = 0;
 	p_opt->ids_guid_file = NULL;
 	p_opt->guid_routing_order_file = NULL;
 	p_opt->sa_db_file = NULL;
 	p_opt->sa_db_dump = FALSE;
+	p_opt->torus_conf_file = strdup(OSM_DEFAULT_TORUS_CONF_FILE);
 	p_opt->do_mesh_analysis = FALSE;
 	p_opt->exit_on_fatal = TRUE;
 	p_opt->enable_quirks = FALSE;
@@ -909,38 +1003,37 @@ static ib_api_status_t parse_prefix_routes_file(IN osm_subn_t * p_subn)
 	return (errors == 0) ? IB_SUCCESS : IB_ERROR;
 }
 
-static void subn_verify_max_vls(unsigned *max_vls, const char *prefix, unsigned dflt)
+static void subn_verify_max_vls(unsigned *max_vls, const char *prefix)
 {
 	if (!*max_vls || *max_vls > 15) {
 		if (*max_vls)
 			log_report(" Invalid Cached Option: %s_max_vls=%u: "
 				   "Using Default = %u\n",
-				   prefix, *max_vls, dflt);
-		*max_vls = dflt;
+				   prefix, *max_vls, OSM_DEFAULT_QOS_MAX_VLS);
+		*max_vls = 0;
 	}
 }
 
-static void subn_verify_high_limit(int *high_limit, const char *prefix, int dflt)
+static void subn_verify_high_limit(int *high_limit, const char *prefix)
 {
 	if (*high_limit < 0 || *high_limit > 255) {
 		if (*high_limit > 255)
 			log_report(" Invalid Cached Option: %s_high_limit=%d: "
 				   "Using Default: %d\n",
-				   prefix, *high_limit, dflt);
-		*high_limit = dflt;
+				   prefix, *high_limit,
+				   OSM_DEFAULT_QOS_HIGH_LIMIT);
+		*high_limit = -1;
 	}
 }
 
 static void subn_verify_vlarb(char **vlarb, const char *prefix,
-			      const char *suffix, char *dflt)
+			      const char *suffix)
 {
 	char *str, *tok, *end, *ptr;
 	int count = 0;
 
-	if (*vlarb == NULL) {
-		*vlarb = strdup(dflt);
+	if (*vlarb == NULL)
 		return;
-	}
 
 	str = strdup(*vlarb);
 
@@ -999,15 +1092,13 @@ static void subn_verify_vlarb(char **vlarb, const char *prefix,
 	free(str);
 }
 
-static void subn_verify_sl2vl(char **sl2vl, const char *prefix, char *dflt)
+static void subn_verify_sl2vl(char **sl2vl, const char *prefix)
 {
 	char *str, *tok, *end, *ptr;
 	int count = 0;
 
-	if (*sl2vl == NULL) {
-		*sl2vl = strdup(dflt);
+	if (*sl2vl == NULL)
 		return;
-	}
 
 	str = strdup(*sl2vl);
 
@@ -1029,22 +1120,20 @@ static void subn_verify_sl2vl(char **sl2vl, const char *prefix, char *dflt)
 	if (count < 16)
 		log_report(" Warning: Cached Option %s_sl2vl: < 16 VLs "
 			   "listed\n", prefix);
-
-	if (count > 16)
+	else if (count > 16)
 		log_report(" Warning: Cached Option %s_sl2vl: > 16 listed: "
 			   "excess VLs will be dropped\n", prefix);
 
 	free(str);
 }
 
-static void subn_verify_qos_set(osm_qos_options_t *set, const char *prefix,
-				osm_qos_options_t *dflt)
+static void subn_verify_qos_set(osm_qos_options_t *set, const char *prefix)
 {
-	subn_verify_max_vls(&set->max_vls, prefix, dflt->max_vls);
-	subn_verify_high_limit(&set->high_limit, prefix, dflt->high_limit);
-	subn_verify_vlarb(&set->vlarb_low, prefix, "low", dflt->vlarb_low);
-	subn_verify_vlarb(&set->vlarb_high, prefix, "high", dflt->vlarb_high);
-	subn_verify_sl2vl(&set->sl2vl, prefix, dflt->sl2vl);
+	subn_verify_max_vls(&set->max_vls, prefix);
+	subn_verify_high_limit(&set->high_limit, prefix);
+	subn_verify_vlarb(&set->vlarb_low, prefix, "low");
+	subn_verify_vlarb(&set->vlarb_high, prefix, "high");
+	subn_verify_sl2vl(&set->sl2vl, prefix);
 }
 
 int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
@@ -1070,6 +1159,20 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		p_opts->force_link_speed = IB_PORT_LINK_SPEED_ENABLED_MASK;
 	}
 
+	if ((31 < p_opts->force_link_speed_ext) ||
+	    (p_opts->force_link_speed_ext > 3 && p_opts->force_link_speed_ext < 30)) {
+		log_report(" Invalid Cached Option Value:force_link_speed_ext = %u:"
+			   "Using Default:%u\n", p_opts->force_link_speed_ext,
+			   31);
+		p_opts->force_link_speed_ext = 31;
+	}
+
+	if (2 < p_opts->fdr10) {
+		log_report(" Invalid Cached Option Value:fdr10 = %u:"
+			   "Using Default:%u\n", p_opts->fdr10, 1);
+		p_opts->fdr10 = 1;
+	}
+
 	if (p_opts->max_wire_smps == 0)
 		p_opts->max_wire_smps = 0x7FFFFFFF;
 	else if (p_opts->max_wire_smps > 0x7FFFFFFF) {
@@ -1088,36 +1191,26 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 
 	if (strcmp(p_opts->console, OSM_DISABLE_CONSOLE)
 	    && strcmp(p_opts->console, OSM_LOCAL_CONSOLE)
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 	    && strcmp(p_opts->console, OSM_LOOPBACK_CONSOLE)
+#endif
+#ifdef ENABLE_OSM_CONSOLE_SOCKET
 	    && strcmp(p_opts->console, OSM_REMOTE_CONSOLE)
 #endif
 	    ) {
 		log_report(" Invalid Cached Option Value:console = %s"
 			   ", Using Default:%s\n",
 			   p_opts->console, OSM_DEFAULT_CONSOLE);
-		p_opts->console = OSM_DEFAULT_CONSOLE;
+		free(p_opts->console);
+		p_opts->console = strdup(OSM_DEFAULT_CONSOLE);
 	}
 
 	if (p_opts->qos) {
-		osm_qos_options_t dflt;
-
-		/* the default options in qos_options must be correct.
-		 * every other one need not be, b/c those will default
-		 * back to whatever is in qos_options.
-		 */
-
-		subn_set_default_qos_options(&dflt);
-
-		subn_verify_qos_set(&p_opts->qos_options, "qos", &dflt);
-		subn_verify_qos_set(&p_opts->qos_ca_options, "qos_ca",
-				    &p_opts->qos_options);
-		subn_verify_qos_set(&p_opts->qos_sw0_options, "qos_sw0",
-				    &p_opts->qos_options);
-		subn_verify_qos_set(&p_opts->qos_swe_options, "qos_swe",
-				    &p_opts->qos_options);
-		subn_verify_qos_set(&p_opts->qos_rtr_options, "qos_rtr",
-				    &p_opts->qos_options);
+		subn_verify_qos_set(&p_opts->qos_options, "qos");
+		subn_verify_qos_set(&p_opts->qos_ca_options, "qos_ca");
+		subn_verify_qos_set(&p_opts->qos_sw0_options, "qos_sw0");
+		subn_verify_qos_set(&p_opts->qos_swe_options, "qos_swe");
+		subn_verify_qos_set(&p_opts->qos_rtr_options, "qos_rtr");
 	}
 
 #ifdef ENABLE_OSM_PERF_MGR
@@ -1168,6 +1261,7 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 		return -1;
 	}
 	memcpy(p_opts->file_opts, p_opts, sizeof(*p_opts));
+	p_opts->file_opts->file_opts = NULL;
 
 	while (fgets(line, 1023, opts_file) != NULL) {
 		/* get the first token */
@@ -1320,13 +1414,31 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"#    2,4,6,8-14 Reserved\n"
 		"#    Default 15: set to PortInfo:LinkSpeedSupported\n"
 		"force_link_speed %u\n\n"
+		"# Force PortInfo:LinkSpeedExtEnabled on ports\n"
+		"# If 0, don't modify PortInfo:LinkSpeedExtEnabled on port\n"
+		"# Otherwise, use value for PortInfo:LinkSpeedExtEnabled on port\n"
+		"# Values are (MgtWG RefID #4722)\n"
+		"#    1: 14.0625 Gbps\n"
+		"#    2: 25.78125 Gbps\n"
+		"#    3: 14.0625 Gbps or 25.78125 Gbps\n"
+		"#    30: Disable extended link speeds\n"
+		"#    Default 31: set to PortInfo:LinkSpeedExtSupported\n"
+		"force_link_speed_ext %u\n\n"
+		"# FDR10 on ports on devices that support FDR10\n"
+		"# Values are:\n"
+		"#    0: don't use fdr10 (no MLNX ExtendedPortInfo MADs)\n"
+		"#    Default 1: enable fdr10 when supported\n"
+		"#    2: disable fdr10 when supported\n"
+		"fdr10 %u\n\n"
 		"# The subnet_timeout code that will be set for all the ports\n"
 		"# The actual timeout is 4.096usec * 2^<subnet_timeout>\n"
 		"subnet_timeout %u\n\n"
 		"# Threshold of local phy errors for sending Trap 129\n"
 		"local_phy_errors_threshold 0x%02x\n\n"
 		"# Threshold of credit overrun errors for sending Trap 130\n"
-		"overrun_errors_threshold 0x%02x\n\n",
+		"overrun_errors_threshold 0x%02x\n\n"
+		"# Use SwitchInfo:MulticastFDBTop if advertised in PortInfo:CapabilityMask\n"
+		"use_mfttop %s\n\n",
 		cl_ntoh64(p_opts->guid),
 		cl_ntoh64(p_opts->m_key),
 		cl_ntoh16(p_opts->m_key_lease_period),
@@ -1343,9 +1455,12 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->leaf_head_of_queue_lifetime,
 		p_opts->max_op_vls,
 		p_opts->force_link_speed,
+		p_opts->force_link_speed_ext,
+		p_opts->fdr10,
 		p_opts->subnet_timeout,
 		p_opts->local_phy_errors_threshold,
-		p_opts->overrun_errors_threshold);
+		p_opts->overrun_errors_threshold,
+		p_opts->use_mfttop ? "TRUE" : "FALSE");
 
 	fprintf(out,
 		"#\n# PARTITIONING OPTIONS\n#\n"
@@ -1389,16 +1504,18 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->hop_weights_file ? p_opts->hop_weights_file : null_str);
 
 	fprintf(out,
-		"# The file holding non-default port order per switch for DOR routing \n"
-		"dimn_ports_file %s\n\n",
-		p_opts->dimn_ports_file ? p_opts->dimn_ports_file : null_str);
+		"# The file holding non-default port order per switch for routing\n"
+		"port_search_ordering_file %s\n\n",
+		p_opts->port_search_ordering_file ?
+		p_opts->port_search_ordering_file : null_str);
 
 	fprintf(out,
 		"# Routing engine\n"
 		"# Multiple routing engines can be specified separated by\n"
 		"# commas so that specific ordering of routing algorithms will\n"
 		"# be tried if earlier routing engines fail.\n"
-		"# Supported engines: minhop, updn, file, ftree, lash, dor\n"
+		"# Supported engines: minhop, updn, dnup, file, ftree, lash,\n"
+		"#    dor, torus-2QoS\n"
 		"routing_engine %s\n\n", p_opts->routing_engine_names ?
 		p_opts->routing_engine_names : null_str);
 
@@ -1463,6 +1580,17 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->lash_start_vl);
 
 	fprintf(out,
+		"# Port Shifting (use FALSE if unsure)\n"
+		"port_shifting %s\n\n",
+		p_opts->port_shifting ? "TRUE" : "FALSE");
+
+	fprintf(out,
+		"# Assign ports in a random order instead of round-robin.\n"
+		"# If zero disable, otherwise use the value as a random seed\n"
+		"scatter_ports %d\n\n",
+		p_opts->scatter_ports);
+
+	fprintf(out,
 		"# SA database file name\nsa_db_file %s\n\n",
 		p_opts->sa_db_file ? p_opts->sa_db_file : null_str);
 
@@ -1471,6 +1599,10 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# every light sweep, regardless of the verbosity level\n"
 		"sa_db_dump %s\n\n",
 		p_opts->sa_db_dump ? "TRUE" : "FALSE");
+
+	fprintf(out,
+		"# Torus-2QoS configuration file name\ntorus_config %s\n\n",
+		p_opts->torus_conf_file ? p_opts->torus_conf_file : null_str);
 
 	fprintf(out,
 		"#\n# HANDOVER - MULTIPLE SMs OPTIONS\n#\n"
@@ -1508,7 +1640,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Maximal time in [msec] a message can stay in the incoming message queue.\n"
 		"# If there is more than one message in the queue and the last message\n"
 		"# stayed in the queue more than this value, any SA request will be\n"
-		"# immediately returned with a BUSY status.\n"
+		"# immediately be dropped but BUSY status is not currently returned.\n"
 		"max_msg_fifo_timeout %u\n\n"
 		"# Use a single thread for handling SA queries\n"
 		"single_thread %s\n\n",
@@ -1598,8 +1730,11 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"disable_multicast %s\n\n"
 		"# If TRUE opensm will exit on fatal initialization issues\n"
 		"exit_on_fatal %s\n\n" "# console [off|local"
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
+		"|loopback"
+#endif
 #ifdef ENABLE_OSM_CONSOLE_SOCKET
-		"|loopback|socket]\n"
+		"|socket]\n"
 #else
 		"]\n"
 #endif

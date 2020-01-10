@@ -101,13 +101,12 @@ void osm_sa_construct(IN osm_sa_t * p_sa)
 
 void osm_sa_shutdown(IN osm_sa_t * p_sa)
 {
-	ib_api_status_t status;
 	OSM_LOG_ENTER(p_sa->p_log);
 
 	cl_timer_stop(&p_sa->sr_timer);
 
 	/* unbind from the mad service */
-	status = osm_sa_mad_ctrl_unbind(&p_sa->mad_ctrl);
+	osm_sa_mad_ctrl_unbind(&p_sa->mad_ctrl);
 
 	/* remove any registered dispatcher message */
 	cl_disp_unregister(p_sa->nr_disp_h);
@@ -984,6 +983,8 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 					      well_known);
 			if (!p_mgrp)
 				rereg_clients = 1;
+			if (cl_ntoh16(mlid) > p_osm->sm.mlids_init_max)
+				p_osm->sm.mlids_init_max = cl_ntoh16(mlid);
 		} else if (p_mgrp && !strncmp(p, "mcm_port", 8)) {
 			ib_member_rec_t mcmr;
 			ib_net64_t guid;
@@ -1111,7 +1112,7 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 	/*
 	 * If loading succeeded, do whatever 'no_clients_rereg' says.
 	 * If loading failed at some point, turn off the 'no_clients_rereg'
-	 * option (turn on re-registartion requests).
+	 * option (turn on re-registration requests).
 	 */
 	if (rereg_clients)
 		p_osm->subn.opt.no_clients_rereg = FALSE;

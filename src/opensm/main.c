@@ -174,7 +174,10 @@ static void show_usage(void)
 	       "          Min Hop algorithm.  Multiple routing engines can be specified\n"
 	       "          separated by commas so that specific ordering of routing\n"
 	       "          algorithms will be tried if earlier routing engines fail.\n"
-	       "          Supported engines: updn, file, ftree, lash, dor\n\n");
+	       "          If all configured routing engines fail, OpenSM will always\n"
+	       "          attempt to route with Min Hop unless 'no_fallback' is\n"
+	       "          included in the list of routing engines.\n"
+	       "          Supported engines: updn, dnup, file, ftree, lash, dor, torus-2QoS\n\n");
 	printf("--do_mesh_analysis\n"
 	       "          This option enables additional analysis for the lash\n"
 	       "          routing engine to precondition switch port assignments\n"
@@ -220,6 +223,11 @@ static void show_usage(void)
 	printf("--io_guid_file, -G <path to file>\n"
 	       "          Set the I/O nodes for the Fat-Tree routing algorithm\n"
 	       "          to the guids provided in the given file (one to a line)\n\n");
+	printf("--port-shifting\n"
+	       "          Attempt to shift port routes around to remove alignment problems\n"
+	       "          in routing tables\n\n");
+	printf("--scatter-ports <random seed>\n"
+	       "          Randomize best port chosen for a route\n\n");
 	printf("--max_reverse_hops, -H <hop_count>\n"
 	       "          Set the max number of hops the wrong way around\n"
 	       "          an I/O node is allowed to do (connectivity for I/O nodes on top swithces)\n\n");
@@ -231,6 +239,10 @@ static void show_usage(void)
 	       "          Set the order port guids will be routed for the MinHop\n"
 	       "          and Up/Down routing algorithms to the guids provided in the\n"
 	       "          given file (one to a line)\n\n");
+	printf("--torus_config <path to file>\n"
+	       "          This option defines the file name for the extra configuration\n"
+	       "          info needed for the torus-2QoS routing engine.   The default\n"
+	       "          name is \'"OSM_DEFAULT_TORUS_CONF_FILE"\'\n\n");
 	printf("--once, -o\n"
 	       "          This option causes OpenSM to configure the subnet\n"
 	       "          once, then exit.  Ports remain in the ACTIVE state.\n\n");
@@ -242,7 +254,7 @@ static void show_usage(void)
 	printf("--timeout, -t <milliseconds>\n"
 	       "          This option specifies the time in milliseconds\n"
 	       "          used for transaction timeouts.\n"
-	       "          Specifying -t 0 disables timeouts.\n"
+	       "          Timeout values should be > 0.\n"
 	       "          Without -t, OpenSM defaults to a timeout value of\n"
 	       "          200 milliseconds.\n\n");
 	printf("--retries <number>\n"
@@ -258,11 +270,14 @@ static void show_usage(void)
 	       "          Without --maxsmps, OpenSM defaults to a maximum of\n"
 	       "          4 outstanding SMPs.\n\n");
 	printf("--console, -q [off|local"
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
+	       "|loopback"
+#endif
 #ifdef ENABLE_OSM_CONSOLE_SOCKET
-	       "|socket|loopback"
+	       "|socket"
 #endif
 	       "]\n          This option activates the OpenSM console (default off).\n\n");
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 	printf("--console-port, -C <port>\n"
 	       "          Specify an alternate telnet port for the console (default %d).\n\n",
 	       OSM_DEFAULT_CONSOLE_PORT);
@@ -275,7 +290,14 @@ static void show_usage(void)
 	       "          This option provides the means to define a weighting\n"
 	       "          factor per port for customizing the least weight\n"
 	       "          hops for the routing.\n\n");
-	printf("--dimn_ports_file, -O <path to file>\n"
+	printf("--port_search_ordering_file, -O <path to file>\n"
+	       "          This option provides the means to define a mapping\n"
+	       "          between ports and dimension (Order) for controlling\n"
+	       "          Dimension Order Routing (DOR).\n"
+	       "          Moreover this option provides the means to define non\n"
+	       "          default routing port order.\n\n");
+	printf("--dimn_ports_file, -O <path to file> (DEPRECATED)\n"
+	       "          Use --port_search_ordering_file instead.\n"
 	       "          This option provides the means to define a mapping\n"
 	       "          between ports and dimension (Order) for controlling\n"
 	       "          Dimension Order Routing (DOR).\n\n");
@@ -565,6 +587,7 @@ int main(int argc, char *argv[])
 		{"ignore_guids", 1, NULL, 'i'},
 		{"hop_weights_file", 1, NULL, 'w'},
 		{"dimn_ports_file", 1, NULL, 'O'},
+		{"port_search_ordering_file", 1, NULL, 'O'},
 		{"lmc", 1, NULL, 'l'},
 		{"sweep", 1, NULL, 's'},
 		{"timeout", 1, NULL, 't'},
@@ -594,12 +617,14 @@ int main(int argc, char *argv[])
 		{"root_guid_file", 1, NULL, 'a'},
 		{"cn_guid_file", 1, NULL, 'u'},
 		{"io_guid_file", 1, NULL, 'G'},
+		{"port-shifting", 0, NULL, 11},
+		{"scatter-ports", 1, NULL, 14},
 		{"max_reverse_hops", 1, NULL, 'H'},
 		{"ids_guid_file", 1, NULL, 'm'},
 		{"guid_routing_order_file", 1, NULL, 'X'},
 		{"stay_on_fatal", 0, NULL, 'y'},
 		{"honor_guid2lid", 0, NULL, 'x'},
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 		{"console-port", 1, NULL, 'C'},
 #endif
 		{"daemon", 0, NULL, 'B'},
@@ -615,11 +640,12 @@ int main(int argc, char *argv[])
 		{"sm_sl", 1, NULL, 7},
 		{"retries", 1, NULL, 8},
 		{"log_prefix", 1, NULL, 9},
+		{"torus_config", 1, NULL, 10},
 		{NULL, 0, NULL, 0}	/* Required at the end of the array */
 	};
 
 	/* force stdout to be line-buffered */
-	setvbuf(stdout, NULL, _IOLBF, 0);
+	setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
 
 	/* Make sure that the opensm and complib were compiled using
 	   same modes (debug/free) */
@@ -633,12 +659,6 @@ int main(int argc, char *argv[])
 
 	printf("-------------------------------------------------\n");
 	printf("%s\n", OSM_VERSION);
-
-	osm_subn_set_default_opt(&opt);
-
-	if (osm_subn_parse_conf_file(OSM_DEFAULT_CONFIG_FILE, &opt) < 0)
-		printf("\nFail to parse config file \'%s\'\n",
-		       OSM_DEFAULT_CONFIG_FILE);
 
 	do {
 		next_option = getopt_long_only(argc, argv, short_option,
@@ -655,7 +675,12 @@ int main(int argc, char *argv[])
 
 	optind = 0;		/* reset command line */
 
-	if (config_file && osm_subn_parse_conf_file(config_file, &opt) < 0)
+	if (!config_file)
+		config_file = OSM_DEFAULT_CONFIG_FILE;
+
+	osm_subn_set_default_opt(&opt);
+
+	if (osm_subn_parse_conf_file(config_file, &opt) < 0)
 		printf("\nFail to parse config file \'%s\'\n", config_file);
 
 	printf("Command Line Arguments:\n");
@@ -699,15 +724,15 @@ int main(int argc, char *argv[])
 			break;
 
 		case 'w':
-			opt.hop_weights_file = optarg;
+			SET_STR_OPT(opt.hop_weights_file, optarg);
 			printf(" Hop Weights File = %s\n",
 			       opt.hop_weights_file);
 			break;
 
 		case 'O':
-			opt.dimn_ports_file = optarg;
-			printf(" Dimension Ports File = %s\n",
-			       opt.dimn_ports_file);
+			SET_STR_OPT(opt.port_search_ordering_file, optarg);
+			printf(" Port Search Ordering/Dimension Ports File = %s\n",
+			       opt.port_search_ordering_file);
 			break;
 
 		case 'g':
@@ -738,9 +763,15 @@ int main(int argc, char *argv[])
 			break;
 
 		case 't':
+			val = strtoul(optarg, NULL, 0);
 			opt.transaction_timeout = strtoul(optarg, NULL, 0);
-			printf(" Transaction timeout = %u\n",
-			       opt.transaction_timeout);
+			if (val == 0)
+				fprintf(stderr, "ERROR: timeout value 0 is invalid. Ignoring it.\n");
+			else {
+				opt.transaction_timeout = val;
+				printf(" Transaction timeout = %u\n",
+				       opt.transaction_timeout);
+			}
 			break;
 
 		case 'n':
@@ -759,6 +790,8 @@ int main(int argc, char *argv[])
 			    || strcmp(optarg, OSM_LOCAL_CONSOLE) == 0
 #ifdef ENABLE_OSM_CONSOLE_SOCKET
 			    || strcmp(optarg, OSM_REMOTE_CONSOLE) == 0
+#endif
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 			    || strcmp(optarg, OSM_LOOPBACK_CONSOLE) == 0
 #endif
 			    )
@@ -768,7 +801,7 @@ int main(int argc, char *argv[])
 				       optarg);
 			break;
 
-#ifdef ENABLE_OSM_CONSOLE_SOCKET
+#ifdef ENABLE_OSM_CONSOLE_LOOPBACK
 		case 'C':
 			opt.console_port = strtol(optarg, NULL, 0);
 			break;
@@ -803,7 +836,7 @@ int main(int argc, char *argv[])
 			break;
 
 		case 'l':
-			temp = strtol(optarg, NULL, 0);
+			temp = strtoul(optarg, NULL, 0);
 			if (temp > 7) {
 				fprintf(stderr,
 					"ERROR: LMC must be 7 or less.\n");
@@ -868,8 +901,8 @@ int main(int argc, char *argv[])
 			break;
 
 		case 'p':
-			temp = strtol(optarg, NULL, 0);
-			if (0 > temp || 15 < temp) {
+			temp = strtoul(optarg, NULL, 0);
+			if (temp > 15) {
 				fprintf(stderr,
 					"ERROR: priority must be between 0 and 15\n");
 				return -1;
@@ -926,8 +959,16 @@ int main(int argc, char *argv[])
 			break;
 
 		case 'G':
-			opt.io_guid_file = optarg;
+			SET_STR_OPT(opt.io_guid_file, optarg);
 			printf(" I/O Node Guid File: %s\n", opt.io_guid_file);
+			break;
+		case 11:
+			opt.port_shifting = TRUE;
+			printf(" Port Shifting is on\n");
+			break;
+		case 14:
+			opt.scatter_ports = strtol(optarg, NULL, 0);
+			printf(" Scatter Ports is on\n");
 			break;
 		case 'H':
 			opt.max_reverse_hops = atoi(optarg);
@@ -978,8 +1019,8 @@ int main(int argc, char *argv[])
 			opt.do_mesh_analysis = TRUE;
 			break;
 		case 6:
-			temp = strtol(optarg, NULL, 0);
-			if (temp < 0 || temp >= IB_MAX_NUM_VLS) {
+			temp = strtoul(optarg, NULL, 0);
+			if (temp >= IB_MAX_NUM_VLS) {
 				fprintf(stderr,
 					"ERROR: starting lash vl must be between 0 and 15\n");
 				return -1;
@@ -988,8 +1029,8 @@ int main(int argc, char *argv[])
 			printf(" LASH starting VL = %d\n", opt.lash_start_vl);
 			break;
 		case 7:
-			temp = strtol(optarg, NULL, 0);
-			if (temp < 0 || temp > 15) {
+			temp = strtoul(optarg, NULL, 0);
+			if (temp > 15) {
 				fprintf(stderr,
 					"ERROR: SM's SL must be between 0 and 15\n");
 				return -1;
@@ -1005,6 +1046,10 @@ int main(int argc, char *argv[])
 		case 9:
 			SET_STR_OPT(opt.log_prefix, optarg);
 			printf("Log prefix = %s\n", opt.log_prefix);
+			break;
+		case 10:
+			SET_STR_OPT(opt.torus_conf_file, optarg);
+			printf("Torus-2QoS config file = %s\n", opt.torus_conf_file);
 			break;
 		case 'h':
 		case '?':
