@@ -167,21 +167,6 @@ static const ib_gid_t osm_ipoib_mgid = {
 	 },
 };
 
-/*
- * HACK: Until TS resolves their noncompliant join compmask,
- * we have to pre-define the MGID
- */
-static const ib_gid_t osm_ts_ipoib_mgid = {
-	{
-	 0xff,			/*  multicast field */
-	 0x12,			/*  non-permanent bit, link local scope */
-	 0x40, 0x1b,		/*  IPv4 signature */
-	 0xff, 0xff,		/*  16 bits of P_Key (to be filled in) */
-	 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,	/*  48 bits of zeros */
-	 0x00, 0x00, 0x00, 0x01,	/*  32 bit IPv4 broadcast address */
-	 },
-};
-
 ib_api_status_t osm_prtn_add_mcgroup(osm_log_t * p_log, osm_subn_t * p_subn,
 				     osm_prtn_t * p, uint8_t rate, uint8_t mtu,
 				     uint8_t scope)
@@ -189,9 +174,8 @@ ib_api_status_t osm_prtn_add_mcgroup(osm_log_t * p_log, osm_subn_t * p_subn,
 	ib_member_rec_t mc_rec;
 	ib_net64_t comp_mask;
 	ib_net16_t pkey;
-	osm_mgrp_t *p_mgrp = NULL;
+	osm_mgrp_t *mgrp;
 	osm_sa_t *p_sa = &p_subn->p_osm->sa;
-	ib_api_status_t status = IB_SUCCESS;
 	uint8_t hop_limit;
 
 	pkey = p->pkey | cl_hton16(0x8000);
@@ -212,40 +196,25 @@ ib_api_status_t osm_prtn_add_mcgroup(osm_log_t * p_log, osm_subn_t * p_subn,
 	mc_rec.pkt_life = p_subn->opt.subnet_timeout;
 	mc_rec.sl_flow_hop = ib_member_set_sl_flow_hop(p->sl, 0, hop_limit);
 	/* Scope in MCMemberRecord (if present) needs to be consistent with MGID */
-	mc_rec.scope_state = ib_member_set_scope_state(scope, IB_MC_REC_STATE_FULL_MEMBER);
+	mc_rec.scope_state =
+	    ib_member_set_scope_state(scope, IB_MC_REC_STATE_FULL_MEMBER);
 	ib_mgid_set_scope(&mc_rec.mgid, scope);
 
 	/* don't update rate, mtu */
 	comp_mask = IB_MCR_COMPMASK_MTU | IB_MCR_COMPMASK_MTU_SEL |
 	    IB_MCR_COMPMASK_RATE | IB_MCR_COMPMASK_RATE_SEL;
-	status = osm_mcmr_rcv_find_or_create_new_mgrp(p_sa, comp_mask, &mc_rec,
-						      &p_mgrp);
-	if (!p_mgrp || status != IB_SUCCESS)
+	mgrp = osm_mcmr_rcv_find_or_create_new_mgrp(p_sa, comp_mask, &mc_rec);
+	if (!mgrp) {
 		OSM_LOG(p_log, OSM_LOG_ERROR,
 			"Failed to create MC group with pkey 0x%04x\n",
 			cl_ntoh16(pkey));
-	if (p_mgrp) {
-		p_mgrp->well_known = TRUE;
-		p->mgrp = p_mgrp;
+		return IB_ERROR;
 	}
 
-	/* workaround for TS */
-	/* FIXME: remove this upon TS fixes */
-	mc_rec.mgid = osm_ts_ipoib_mgid;
-	memcpy(&mc_rec.mgid.raw[4], &pkey, sizeof(pkey));
-	/* Scope in MCMemberRecord (if present) needs to be consistent with MGID */
-	mc_rec.scope_state = ib_member_set_scope_state(scope, IB_MC_REC_STATE_FULL_MEMBER);
-	ib_mgid_set_scope(&mc_rec.mgid, scope);
+	mgrp->well_known = TRUE;
+	p->mgrp = mgrp;
 
-	status = osm_mcmr_rcv_find_or_create_new_mgrp(p_sa, comp_mask, &mc_rec,
-						      &p_mgrp);
-	if (p_mgrp) {
-		p_mgrp->well_known = TRUE;
-		if (!p->mgrp)
-			p->mgrp = p_mgrp;
-	}
-
-	return status;
+	return IB_SUCCESS;
 }
 
 static uint16_t generate_pkey(osm_subn_t * p_subn)

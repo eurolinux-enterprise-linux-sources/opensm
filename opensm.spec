@@ -1,5 +1,5 @@
 Name: opensm
-Version: 3.3.5
+Version: 3.3.9
 Release: 1%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 Group: System Environment/Daemons
@@ -9,8 +9,9 @@ Source0: http://www.openfabrics.org/downloads/management/%{name}-%{version}.tar.
 Source1: opensm.conf
 Source2: opensm.logrotate
 Source3: opensm.initd
+Source4: opensm.sysconfig
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.4, libtool, bison, flex, byacc
+BuildRequires: libibmad-devel = 1.3.7, libtool, bison, flex, byacc
 Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
 ExcludeArch: s390 s390x
 
@@ -52,18 +53,19 @@ Static version of opensm libraries
 make %{?_smp_mflags}
 
 %install
-rm -rf $RPM_BUILD_ROOT
-make install DESTDIR=$RPM_BUILD_ROOT
+rm -rf %{buildroot}
+make install DESTDIR=%{buildroot}
 # remove unpackaged files from the buildroot
-rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
-rm -fr $RPM_BUILD_ROOT%{_sysconfdir}/init.d
-install -D -m644 %{SOURCE1} $RPM_BUILD_ROOT%{_sysconfdir}/rdma/opensm.conf
-install -D -m644 %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/opensm
-install -D -m755 %{SOURCE3} $RPM_BUILD_ROOT%{_initddir}/opensm
+rm -f %{buildroot}%{_libdir}/*.la
+rm -fr %{buildroot}%{_sysconfdir}/init.d
+install -D -m644 %{SOURCE1} %{buildroot}%{_sysconfdir}/rdma/opensm.conf
+install -D -m644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/opensm
+install -D -m755 %{SOURCE3} %{buildroot}%{_initddir}/opensm
+install -D -m644 %{SOURCE4} %{buildroot}%{_sysconfdir}/sysconfig/opensm
 mkdir -p ${RPM_BUILD_ROOT}/var/cache/opensm
 
 %clean
-rm -rf $RPM_BUILD_ROOT
+rm -rf %{buildroot}
 
 %post
 if [ $1 = 1 ]; then
@@ -91,6 +93,7 @@ fi
 %{_mandir}/man8/*
 %config(noreplace) %{_sysconfdir}/logrotate.d/opensm
 %config(noreplace) %{_sysconfdir}/rdma/opensm.conf
+%config(noreplace) %{_sysconfdir}/sysconfig/opensm
 %doc AUTHORS COPYING ChangeLog INSTALL README NEWS
 
 %files libs
@@ -107,6 +110,16 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Fri Jul 22 2011 Doug Ledford <dledford@redhat.com> - 3.3.9-1
+- Update to latest upstream version (3.3.5 -> 3.3.9)
+- Add /etc/sysconfig/opensm for use by opensm init script
+- Enable the ability to start more than one instance of opensm for multiple
+  fabric support
+- Enable the ability to start opensm with a priority other than default for
+  support of backup opensm instances
+- Related: bz725016
+- Resolves: bz633392
+
 * Mon Mar 08 2010 Doug Ledford <dledford@redhat.com> - 3.3.5-1
 - Update to latest upstream release.  We need various defines in ib_types.h
   for the latest ibutils package to build properly, and the latest ibutils

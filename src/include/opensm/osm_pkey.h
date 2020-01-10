@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2010 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
@@ -211,9 +212,9 @@ void osm_pkey_tbl_destroy(IN osm_pkey_tbl_t * p_pkey_tbl);
 *
 *********/
 
-/****f* OpenSM: osm_pkey_get_num_blocks
+/****f* OpenSM: osm_pkey_tbl_get_num_blocks
 * NAME
-*  osm_pkey_get_num_blocks
+*  osm_pkey_tbl_get_num_blocks
 *
 * DESCRIPTION
 *  Obtain the number of blocks in IB PKey table
@@ -251,7 +252,8 @@ static inline ib_pkey_table_t *osm_pkey_tbl_block_get(const osm_pkey_tbl_t *
 						      uint16_t block)
 {
 	return ((block < cl_ptr_vector_get_size(&p_pkey_tbl->blocks)) ?
-		cl_ptr_vector_get(&p_pkey_tbl->blocks, block) : NULL);
+		(ib_pkey_table_t *)cl_ptr_vector_get(
+		&p_pkey_tbl->blocks, block) : NULL);
 };
 
 /*
@@ -281,8 +283,9 @@ static inline ib_pkey_table_t *osm_pkey_tbl_new_block_get(const osm_pkey_tbl_t *
 							  p_pkey_tbl,
 							  uint16_t block)
 {
-	return (block < cl_ptr_vector_get_size(&p_pkey_tbl->new_blocks)) ?
-	    cl_ptr_vector_get(&p_pkey_tbl->new_blocks, block) : NULL;
+	return ((block < cl_ptr_vector_get_size(&p_pkey_tbl->new_blocks)) ?
+		(ib_pkey_table_t *)cl_ptr_vector_get(
+		&p_pkey_tbl->new_blocks, block) : NULL);
 };
 
 /****f* OpenSM: osm_pkey_tbl_set_new_entry

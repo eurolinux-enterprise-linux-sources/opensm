@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
@@ -297,10 +297,12 @@ static const opt_rec_t opt_tbl[] = {
 	{ "m_key_lease_period", OPT_OFFSET(m_key_lease_period), opts_parse_net16, NULL, 1 },
 	{ "sweep_interval", OPT_OFFSET(sweep_interval), opts_parse_uint32, NULL, 1 },
 	{ "max_wire_smps", OPT_OFFSET(max_wire_smps), opts_parse_uint32, NULL, 1 },
+	{ "max_wire_smps2", OPT_OFFSET(max_wire_smps2), opts_parse_uint32, NULL, 1 },
+	{ "max_smps_timeout", OPT_OFFSET(max_smps_timeout), opts_parse_uint32, NULL, 1 },
 	{ "console", OPT_OFFSET(console), opts_parse_charp, NULL, 0 },
 	{ "console_port", OPT_OFFSET(console_port), opts_parse_uint16, NULL, 0 },
-	{ "transaction_timeout", OPT_OFFSET(transaction_timeout), opts_parse_uint32, NULL, 1 },
-	{ "transaction_retries", OPT_OFFSET(transaction_retries), opts_parse_uint32, NULL, 1 },
+	{ "transaction_timeout", OPT_OFFSET(transaction_timeout), opts_parse_uint32, NULL, 0 },
+	{ "transaction_retries", OPT_OFFSET(transaction_retries), opts_parse_uint32, NULL, 0 },
 	{ "max_msg_fifo_timeout", OPT_OFFSET(max_msg_fifo_timeout), opts_parse_uint32, NULL, 1 },
 	{ "sm_priority", OPT_OFFSET(sm_priority), opts_parse_uint8, opts_setup_sm_priority, 1 },
 	{ "lmc", OPT_OFFSET(lmc), opts_parse_uint8, NULL, 1 },
@@ -324,11 +326,12 @@ static const opt_rec_t opt_tbl[] = {
 	{ "force_heavy_sweep", OPT_OFFSET(force_heavy_sweep), opts_parse_boolean, NULL, 1 },
 	{ "port_prof_ignore_file", OPT_OFFSET(port_prof_ignore_file), opts_parse_charp, NULL, 0 },
 	{ "hop_weights_file", OPT_OFFSET(hop_weights_file), opts_parse_charp, NULL, 0 },
+	{ "dimn_ports_file", OPT_OFFSET(dimn_ports_file), opts_parse_charp, NULL, 0 },
 	{ "port_profile_switch_nodes", OPT_OFFSET(port_profile_switch_nodes), opts_parse_boolean, NULL, 1 },
 	{ "sweep_on_trap", OPT_OFFSET(sweep_on_trap), opts_parse_boolean, NULL, 1 },
 	{ "routing_engine", OPT_OFFSET(routing_engine_names), opts_parse_charp, NULL, 0 },
 	{ "connect_roots", OPT_OFFSET(connect_roots), opts_parse_boolean, NULL, 1 },
-	{ "use_ucast_cache", OPT_OFFSET(use_ucast_cache), opts_parse_boolean, NULL, 1 },
+	{ "use_ucast_cache", OPT_OFFSET(use_ucast_cache), opts_parse_boolean, NULL, 0 },
 	{ "log_file", OPT_OFFSET(log_file), opts_parse_charp, NULL, 0 },
 	{ "log_max_size", OPT_OFFSET(log_max_size), opts_parse_uint32, opts_setup_log_max_size, 1 },
 	{ "log_flags", OPT_OFFSET(log_flags), opts_parse_uint8, opts_setup_log_flags, 1 },
@@ -355,6 +358,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "daemon", OPT_OFFSET(daemon), opts_parse_boolean, NULL, 0 },
 	{ "sm_inactive", OPT_OFFSET(sm_inactive), opts_parse_boolean, NULL, 1 },
 	{ "babbling_port_policy", OPT_OFFSET(babbling_port_policy), opts_parse_boolean, NULL, 1 },
+	{ "use_optimized_slvl", OPT_OFFSET(use_optimized_slvl), opts_parse_boolean, NULL, 1 },
 #ifdef ENABLE_OSM_PERF_MGR
 	{ "perfmgr", OPT_OFFSET(perfmgr), opts_parse_boolean, NULL, 0 },
 	{ "perfmgr_redir", OPT_OFFSET(perfmgr_redir), opts_parse_boolean, NULL, 0 },
@@ -363,6 +367,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "event_db_dump_file", OPT_OFFSET(event_db_dump_file), opts_parse_charp, NULL, 0 },
 #endif				/* ENABLE_OSM_PERF_MGR */
 	{ "event_plugin_name", OPT_OFFSET(event_plugin_name), opts_parse_charp, NULL, 0 },
+	{ "event_plugin_options", OPT_OFFSET(event_plugin_options), opts_parse_charp, NULL, 0 },
 	{ "node_name_map_name", OPT_OFFSET(node_name_map_name), opts_parse_charp, NULL, 0 },
 	{ "qos_max_vls", OPT_OFFSET(qos_options.max_vls), opts_parse_uint32, NULL, 1 },
 	{ "qos_high_limit", OPT_OFFSET(qos_options.high_limit), opts_parse_int32, NULL, 1 },
@@ -395,6 +400,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "consolidate_ipv6_snm_req", OPT_OFFSET(consolidate_ipv6_snm_req), opts_parse_boolean, NULL, 1 },
 	{ "lash_start_vl", OPT_OFFSET(lash_start_vl), opts_parse_uint8, NULL, 1 },
 	{ "sm_sl", OPT_OFFSET(sm_sl), opts_parse_uint8, NULL, 1 },
+	{ "log_prefix", OPT_OFFSET(log_prefix), opts_parse_charp, NULL, 1 },
 	{0}
 };
 
@@ -527,6 +533,7 @@ ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
 
 	/* we assume master by default - so we only need to set it true if STANDBY */
 	p_subn->coming_out_of_standby = FALSE;
+	p_subn->sweeping_enabled = TRUE;
 
 	return IB_SUCCESS;
 }
@@ -535,27 +542,13 @@ osm_port_t *osm_get_port_by_mad_addr(IN osm_log_t * p_log,
 				     IN const osm_subn_t * p_subn,
 				     IN osm_mad_addr_t * p_mad_addr)
 {
-	const cl_ptr_vector_t *p_port_lid_tbl;
-	osm_port_t *p_port = NULL;
-
-	/* Find the port gid of the request in the subnet */
-	p_port_lid_tbl = &p_subn->port_lid_tbl;
-
-	CL_ASSERT(cl_ptr_vector_get_size(p_port_lid_tbl) < 0x10000);
-
-	if ((uint16_t) cl_ptr_vector_get_size(p_port_lid_tbl) >
-	    cl_ntoh16(p_mad_addr->dest_lid)) {
-		p_port =
-		    cl_ptr_vector_get(p_port_lid_tbl,
-				      cl_ntoh16(p_mad_addr->dest_lid));
-	} else {
-		/* The dest_lid is not in the subnet table - this is an error */
+	osm_port_t *port = osm_get_port_by_lid(p_subn, p_mad_addr->dest_lid);
+	if (!port)
 		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 7504: "
 			"Lid is out of range: %u\n",
 			cl_ntoh16(p_mad_addr->dest_lid));
-	}
 
-	return p_port;
+	return port;
 }
 
 ib_api_status_t osm_get_gid_by_mad_addr(IN osm_log_t * p_log,
@@ -625,9 +618,8 @@ osm_port_t *osm_get_port_by_guid(IN osm_subn_t const *p_subn, IN ib_net64_t guid
 	return p_port;
 }
 
-osm_port_t *osm_get_port_by_lid(IN osm_subn_t const * subn, IN ib_net16_t lid)
+osm_port_t *osm_get_port_by_lid_ho(IN osm_subn_t const * subn, IN uint16_t lid)
 {
-	lid = cl_ntoh16(lid);
 	if (lid < cl_ptr_vector_get_size(&subn->port_lid_tbl))
 		return cl_ptr_vector_get(&subn->port_lid_tbl, lid);
 	return NULL;
@@ -680,10 +672,13 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->m_key_lease_period = 0;
 	p_opt->sweep_interval = OSM_DEFAULT_SWEEP_INTERVAL_SECS;
 	p_opt->max_wire_smps = OSM_DEFAULT_SMP_MAX_ON_WIRE;
+	p_opt->max_wire_smps2 = p_opt->max_wire_smps;
 	p_opt->console = strdup(OSM_DEFAULT_CONSOLE);
 	p_opt->console_port = OSM_DEFAULT_CONSOLE_PORT;
 	p_opt->transaction_timeout = OSM_DEFAULT_TRANS_TIMEOUT_MILLISEC;
 	p_opt->transaction_retries = OSM_DEFAULT_RETRY_COUNT;
+	p_opt->max_smps_timeout = 1000 * p_opt->transaction_timeout *
+				  p_opt->transaction_retries;
 	/* by default we will consider waiting for 50x transaction timeout normal */
 	p_opt->max_msg_fifo_timeout = 50 * OSM_DEFAULT_TRANS_TIMEOUT_MILLISEC;
 	p_opt->sm_priority = OSM_DEFAULT_SM_PRIORITY;
@@ -714,6 +709,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->daemon = FALSE;
 	p_opt->sm_inactive = FALSE;
 	p_opt->babbling_port_policy = FALSE;
+	p_opt->use_optimized_slvl = FALSE;
 #ifdef ENABLE_OSM_PERF_MGR
 	p_opt->perfmgr = FALSE;
 	p_opt->perfmgr_redir = TRUE;
@@ -724,6 +720,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 #endif				/* ENABLE_OSM_PERF_MGR */
 
 	p_opt->event_plugin_name = NULL;
+	p_opt->event_plugin_options = NULL;
 	p_opt->node_name_map_name = NULL;
 
 	p_opt->dump_files_dir = getenv("OSM_TMP_DIR");
@@ -739,6 +736,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->accum_log_file = TRUE;
 	p_opt->port_prof_ignore_file = NULL;
 	p_opt->hop_weights_file = NULL;
+	p_opt->dimn_ports_file = NULL;
 	p_opt->port_profile_switch_nodes = FALSE;
 	p_opt->sweep_on_trap = TRUE;
 	p_opt->use_ucast_cache = FALSE;
@@ -762,6 +760,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->consolidate_ipv6_snm_req = FALSE;
 	p_opt->lash_start_vl = 0;
 	p_opt->sm_sl = OSM_DEFAULT_SL;
+	p_opt->log_prefix = NULL;
 	subn_init_qos_options(&p_opt->qos_options, NULL);
 	subn_init_qos_options(&p_opt->qos_ca_options, NULL);
 	subn_init_qos_options(&p_opt->qos_sw0_options, NULL);
@@ -1080,6 +1079,13 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		p_opts->max_wire_smps = OSM_DEFAULT_SMP_MAX_ON_WIRE;
 	}
 
+	if (p_opts->max_wire_smps2 > 0x7FFFFFFF) {
+		log_report(" Invalid Cached Option Value: max_wire_smps2 = %u,"
+			   " Using Default: %u",
+			   p_opts->max_wire_smps2, p_opts->max_wire_smps);
+		p_opts->max_wire_smps2 = p_opts->max_wire_smps;
+	}
+
 	if (strcmp(p_opts->console, OSM_DISABLE_CONSOLE)
 	    && strcmp(p_opts->console, OSM_LOCAL_CONSOLE)
 #ifdef ENABLE_OSM_CONSOLE_SOCKET
@@ -1157,8 +1163,10 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 	cl_log_event("OpenSM", CL_LOG_INFO, line, NULL, 0);
 
 	p_opts->config_file = file_name;
-	if (!p_opts->file_opts && !(p_opts->file_opts = malloc(sizeof(*p_opts))))
+	if (!p_opts->file_opts && !(p_opts->file_opts = malloc(sizeof(*p_opts)))) {
+		fclose(opts_file);
 		return -1;
+	}
 	memcpy(p_opts->file_opts, p_opts, sizeof(*p_opts));
 
 	while (fgets(line, 1023, opts_file) != NULL) {
@@ -1381,6 +1389,11 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->hop_weights_file ? p_opts->hop_weights_file : null_str);
 
 	fprintf(out,
+		"# The file holding non-default port order per switch for DOR routing \n"
+		"dimn_ports_file %s\n\n",
+		p_opts->dimn_ports_file ? p_opts->dimn_ports_file : null_str);
+
+	fprintf(out,
 		"# Routing engine\n"
 		"# Multiple routing engines can be specified separated by\n"
 		"# commas so that specific ordering of routing algorithms will\n"
@@ -1483,6 +1496,11 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"#\n# TIMING AND THREADING OPTIONS\n#\n"
 		"# Maximum number of SMPs sent in parallel\n"
 		"max_wire_smps %u\n\n"
+		"# Maximum number of timeout based SMPs allowed to be outstanding\n"
+		"# A value less than or equal to max_wire_smps disables this mechanism\n"
+		"max_wire_smps2 %u\n\n"
+		"# The timeout in [usec] used for sending SMPs above max_wire_smps limit and below max_wire_smps2 limit\n"
+		"max_smps_timeout %u\n\n"
 		"# The maximum time in [msec] allowed for a transaction to complete\n"
 		"transaction_timeout %u\n\n"
 		"# The maximum number of retries allowed for a transaction to complete\n"
@@ -1495,6 +1513,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Use a single thread for handling SA queries\n"
 		"single_thread %s\n\n",
 		p_opts->max_wire_smps,
+		p_opts->max_wire_smps2,
+		p_opts->max_smps_timeout,
 		p_opts->transaction_timeout,
 		p_opts->transaction_retries,
 		p_opts->max_msg_fifo_timeout,
@@ -1507,10 +1527,13 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# SM Inactive\n"
 		"sm_inactive %s\n\n"
 		"# Babbling Port Policy\n"
-		"babbling_port_policy %s\n\n",
+		"babbling_port_policy %s\n\n"
+		"# Use Optimized SLtoVLMapping programming if supported by device\n"
+		"use_optimized_slvl %s\n\n",
 		p_opts->daemon ? "TRUE" : "FALSE",
 		p_opts->sm_inactive ? "TRUE" : "FALSE",
-		p_opts->babbling_port_policy ? "TRUE" : "FALSE");
+		p_opts->babbling_port_policy ? "TRUE" : "FALSE",
+		p_opts->use_optimized_slvl ? "TRUE" : "FALSE");
 
 #ifdef ENABLE_OSM_PERF_MGR
 	fprintf(out,
@@ -1537,8 +1560,14 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 
 	fprintf(out,
 		"#\n# Event Plugin Options\n#\n"
-		"event_plugin_name %s\n\n", p_opts->event_plugin_name ?
-		p_opts->event_plugin_name : null_str);
+		"# Event plugin name(s)\n"
+		"event_plugin_name %s\n\n"
+		"# Options string that would be passed to the plugin(s)\n"
+		"event_plugin_options %s\n\n",
+		p_opts->event_plugin_name ?
+		p_opts->event_plugin_name : null_str,
+		p_opts->event_plugin_options ?
+		p_opts->event_plugin_options : null_str);
 
 	fprintf(out,
 		"#\n# Node name map for mapping node's to more descriptive node descriptions\n"
@@ -1628,6 +1657,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"#\n# IPv6 Solicited Node Multicast (SNM) Options\n#\n"
 		"consolidate_ipv6_snm_req %s\n\n",
 		p_opts->consolidate_ipv6_snm_req ? "TRUE" : "FALSE");
+
+	fprintf(out, "# Log prefix\nlog_prefix %s\n\n", p_opts->log_prefix);
 
 	/* optional string attributes ... */
 

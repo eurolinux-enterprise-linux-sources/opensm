@@ -4,6 +4,7 @@
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
+ * Copyright (c) 2010 HNR Consulting. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -63,7 +64,7 @@ typedef struct osm_mcast_work_obj {
 	cl_map_item_t map_item;
 } osm_mcast_work_obj_t;
 
-static osm_mcast_work_obj_t *mcast_work_obj_new(IN const osm_port_t * p_port)
+static osm_mcast_work_obj_t *mcast_work_obj_new(IN osm_port_t * p_port)
 {
 	osm_mcast_work_obj_t *p_obj;
 
@@ -75,7 +76,7 @@ static osm_mcast_work_obj_t *mcast_work_obj_new(IN const osm_port_t * p_port)
 	p_obj = malloc(sizeof(*p_obj));
 	if (p_obj) {
 		memset(p_obj, 0, sizeof(*p_obj));
-		p_obj->p_port = (osm_port_t *) p_port;
+		p_obj->p_port = p_port;
 	}
 
 	return p_obj;
@@ -86,7 +87,7 @@ static void mcast_work_obj_delete(IN osm_mcast_work_obj_t * p_wobj)
 	free(p_wobj);
 }
 
-static int make_port_list(cl_qlist_t *list, osm_mgrp_box_t *mbox)
+static int make_port_list(cl_qlist_t * list, osm_mgrp_box_t * mbox)
 {
 	cl_qmap_t map;
 	cl_map_item_t *map_item;
@@ -125,8 +126,8 @@ static int make_port_list(cl_qlist_t *list, osm_mgrp_box_t *mbox)
 static void drop_port_list(cl_qlist_t * list)
 {
 	while (cl_qlist_count(list))
-		mcast_work_obj_delete(
-			(osm_mcast_work_obj_t *)cl_qlist_remove_head(list));
+		mcast_work_obj_delete((osm_mcast_work_obj_t *)
+				      cl_qlist_remove_head(list));
 }
 
 /**********************************************************************
@@ -157,50 +158,91 @@ static void mcast_mgr_purge_tree(osm_sm_t * sm, IN osm_mgrp_box_t * mbox)
 	OSM_LOG_EXIT(sm->p_log);
 }
 
-static float osm_mcast_mgr_compute_avg_hops(osm_sm_t * sm, cl_qlist_t * l,
-					    const osm_switch_t * p_sw)
+static void create_mgrp_switch_map(cl_qmap_t * m, cl_qlist_t * port_list)
 {
-	float avg_hops = 0;
-	uint32_t hops = 0;
-	uint32_t num_ports = 0;
-	cl_list_item_t *i;
 	osm_mcast_work_obj_t *wobj;
+	osm_port_t *port;
+	osm_switch_t *sw;
+	ib_net64_t guid;
+	cl_list_item_t *i;
 
-	OSM_LOG_ENTER(sm->p_log);
-
-	/*
-	   For each member of the multicast group, compute the
-	   number of hops to its base LID.
-	 */
-	for (i = cl_qlist_head(l); i != cl_qlist_end(l); i = cl_qlist_next(i)) {
+	cl_qmap_init(m);
+	for (i = cl_qlist_head(port_list); i != cl_qlist_end(port_list);
+	     i = cl_qlist_next(i)) {
 		wobj = cl_item_obj(i, wobj, list_item);
-		hops += osm_switch_get_port_least_hops(p_sw, wobj->p_port);
-		num_ports++;
+		port = wobj->p_port;
+		if (port->p_node->sw) {
+			sw = port->p_node->sw;
+			sw->is_mc_member = 1;
+		} else {
+			sw = port->p_physp->p_remote_physp->p_node->sw;
+			sw->num_of_mcm++;
+		}
+		guid = osm_node_get_node_guid(sw->p_node);
+		if (cl_qmap_get(m, guid) == cl_qmap_end(m))
+			cl_qmap_insert(m, guid, &sw->mgrp_item);
 	}
+}
 
-	/*
-	   We should be here if there aren't any ports in the group.
-	 */
-	CL_ASSERT(num_ports);
+static void destroy_mgrp_switch_map(cl_qmap_t * m)
+{
+	osm_switch_t *sw;
+	cl_map_item_t *i;
 
-	if (num_ports != 0)
-		avg_hops = (float)(hops / num_ports);
-
-	OSM_LOG_EXIT(sm->p_log);
-	return avg_hops;
+	for (i = cl_qmap_head(m); i != cl_qmap_end(m); i = cl_qmap_next(i)) {
+		sw = cl_item_obj(i, sw, mgrp_item);
+		sw->num_of_mcm = 0;
+		sw->is_mc_member = 0;
+	}
+	cl_qmap_remove_all(m);
 }
 
 /**********************************************************************
  Calculate the maximal "min hops" from the given switch to any
  of the group HCAs
  **********************************************************************/
-static float osm_mcast_mgr_compute_max_hops(osm_sm_t * sm, cl_qlist_t * l,
-					    const osm_switch_t * p_sw)
+#ifdef OSM_VENDOR_INTF_ANAFA
+static float mcast_mgr_compute_avg_hops(osm_sm_t * sm, cl_qmap_t * m,
+					const osm_switch_t * this_sw)
 {
-	uint32_t max_hops = 0;
+	float avg_hops = 0;
 	uint32_t hops = 0;
-	cl_list_item_t *i;
-	osm_mcast_work_obj_t *wobj;
+	uint32_t num_ports = 0;
+	uint16_t lid;
+	uint32_t least_hops;
+	cl_map_item_t *i;
+	osm_switch_t *sw;
+
+	OSM_LOG_ENTER(sm->p_log);
+
+	for (i = cl_qmap_head(m); i != cl_qmap_end(m); i = cl_qmap_next(i)) {
+		sw = cl_item_obj(i, sw, mcast_item);
+		lid = cl_ntoh16(osm_node_get_base_lid(sw->p_node, 0));
+		least_hops = osm_switch_get_least_hops(this_sw, lid);
+		/* for all host that are MC members and attached to the switch,
+		   we should add the (least_hops + 1) * number_of_such_hosts.
+		   If switch itself is in the MC, we should add the least_hops only */
+		hops += (least_hops + 1) * sw->num_of_mcm +
+		    least_hops * sw->is_mc_member;
+		num_ports += sw->num_of_mcm + sw->is_mc_member;
+	}
+
+	/* We shouldn't be here if there aren't any ports in the group. */
+	CL_ASSERT(num_ports);
+
+	avg_hops = (float)(hops / num_ports);
+
+	OSM_LOG_EXIT(sm->p_log);
+	return avg_hops;
+}
+#else
+static float mcast_mgr_compute_max_hops(osm_sm_t * sm, cl_qmap_t * m,
+					const osm_switch_t * this_sw)
+{
+	uint32_t max_hops = 0, hops;
+	uint16_t lid;
+	cl_map_item_t *i;
+	osm_switch_t *sw;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -208,9 +250,12 @@ static float osm_mcast_mgr_compute_max_hops(osm_sm_t * sm, cl_qlist_t * l,
 	   For each member of the multicast group, compute the
 	   number of hops to its base LID.
 	 */
-	for (i = cl_qlist_head(l); i != cl_qlist_end(l); i = cl_qlist_next(i)) {
-		wobj = cl_item_obj(i, wobj, list_item);
-		hops = osm_switch_get_port_least_hops(p_sw, wobj->p_port);
+	for (i = cl_qmap_head(m); i != cl_qmap_end(m); i = cl_qmap_next(i)) {
+		sw = cl_item_obj(i, sw, mgrp_item);
+		lid = cl_ntoh16(osm_node_get_base_lid(sw->p_node, 0));
+		hops = osm_switch_get_least_hops(this_sw, lid);
+		if (!sw->is_mc_member)
+			hops += 1;
 		if (hops > max_hops)
 			max_hops = hops;
 	}
@@ -222,6 +267,7 @@ static float osm_mcast_mgr_compute_max_hops(osm_sm_t * sm, cl_qlist_t * l,
 	OSM_LOG_EXIT(sm->p_log);
 	return (float)max_hops;
 }
+#endif
 
 /**********************************************************************
    This function attempts to locate the optimal switch for the
@@ -230,32 +276,30 @@ static float osm_mcast_mgr_compute_max_hops(osm_sm_t * sm, cl_qlist_t * l,
    of the multicast group.
 **********************************************************************/
 static osm_switch_t *mcast_mgr_find_optimal_switch(osm_sm_t * sm,
-						   cl_qlist_t *list)
+						   cl_qlist_t * list)
 {
+	cl_qmap_t mgrp_sw_map;
 	cl_qmap_t *p_sw_tbl;
 	osm_switch_t *p_sw, *p_best_sw = NULL;
 	float hops = 0;
 	float best_hops = 10000;	/* any big # will do */
-#ifdef OSM_VENDOR_INTF_ANAFA
-	boolean_t use_avg_hops = TRUE;	/* anafa2 - bug hca on switch *//* use max hops for root */
-#else
-	boolean_t use_avg_hops = FALSE;	/* use max hops for root */
-#endif
 
 	OSM_LOG_ENTER(sm->p_log);
 
 	p_sw_tbl = &sm->p_subn->sw_guid_tbl;
 
+	create_mgrp_switch_map(&mgrp_sw_map, list);
 	for (p_sw = (osm_switch_t *) cl_qmap_head(p_sw_tbl);
 	     p_sw != (osm_switch_t *) cl_qmap_end(p_sw_tbl);
 	     p_sw = (osm_switch_t *) cl_qmap_next(&p_sw->map_item)) {
 		if (!osm_switch_supports_mcast(p_sw))
 			continue;
 
-		if (use_avg_hops)
-			hops = osm_mcast_mgr_compute_avg_hops(sm, list, p_sw);
-		else
-			hops = osm_mcast_mgr_compute_max_hops(sm, list, p_sw);
+#ifdef OSM_VENDOR_INTF_ANAFA
+		hops = mcast_mgr_compute_avg_hops(sm, &mgrp_sw_map, p_sw);
+#else
+		hops = mcast_mgr_compute_max_hops(sm, &mgrp_sw_map, p_sw);
+#endif
 
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 			"Switch 0x%016" PRIx64 ", hops = %f\n",
@@ -276,12 +320,13 @@ static osm_switch_t *mcast_mgr_find_optimal_switch(osm_sm_t * sm,
 		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 			"No multicast capable switches detected\n");
 
+	destroy_mgrp_switch_map(&mgrp_sw_map);
 	OSM_LOG_EXIT(sm->p_log);
 	return p_best_sw;
 }
 
 /**********************************************************************
-   This function returns the existing or optimal root swtich for the tree.
+   This function returns the existing or optimal root switch for the tree.
 **********************************************************************/
 static osm_switch_t *mcast_mgr_find_root_switch(osm_sm_t * sm, cl_qlist_t *list)
 {
@@ -341,8 +386,8 @@ static int mcast_mgr_set_mft_block(osm_sm_t * sm, IN osm_switch_t * p_sw,
 		block_id_ho = block_num + (position << 28);
 
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
-			"Writing MFT block %u position %u to switch 0x%" PRIx64 "\n",
-			block_num, position,
+			"Writing MFT block %u position %u to switch 0x%" PRIx64
+			"\n", block_num, position,
 			cl_ntoh64(context.mft_context.node_guid));
 
 		status = osm_req_set(sm, p_path, (void *)block, sizeof(block),
@@ -399,13 +444,12 @@ static void mcast_mgr_subdivide(osm_sm_t * sm, uint16_t mlid_ho,
 			   multicast and the multicast tree must branch at this
 			   switch.
 			 */
-			uint64_t node_guid_ho =
-			    cl_ntoh64(osm_node_get_node_guid(p_sw->p_node));
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A03: "
 				"Error routing MLID 0x%X through switch 0x%"
 				PRIx64 " %s\n"
 				"\t\t\t\tNo multicast paths from this switch "
-				"for port with LID %u\n", mlid_ho, node_guid_ho,
+				"for port with LID %u\n", mlid_ho,
+				cl_ntoh64(osm_node_get_node_guid(p_sw->p_node)),
 				p_sw->p_node->print_desc,
 				cl_ntoh16(osm_port_get_base_lid
 					  (p_wobj->p_port)));
@@ -414,13 +458,12 @@ static void mcast_mgr_subdivide(osm_sm_t * sm, uint16_t mlid_ho,
 		}
 
 		if (port_num > array_size) {
-			uint64_t node_guid_ho =
-			    cl_ntoh64(osm_node_get_node_guid(p_sw->p_node));
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A04: "
 				"Error routing MLID 0x%X through switch 0x%"
 				PRIx64 " %s\n"
 				"\t\t\t\tNo multicast paths from this switch "
-				"to port with LID %u\n", mlid_ho, node_guid_ho,
+				"to port with LID %u\n", mlid_ho,
+				cl_ntoh64(osm_node_get_node_guid(p_sw->p_node)),
 				p_sw->p_node->print_desc,
 				cl_ntoh16(osm_port_get_base_lid
 					  (p_wobj->p_port)));
@@ -470,7 +513,6 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 	cl_qlist_t *list_array = NULL;
 	uint8_t i;
 	ib_net64_t node_guid;
-	uint64_t node_guid_ho;
 	osm_mcast_work_obj_t *p_wobj;
 	cl_qlist_t *p_port_list;
 	size_t count;
@@ -483,12 +525,11 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 	CL_ASSERT(p_max_depth);
 
 	node_guid = osm_node_get_node_guid(p_sw->p_node);
-	node_guid_ho = cl_ntoh64(node_guid);
 
 	OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 		"Routing MLID 0x%X through switch 0x%" PRIx64
 		" %s, %u nodes at depth %u\n",
-		mlid_ho, node_guid_ho, p_sw->p_node->print_desc,
+		mlid_ho, cl_ntoh64(node_guid), p_sw->p_node->print_desc,
 		cl_qlist_count(p_list), depth);
 
 	CL_ASSERT(cl_qlist_count(p_list) > 0);
@@ -514,7 +555,7 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 		 */
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A14: "
 			"Switch 0x%" PRIx64 " %s does not support multicast\n",
-			node_guid_ho, p_sw->p_node->print_desc);
+			cl_ntoh64(node_guid), p_sw->p_node->print_desc);
 
 		/*
 		   Deallocate all the work objects on this branch of the tree.
@@ -553,6 +594,8 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A16: "
 			"Unable to allocate list array\n");
 		mcast_mgr_purge_list(sm, p_list);
+		osm_mtree_destroy(p_mtn);
+		p_mtn = NULL;
 		goto Exit;
 	}
 
@@ -704,10 +747,11 @@ static ib_api_status_t mcast_mgr_build_spanning_tree(osm_sm_t * sm,
 	}
 
 	num_ports = cl_qlist_count(&port_list);
-	if (num_ports == 0) {
+	if (num_ports < 2) {
 		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
-			"MLID 0x%X has no members - nothing to do\n",
-			mbox->mlid);
+			"MLID 0x%X has %u members - nothing to do\n",
+			mbox->mlid, num_ports);
+		drop_port_list(&port_list);
 		goto Exit;
 	}
 
@@ -969,6 +1013,63 @@ static ib_api_status_t mcast_mgr_process_mlid(osm_sm_t * sm, uint16_t mlid)
 	return status;
 }
 
+static void mcast_mgr_set_mfttop(IN osm_sm_t * sm, IN osm_switch_t * p_sw)
+{
+	osm_node_t *p_node;
+	osm_dr_path_t *p_path;
+	osm_physp_t *p_physp;
+	osm_mcast_tbl_t *p_tbl;
+	osm_madw_context_t context;
+	ib_api_status_t status;
+	ib_switch_info_t si;
+	uint16_t mcast_top;
+
+	OSM_LOG_ENTER(sm->p_log);
+
+	CL_ASSERT(p_sw);
+
+	p_node = p_sw->p_node;
+
+	CL_ASSERT(p_node);
+
+	p_physp = osm_node_get_physp_ptr(p_node, 0);
+	p_path = osm_physp_get_dr_path_ptr(p_physp);
+	p_tbl = osm_switch_get_mcast_tbl_ptr(p_sw);
+
+	if (p_physp->port_info.capability_mask & IB_PORT_CAP_HAS_MCAST_FDB_TOP) {
+		/*
+		   Set the top of the multicast forwarding table.
+		 */
+		si = p_sw->switch_info;
+		if (p_tbl->max_block_in_use == -1)
+			mcast_top = cl_hton16(IB_LID_MCAST_START_HO - 1);
+		else
+			mcast_top = cl_hton16(IB_LID_MCAST_START_HO +
+					      (p_tbl->max_block_in_use + 1) * IB_MCAST_BLOCK_SIZE - 1);
+		if (mcast_top == si.mcast_top)
+			return;
+
+		si.mcast_top = mcast_top;
+
+		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
+			"Setting switch MFT top to MLID 0x%x\n",
+			cl_ntoh16(si.mcast_top));
+
+		context.si_context.light_sweep = FALSE;
+		context.si_context.node_guid = osm_node_get_node_guid(p_node);
+		context.si_context.set_method = TRUE;
+
+		status = osm_req_set(sm, p_path, (uint8_t *) & si,
+				     sizeof(si), IB_MAD_ATTR_SWITCH_INFO,
+				     0, CL_DISP_MSGID_NONE, &context);
+
+		if (status != IB_SUCCESS)
+			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A1B: "
+				"Sending SwitchInfo attribute failed (%s)\n",
+				ib_get_err_str(status));
+	}
+}
+
 static int mcast_mgr_set_mftables(osm_sm_t * sm)
 {
 	cl_qmap_t *p_sw_tbl = &sm->p_subn->sw_guid_tbl;
@@ -984,6 +1085,7 @@ static int mcast_mgr_set_mftables(osm_sm_t * sm)
 		p_tbl = osm_switch_get_mcast_tbl_ptr(p_sw);
 		if (osm_mcast_tbl_get_max_block_in_use(p_tbl) > max_block)
 			max_block = osm_mcast_tbl_get_max_block_in_use(p_tbl);
+		mcast_mgr_set_mfttop(sm, p_sw);
 		p_sw = (osm_switch_t *) cl_qmap_next(&p_sw->map_item);
 	}
 
@@ -1031,7 +1133,7 @@ static int alloc_mfts(osm_sm_t * sm)
 	for (item = cl_qmap_head(&sm->p_subn->sw_guid_tbl);
 	     item != cl_qmap_end(&sm->p_subn->sw_guid_tbl);
 	     item = cl_qmap_next(item)) {
-		p_sw = (osm_switch_t *)item;
+		p_sw = (osm_switch_t *) item;
 		if (osm_mcast_tbl_realloc(&p_sw->mcast_tbl, i))
 			return -1;
 	}

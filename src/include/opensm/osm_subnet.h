@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
@@ -149,6 +149,8 @@ typedef struct osm_subn_opt {
 	ib_net16_t m_key_lease_period;
 	uint32_t sweep_interval;
 	uint32_t max_wire_smps;
+	uint32_t max_wire_smps2;
+	uint32_t max_smps_timeout;
 	uint32_t transaction_timeout;
 	uint32_t transaction_retries;
 	uint8_t sm_priority;
@@ -186,6 +188,7 @@ typedef struct osm_subn_opt {
 	uint16_t console_port;
 	char *port_prof_ignore_file;
 	char *hop_weights_file;
+	char *dimn_ports_file;
 	boolean_t port_profile_switch_nodes;
 	boolean_t sweep_on_trap;
 	char *routing_engine_names;
@@ -207,6 +210,7 @@ typedef struct osm_subn_opt {
 	boolean_t daemon;
 	boolean_t sm_inactive;
 	boolean_t babbling_port_policy;
+	boolean_t use_optimized_slvl;
 	osm_qos_options_t qos_options;
 	osm_qos_options_t qos_ca_options;
 	osm_qos_options_t qos_sw0_options;
@@ -222,8 +226,10 @@ typedef struct osm_subn_opt {
 	char *event_db_dump_file;
 #endif				/* ENABLE_OSM_PERF_MGR */
 	char *event_plugin_name;
+	char *event_plugin_options;
 	char *node_name_map_name;
 	char *prefix_routes_file;
+	char *log_prefix;
 	boolean_t consolidate_ipv6_snm_req;
 	struct osm_subn_opt *file_opts; /* used for update */
 	uint8_t lash_start_vl;			/* starting vl to use in lash */
@@ -259,6 +265,15 @@ typedef struct osm_subn_opt {
 *
 *	max_wire_smps
 *		The maximum number of SMPs sent in parallel.  Default is 4.
+*
+*	max_wire_smps2
+*		The maximum number of timeout SMPs allowed to be outstanding.
+*		Default is same as max_wire_smps which disables the timeout
+*		mechanism.
+*
+*	max_smps_timeout
+*		The wait time in usec for timeout based SMPs.  Default is
+*		timeout * retries.
 *
 *	transaction_timeout
 *		The maximum time in milliseconds allowed for a transaction
@@ -438,6 +453,10 @@ typedef struct osm_subn_opt {
 *	babbling_port_policy
 *		OpenSM will enforce its "babbling" port policy.
 *
+*	use_optimized_slvl
+*		Use optimized SLtoVLMappingTable programming if
+*		device indicates it supports this.
+*
 *	perfmgr
 *		Enable or disable the performance manager
 *
@@ -450,8 +469,11 @@ typedef struct osm_subn_opt {
 *       event_db_dump_file
 *               File to dump the event database to
 *
-*       event_db_plugin
-*               Specify the name of the event plugin
+*       event_plugin_name
+*               Specify the name(s) of the event plugin(s)
+*
+*       event_plugin_options
+*               Options string that would be passed to the plugin(s)
 *
 *	qos_options
 *		Default set of QoS options
@@ -521,6 +543,7 @@ typedef struct osm_subn {
 	boolean_t in_sweep_hop_0;
 	boolean_t first_time_master_sweep;
 	boolean_t coming_out_of_standby;
+	boolean_t sweeping_enabled;
 	unsigned need_update;
 	cl_fmap_t mgrp_mgid_tbl;
 	void *mboxes[IB_LID_MCAST_END_HO - IB_LID_MCAST_START_HO + 1];
@@ -639,6 +662,11 @@ typedef struct osm_subn {
 *		Used for nulling any cache of LID and Routing.
 *		The flag is set true if the SM state was standby and now
 *		changed to MASTER it is reset at the end of the sweep.
+*
+*	sweeping_enabled
+*		FALSE - sweeping is administratively disabled, all
+*		sweeping is inhibited, TRUE - sweeping is done
+*		normally
 *
 *	need_update
 *		This flag should be on during first non-master heavy
@@ -947,6 +975,31 @@ struct osm_port *osm_get_port_by_guid(IN osm_subn_t const *p_subn,
 *	osm_port_t
 *********/
 
+/****f* OpenSM: Port/osm_get_port_by_lid_ho
+* NAME
+*	osm_get_port_by_lid_ho
+*
+* DESCRIPTION
+*	Returns a pointer of the port object for given lid value.
+*
+* SYNOPSIS
+*/
+struct osm_port *osm_get_port_by_lid_ho(const osm_subn_t * subn, uint16_t lid);
+/*
+* PARAMETERS
+*	subn
+*		[in] Pointer to the subnet data structure.
+*
+*	lid
+*		[in] LID requested in hot byte order.
+*
+* RETURN VALUES
+*	The port structure pointer if found. NULL otherwise.
+*
+* SEE ALSO
+*       Subnet object, osm_port_t
+*********/
+
 /****f* OpenSM: Port/osm_get_port_by_lid
 * NAME
 *	osm_get_port_by_lid
@@ -956,14 +1009,18 @@ struct osm_port *osm_get_port_by_guid(IN osm_subn_t const *p_subn,
 *
 * SYNOPSIS
 */
-struct osm_port *osm_get_port_by_lid(const osm_subn_t * subn, ib_net16_t lid);
+static inline struct osm_port *osm_get_port_by_lid(IN osm_subn_t const * subn,
+						   IN ib_net16_t lid)
+{
+	return osm_get_port_by_lid_ho(subn, cl_ntoh16(lid));
+}
 /*
 * PARAMETERS
 *	subn
 *		[in] Pointer to the subnet data structure.
 *
 *	lid
-*		[in] LID requested.
+*		[in] LID requested in network byte order.
 *
 * RETURN VALUES
 *	The port structure pointer if found. NULL otherwise.
@@ -1009,7 +1066,7 @@ struct osm_mgrp *osm_get_mgrp_by_mgid(IN osm_subn_t * subn, IN ib_gid_t * mgid);
 */
 static inline struct osm_mgrp_box *osm_get_mbox_by_mlid(osm_subn_t const *p_subn, ib_net16_t mlid)
 {
-	return p_subn->mboxes[cl_ntoh16(mlid) - IB_LID_MCAST_START_HO];
+	return (struct osm_mgrp_box *)p_subn->mboxes[cl_ntoh16(mlid) - IB_LID_MCAST_START_HO];
 }
 /*
 * PARAMETERS
@@ -1021,41 +1078,6 @@ static inline struct osm_mgrp_box *osm_get_mbox_by_mlid(osm_subn_t const *p_subn
 *
 * RETURN VALUES
 *	The multicast group structure pointer if found. NULL otherwise.
-*********/
-
-/****f* OpenSM: Helper/osm_get_physp_by_mad_addr
-* NAME
-*	osm_get_physp_by_mad_addr
-*
-* DESCRIPTION
-*	Looks for the requester physical port in the mad address.
-*
-* Note: This code is not thread safe. Need to grab the lock before
-* calling it.
-*
-* SYNOPSIS
-*/
-struct osm_physp *osm_get_physp_by_mad_addr(IN struct osm_log *p_log,
-					     IN const osm_subn_t * p_subn,
-					     IN struct osm_mad_addr
-					     *p_mad_addr);
-/*
-* PARAMETERS
-*	p_log
-*		[in] Pointer to a log object.
-*
-*	p_subn
-*		[in] Pointer to subnet object.
-*
-*	p_mad_addr
-*		[in] Pointer to mad address object.
-*
-* RETURN VALUES
-*	Pointer to requester physical port object if found. Null otherwise.
-*
-* NOTES
-*
-* SEE ALSO
 *********/
 
 /****f* OpenSM: Subnet/osm_subn_set_default_opt

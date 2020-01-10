@@ -510,11 +510,7 @@ static void query_sm_info(cl_map_item_t * item, void *cxt)
 			ib_get_err_str(ret));
 }
 
-/**********************************************************************
- During a light sweep, check each node to see if the node description
- is valid and if not issue a ND query.
-**********************************************************************/
-static void state_mgr_get_node_desc(IN cl_map_item_t * obj, IN void *context)
+static void state_mgr_update_node_desc(IN cl_map_item_t * obj, IN void *context)
 {
 	osm_madw_context_t mad_context;
 	osm_node_t *p_node = (osm_node_t *) obj;
@@ -527,14 +523,8 @@ static void state_mgr_get_node_desc(IN cl_map_item_t * obj, IN void *context)
 
 	CL_ASSERT(p_node);
 
-	if (p_node->print_desc
-	    && strcmp(p_node->print_desc, OSM_NODE_DESC_UNKNOWN))
-		/* if ND is valid, do nothing */
-		goto exit;
-
-	OSM_LOG(sm->p_log, OSM_LOG_ERROR,
-		"ERR 3319: Unknown node description for node GUID "
-		"0x%016" PRIx64 ".  Reissuing ND query\n",
+	OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
+		"Updating NodeDesc for 0x%016" PRIx64 "\n",
 		cl_ntoh64(osm_node_get_node_guid(p_node)));
 
 	/* get a physp to request from. */
@@ -558,6 +548,43 @@ static void state_mgr_get_node_desc(IN cl_map_item_t * obj, IN void *context)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 			"ERR 331B: Failure initiating NodeDescription request "
 			"(%s)\n", ib_get_err_str(status));
+
+exit:
+	OSM_LOG_EXIT(sm->p_log);
+}
+
+void osm_update_node_desc(IN osm_opensm_t *osm)
+{
+	CL_PLOCK_ACQUIRE(&osm->lock);
+	cl_qmap_apply_func(&osm->subn.node_guid_tbl, state_mgr_update_node_desc,
+			   &osm->sm);
+	CL_PLOCK_RELEASE(&osm->lock);
+}
+
+/**********************************************************************
+ During a light sweep, check each node to see if the node description
+ is valid and if not issue a ND query.
+**********************************************************************/
+static void state_mgr_get_node_desc(IN cl_map_item_t * obj, IN void *context)
+{
+	osm_node_t *p_node = (osm_node_t *) obj;
+	osm_sm_t *sm = context;
+
+	OSM_LOG_ENTER(sm->p_log);
+
+	CL_ASSERT(p_node);
+
+	if (p_node->print_desc
+	    && strcmp(p_node->print_desc, OSM_NODE_DESC_UNKNOWN))
+		/* if ND is valid, do nothing */
+		goto exit;
+
+	OSM_LOG(sm->p_log, OSM_LOG_ERROR,
+		"ERR 3319: Unknown node description for node GUID "
+		"0x%016" PRIx64 ".  Reissuing ND query\n",
+		cl_ntoh64(osm_node_get_node_guid(p_node)));
+
+	state_mgr_update_node_desc(obj, context);
 
 exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -1080,8 +1107,10 @@ static void do_sweep(osm_sm_t * sm)
 		if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
 			return;
 		if (!sm->p_subn->force_heavy_sweep) {
-			if (sm->p_subn->opt.sa_db_dump)
-				osm_sa_db_file_dump(sm->p_subn->p_osm);
+			if (sm->p_subn->opt.sa_db_dump &&
+			    !osm_sa_db_file_dump(sm->p_subn->p_osm))
+				osm_opensm_report_event(sm->p_subn->p_osm,
+					OSM_EVENT_ID_SA_DB_DUMPED, NULL);
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"LIGHT SWEEP COMPLETE");
 			return;
@@ -1124,9 +1153,14 @@ static void do_sweep(osm_sm_t * sm)
 		if (!sm->p_subn->subnet_initialization_error) {
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"REROUTE COMPLETE");
+			osm_opensm_report_event(sm->p_subn->p_osm,
+				OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
 			return;
 		}
 	}
+
+	osm_opensm_report_event(sm->p_subn->p_osm,
+				OSM_EVENT_ID_HEAVY_SWEEP_START, NULL);
 
 	/* go to heavy sweep */
 repeat_discovery:
@@ -1157,7 +1191,10 @@ repeat_discovery:
 		osm_drop_mgr_process(sm);
 
 		/* Move to DISCOVERING state */
-		osm_sm_state_mgr_process(sm, OSM_SM_SIGNAL_DISCOVER);
+		 if (sm->p_subn->sm_state != IB_SMINFO_STATE_DISCOVERING)
+			osm_sm_state_mgr_process(sm, OSM_SM_SIGNAL_DISCOVER);
+		osm_opensm_report_event(sm->p_subn->p_osm,
+				OSM_EVENT_ID_STATE_CHANGE, NULL);
 		return;
 	}
 
@@ -1178,12 +1215,17 @@ repeat_discovery:
 				"ENTERING STANDBY STATE");
 		/* notify master SM about us */
 		osm_send_trap144(sm, 0);
+		osm_opensm_report_event(sm->p_subn->p_osm,
+				OSM_EVENT_ID_STATE_CHANGE, NULL);
 		return;
 	}
 
 	/* if new sweep requested - don't bother with the rest */
 	if (sm->p_subn->force_heavy_sweep)
 		goto repeat_discovery;
+
+	osm_opensm_report_event(sm->p_subn->p_osm,
+				OSM_EVENT_ID_HEAVY_SWEEP_DONE, NULL);
 
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, "HEAVY SWEEP COMPLETE");
 
@@ -1287,6 +1329,8 @@ repeat_discovery:
 
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 			"SWITCHES CONFIGURED FOR UNICAST");
+	osm_opensm_report_event(sm->p_subn->p_osm,
+			OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
 
 	if (!sm->p_subn->opt.disable_multicast) {
 		osm_mcast_mgr_process(sm);
@@ -1388,7 +1432,13 @@ void osm_state_mgr_process(IN osm_sm_t * sm, IN osm_signal_t signal)
 
 	switch (signal) {
 	case OSM_SIGNAL_SWEEP:
-		do_sweep(sm);
+		if (!sm->p_subn->sweeping_enabled) {
+			OSM_LOG(sm->p_log, OSM_LOG_DEBUG, "sweeping disabled - "
+				"ignoring signal %s in state %s\n",
+				osm_get_sm_signal_str(signal),
+				osm_get_sm_mgr_state_str(sm->p_subn->sm_state));
+		} else
+			do_sweep(sm);
 		break;
 	case OSM_SIGNAL_IDLE_TIME_PROCESS_REQUEST:
 		do_process_mgrp_queue(sm);

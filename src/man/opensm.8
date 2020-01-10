@@ -37,6 +37,7 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
 [\-console-port <port>]
 [\-i(gnore-guids) <equalize-ignore-guids-file>]
 [\-w | \-\-hop_weights_file <path to file>]
+[\-O | \-\-dimn_ports_file <path to file>]
 [\-f <log file path> | \-\-log_file <log file path> ]
 [\-L | \-\-log_limit <size in MB>] [\-e(rase_log_file)]
 [\-P(config) <partition config file> ]
@@ -49,6 +50,7 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
 [\-\-perfmgr_sweep_time_s <seconds>]
 [\-\-prefix_routes_file <path>]
 [\-\-consolidate_ipv6_snm_req]
+[\-\-log_prefix <prefix text>]
 [\-v(erbose)] [\-V] [\-D <flags>] [\-d(ebug) <number>]
 [\-h(elp)] [\-?]
 
@@ -173,7 +175,7 @@ the host comes back online.
 \fB\-z\fR, \fB\-\-connect_roots\fR
 This option enforces routing engines (up/down and
 fat-tree) to make connectivity between root switches and in
-this way to be fully IBA complaint. In many cases this can
+this way to be fully IBA compliant. In many cases this can
 violate "pure" deadlock free algorithm, so use it carefully.
 .TP
 \fB\-M\fR, \fB\-\-lid_matrix_file\fR <file name>
@@ -272,6 +274,16 @@ factor of 1.  Lines starting with # are comments.  Weights affect only the
 output route from the port, so many useful configurations will require weights
 to be specified in pairs.
 .TP
+\fB\-O\fR, \fB\-\-dimn_ports_file\fR <path to file>
+This option provides a mapping between hypercube dimensions and ports
+on a per switch basis for the DOR routing engine.  The file consists
+of lines containing a switch node GUID (specified as a 64 bit hex
+number, with leading 0x) followed by a list of non-zero port numbers,
+separated by spaces, one switch per line.  The order for the port
+numbers is in one to one correspondence to the dimensions.  Ports not
+listed on a line are assigned to the remaining dimensions, in port
+order.  Anything after a # is a comment.
+.TP
 \fB\-x\fR, \fB\-\-honor_guid2lid\fR
 This option forces OpenSM to honor the guid2lid file,
 when it comes out of Standby state, if such file exists
@@ -344,6 +356,13 @@ effect if --enable-perfmgr was specified at configure time.
 .BI --consolidate_ipv6_snm_req
 Use shared MLID for IPv6 Solicited Node Multicast groups per MGID scope
 and P_Key.
+.TP
+\fB\-\-log_prefix\fR <prefix text>
+This option specifies the prefix to the syslog messages from OpenSM.
+A suitable prefix can be used to identify the IB subnet in syslog messages
+when two or more instances of OpenSM run in a single node to manage multiple
+fabrics. For example, in a dual-fabric (or dual-rail) IB cluster, the prefix
+for the first fabric could be "mpi" and the other fabric could be "storage".
 .TP
 \fB\-v\fR, \fB\-\-verbose\fR
 This option increases the log verbosity level.
@@ -498,7 +517,7 @@ PortGUIDs list:
                     port.  When omitted (or unrecognized) limited
                     membership is assumed.
 
-There are two useful keywords for PortGUID definition:
+There are several useful keywords for PortGUID definition:
 
  - 'ALL' means all end ports in this subnet.
  - 'ALL_CAS' means all Channel Adapter end ports in this subnet.
@@ -961,17 +980,20 @@ algorithm and so uses shortest paths.  Instead of spreading traffic
 out across different paths with the same shortest distance, it chooses
 among the available shortest paths based on an ordering of dimensions.
 Each port must be consistently cabled to represent a hypercube
-dimension or a mesh dimension.  Paths are grown from a destination
-back to a source using the lowest dimension (port) of available paths
-at each step.  This provides the ordering necessary to avoid deadlock.
+dimension or a mesh dimension.  Alternatively, the -O option can be
+used to assign a custom mapping between the ports on a given switch,
+and the associated dimension.  Paths are grown from a destination back
+to a source using the lowest dimension (port) of available paths at
+each step.  This provides the ordering necessary to avoid deadlock.
 When there are multiple links between any two switches, they still
 represent only one dimension and traffic is balanced across them
 unless port equalization is turned off.  In the case of hypercubes,
 the same port must be used throughout the fabric to represent the
-hypercube dimension and match on both ends of the cable.  In the case
-of meshes, the dimension should consistently use the same pair of
-ports, one port on one end of the cable, and the other port on the
-other end, continuing along the mesh dimension.
+hypercube dimension and match on both ends of the cable, or the -O
+option used to accomplish the alignment.  In the case of meshes, the
+dimension should consistently use the same pair of ports, one port on
+one end of the cable, and the other port on the other end, continuing
+along the mesh dimension, or the -O option used as an override.
 
 Use '-R dor' option to activate the DOR algorithm.
 
@@ -1103,3 +1125,6 @@ Thomas Sodring
 .TP
 Ira Weiny
 .RI < weiny2@llnl.gov >
+.TP
+Dale Purdy
+.RI < purdy@sgi.com >

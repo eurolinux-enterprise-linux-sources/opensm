@@ -72,8 +72,8 @@ static void report_duplicated_guid(IN osm_sm_t * sm, osm_physp_t * p_physp,
 	p_old = p_physp->p_remote_physp;
 	p_new = osm_node_get_physp_ptr(p_neighbor_node, port_num);
 
-	OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D01: "
-		"Found duplicated node.\n"
+	OSM_LOG(sm->p_log, OSM_LOG_SYS | OSM_LOG_ERROR, "ERR 0D01: "
+		"Found duplicated node GUID.\n"
 		"Node 0x%" PRIx64 " port %u is reachable from remote node "
 		"0x%" PRIx64 " port %u and remote node 0x%" PRIx64 " port %u.\n"
 		"Paths are:\n",
@@ -91,9 +91,6 @@ static void report_duplicated_guid(IN osm_sm_t * sm, osm_physp_t * p_physp,
 			"DR path with hop count %d couldn't be extended\n",
 			path.hop_count);
 	osm_dump_dr_path(sm->p_log, &path, OSM_LOG_ERROR);
-
-	osm_log(sm->p_log, OSM_LOG_SYS,
-		"FATAL: duplicated guids or 12x lane reversal\n");
 }
 
 static void requery_dup_node_info(IN osm_sm_t * sm, osm_physp_t * p_physp,
@@ -378,7 +375,6 @@ static void ni_rcv_process_existing_ca_or_router(IN osm_sm_t * sm,
 	osm_port_t *p_port;
 	osm_port_t *p_port_check;
 	uint8_t port_num;
-	osm_physp_t *p_physp;
 	osm_dr_path_t *p_dr_path;
 	osm_bind_handle_t h_bind;
 
@@ -439,9 +435,8 @@ static void ni_rcv_process_existing_ca_or_router(IN osm_sm_t * sm,
 		if (sm->p_subn->sm_state == IB_SMINFO_STATE_MASTER)
 			p_port->is_new = 1;
 
-		p_physp = osm_node_get_physp_ptr(p_node, port_num);
 	} else {
-		p_physp = osm_node_get_physp_ptr(p_node, port_num);
+		osm_physp_t *p_physp = osm_node_get_physp_ptr(p_node, port_num);
 		/*
 		   Update the DR Path to the port,
 		   in case the old one is no longer available.

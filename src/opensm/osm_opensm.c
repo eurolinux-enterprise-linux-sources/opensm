@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2006 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -337,6 +337,7 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 				 p_opt->log_max_size, p_opt->accum_log_file);
 	if (status != IB_SUCCESS)
 		return status;
+	p_osm->log.log_prefix = p_opt->log_prefix;
 
 	/* If there is a log level defined - add the OSM_VERSION to it */
 	osm_log(&p_osm->log,
@@ -391,7 +392,8 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 
 	status = osm_vl15_init(&p_osm->vl15, p_osm->p_vendor,
 			       &p_osm->log, &p_osm->stats,
-			       p_opt->max_wire_smps);
+			       p_opt->max_wire_smps, p_opt->max_wire_smps2,
+			       p_opt->max_smps_timeout);
 	if (status != IB_SUCCESS)
 		goto Exit;
 
@@ -473,7 +475,7 @@ void osm_opensm_report_event(osm_opensm_t *osm, osm_epi_event_id_t event_id,
 	cl_list_item_t *item;
 
 	for (item = cl_qlist_head(&osm->plugin_list);
-	     item != cl_qlist_end(&osm->plugin_list);
+	     !osm_exit_flag && item != cl_qlist_end(&osm->plugin_list);
 	     item = cl_qlist_next(item)) {
 		osm_epi_plugin_t *p = (osm_epi_plugin_t *)item;
 		if (p->impl->report)

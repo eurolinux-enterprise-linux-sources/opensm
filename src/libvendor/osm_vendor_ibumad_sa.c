@@ -85,7 +85,7 @@ __osmv_sa_mad_rcv_cb(IN osm_madw_t * p_madw,
 
 	/* obtain the sent context since we store it during send in the ni_ctx */
 	p_query_req_copy =
-	    (osmv_query_req_t *) (long *)(long)(p_req_madw->context.ni_context.
+	    (osmv_query_req_t *) (uintptr_t)(p_req_madw->context.ni_context.
 						node_guid);
 
 	/* provide the context of the original request in the result */
@@ -181,7 +181,7 @@ static void __osmv_sa_mad_err_cb(IN void *bind_context, IN osm_madw_t * p_madw)
 
 	/* Obtain the sent context etc */
 	p_query_req_copy =
-	    (osmv_query_req_t *) (long *)(long)(p_madw->context.ni_context.
+	    (osmv_query_req_t *) (uintptr_t)(p_madw->context.ni_context.
 						node_guid);
 
 	/* provide the context of the original request in the result */
@@ -199,8 +199,7 @@ static void __osmv_sa_mad_err_cb(IN void *bind_context, IN osm_madw_t * p_madw)
 	if ((p_query_req_copy->flags & OSM_SA_FLAGS_SYNC) == OSM_SA_FLAGS_SYNC)
 		cl_event_signal(&p_bind->sync_event);
 
-	if (p_query_req_copy)
-		free(p_query_req_copy);
+	free(p_query_req_copy);
 	OSM_LOG_EXIT(p_bind->p_log);
 }
 
@@ -434,7 +433,7 @@ __osmv_send_sa_req(IN osmv_sa_bind_info_t * p_bind,
 	}
 	*p_query_req_copy = *p_query_req;
 	p_madw->context.ni_context.node_guid =
-	    (ib_net64_t) (long)p_query_req_copy;
+	    (ib_net64_t) (uintptr_t)p_query_req_copy;
 
 	/* we can support async as well as sync calls */
 	sync = ((p_query_req->flags & OSM_SA_FLAGS_SYNC) == OSM_SA_FLAGS_SYNC);

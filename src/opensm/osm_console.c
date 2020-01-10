@@ -56,6 +56,8 @@
 #include <opensm/osm_perfmgr.h>
 #include <opensm/osm_subnet.h>
 
+extern void osm_update_node_desc(IN osm_opensm_t *osm);
+
 struct command {
 	char *name;
 	void (*help_function) (FILE * out, int detail);
@@ -148,6 +150,16 @@ static void help_reroute(FILE * out, int detail)
 	}
 }
 
+static void help_sweep(FILE * out, int detail)
+{
+	fprintf(out, "sweep [on|off]\n");
+	if (detail) {
+		fprintf(out, "enable or disable sweeping\n");
+		fprintf(out, "   [on] sweep normally\n");
+		fprintf(out, "   [off] inhibit all sweeping\n");
+	}
+}
+
 static void help_status(FILE * out, int detail)
 {
 	fprintf(out, "status [loop]\n");
@@ -204,6 +216,14 @@ static void help_dump_conf(FILE *out, int detail)
 	fprintf(out, "dump_conf\n");
 	if (detail) {
 		fprintf(out, "dump current opensm configuration\n");
+	}
+}
+
+static void help_update_desc(FILE *out, int detail)
+{
+	fprintf(out, "update_desc\n");
+	if (detail) {
+		fprintf(out, "update node description for all nodes\n");
 	}
 }
 
@@ -417,11 +437,15 @@ static void print_status(osm_opensm_t * p_osm, FILE * out)
 			p_osm->stats.sa_mads_ignored);
 		fprintf(out, "\n   Subnet flags\n"
 			"   ------------\n"
+			"   Sweeping enabled               : %d\n"
+			"   Sweep interval (seconds)       : %d\n"
 			"   Ignore existing lfts           : %d\n"
 			"   Subnet Init errors             : %d\n"
 			"   In sweep hop 0                 : %d\n"
 			"   First time master sweep        : %d\n"
 			"   Coming out of standby          : %d\n",
+			p_osm->subn.sweeping_enabled,
+			p_osm->subn.opt.sweep_interval,
 			p_osm->subn.ignore_existing_lfts,
 			p_osm->subn.subnet_initialization_error,
 			p_osm->subn.in_sweep_hop_0,
@@ -485,6 +509,23 @@ static void reroute_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 	osm_opensm_sweep(p_osm);
 }
 
+static void sweep_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
+{
+	char *p_cmd;
+
+	p_cmd = next_token(p_last);
+	if (!p_cmd ||
+	    (strcmp(p_cmd, "on") != 0 && strcmp(p_cmd, "off") != 0)) {
+		fprintf(out, "Invalid sweep command\n");
+		help_sweep(out, 1);
+	} else {
+		if (strcmp(p_cmd, "on") == 0)
+			p_osm->subn.sweeping_enabled = TRUE;
+		else
+			p_osm->subn.sweeping_enabled = FALSE;
+	}
+}
+
 static void logflush_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 {
 	fflush(p_osm->log.out_port);
@@ -505,9 +546,7 @@ static void querylid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 
 	lid = (uint16_t) strtoul(p_cmd, NULL, 0);
 	cl_plock_acquire(&p_osm->lock);
-	if (lid > cl_ptr_vector_get_capacity(&(p_osm->subn.port_lid_tbl)))
-		goto invalid_lid;
-	p_port = cl_ptr_vector_get(&(p_osm->subn.port_lid_tbl), lid);
+	p_port = osm_get_port_by_lid_ho(&p_osm->subn, lid);
 	if (!p_port)
 		goto invalid_lid;
 
@@ -1134,6 +1173,11 @@ static void dump_conf_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 	osm_subn_output_conf(out, &p_osm->subn.opt);
 }
 
+static void update_desc_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
+{
+	osm_update_node_desc(p_osm);
+}
+
 #ifdef ENABLE_OSM_PERF_MGR
 static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 {
@@ -1258,12 +1302,12 @@ static void dump_portguid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 	/* Check we have at least one expression to match */
 	if (p_head_regexp == NULL) {
 		fprintf(out, "No valid expression provided. Aborting\n");
-		return;
+		goto Exit;
 	}
 
 	if (p_osm->sm.p_subn->need_update != 0) {
 		fprintf(out, "Subnet is not ready yet. Try again later\n");
-		return;
+		goto Free_and_exit;
 	}
 
 	/* Subnet doesn't need to be updated so we can carry on */
@@ -1289,14 +1333,16 @@ static void dump_portguid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 	}
 
 	CL_PLOCK_RELEASE(p_osm->sm.p_lock);
-	if (output != out)
-		fclose(output);
 
+Free_and_exit:
 	for (; p_head_regexp; p_head_regexp = p_regexp) {
 		p_regexp = p_head_regexp->next;
 		regfree(&p_head_regexp->exp);
 		free(p_head_regexp);
 	}
+Exit:
+	if (output != out)
+		fclose(output);
 }
 
 static void help_dump_portguid(FILE * out, int detail)
@@ -1319,6 +1365,7 @@ static const struct command console_cmds[] = {
 	{"priority", &help_priority, &priority_parse},
 	{"resweep", &help_resweep, &resweep_parse},
 	{"reroute", &help_reroute, &reroute_parse},
+	{"sweep", &help_sweep, &sweep_parse},
 	{"status", &help_status, &status_parse},
 	{"logflush", &help_logflush, &logflush_parse},
 	{"querylid", &help_querylid, &querylid_parse},
@@ -1326,6 +1373,7 @@ static const struct command console_cmds[] = {
 	{"switchbalance", &help_switchbalance, &switchbalance_parse},
 	{"lidbalance", &help_lidbalance, &lidbalance_parse},
 	{"dump_conf", &help_dump_conf, &dump_conf_parse},
+	{"update_desc", &help_update_desc, &update_desc_parse},
 	{"version", &help_version, &version_parse},
 #ifdef ENABLE_OSM_PERF_MGR
 	{"perfmgr", &help_perfmgr, &perfmgr_parse},

@@ -726,7 +726,7 @@ static int init_lash_structures(lash_t * p_lash)
 		for (j = 0; j < num_switches; j++) {
 			p_lash->cdg_vertex_matrix[i][j] =
 			    (cdg_vertex_t **) malloc(num_switches *
-						     sizeof(cdg_vertex_t **));
+						     sizeof(cdg_vertex_t *));
 			if (p_lash->cdg_vertex_matrix[i][j] == NULL)
 				goto Exit_Mem_Error;
 
@@ -1008,7 +1008,7 @@ static void populate_fwd_tbls(lash_t * p_lash)
 		memset(p_sw->new_lft, OSM_NO_PATH, p_sw->lft_size);
 
 		for (lid = 1; lid <= max_lid_ho; lid++) {
-			port = cl_ptr_vector_get(&p_subn->port_lid_tbl, lid);
+			port = osm_get_port_by_lid_ho(p_subn, lid);
 			if (!port)
 				continue;
 

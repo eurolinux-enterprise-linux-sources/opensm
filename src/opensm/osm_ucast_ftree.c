@@ -791,8 +791,10 @@ static ftree_hca_t *hca_create(IN osm_node_t * p_osm_node)
 	p_hca->up_port_groups = (ftree_port_group_t **)
 	    malloc(osm_node_get_num_physp(p_hca->p_osm_node) *
 		   sizeof(ftree_port_group_t *));
-	if (!p_hca->up_port_groups)
+	if (!p_hca->up_port_groups) {
+		free(p_hca);
 		return NULL;
+	}
 	p_hca->up_port_groups_num = 0;
 	return p_hca;
 }
@@ -1668,13 +1670,13 @@ static int fabric_create_leaf_switch_array(IN ftree_fabric_t * p_ftree)
 	       &(all_switches_at_leaf_level[first_leaf_idx]),
 	       p_ftree->leaf_switches_num * sizeof(ftree_sw_t *));
 
-	free(all_switches_at_leaf_level);
-
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_DEBUG,
 		"Created array of %u leaf switches\n",
 		p_ftree->leaf_switches_num);
 
 Exit:
+	if (all_switches_at_leaf_level)
+		free(all_switches_at_leaf_level);
 	OSM_LOG_EXIT(&p_ftree->p_osm->log);
 	return res;
 }				/* fabric_create_leaf_switch_array() */
@@ -2994,8 +2996,8 @@ static void fabric_route_roots(IN ftree_fabric_t * p_ftree)
 			    p_leaf_sw->hops[lid] == OSM_NO_PATH)
 				continue;
 
-			p_port = cl_ptr_vector_get(
-				&p_ftree->p_osm->subn.port_lid_tbl, lid);
+			p_port = osm_get_port_by_lid_ho(&p_ftree->p_osm->subn,
+							lid);
 
 			/* we're interested only in switches */
 			if (!p_port || !p_port->p_node->sw)
@@ -3012,8 +3014,10 @@ static void fabric_route_roots(IN ftree_fabric_t * p_ftree)
 				"through port %u\n",
 				tuple_to_str(p_sw->tuple), lid, port_num);
 
-			/* set local lft */
-			p_sw->p_osm_sw->new_lft[lid] = port_num;
+			if (p_ftree->p_osm->subn.opt.connect_roots) {
+				/* set local lft */
+				p_sw->p_osm_sw->new_lft[lid] = port_num;
+			}
 
 			/*
 			 * Set local min hop table.
@@ -4061,12 +4065,10 @@ static int do_routing(IN void *context)
 		"Filling switch forwarding tables for switch-to-switch paths\n");
 	fabric_route_to_switches(p_ftree);
 
-	if (p_ftree->p_osm->subn.opt.connect_roots) {
-		OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
-			"Connecting switches that are unreachable within "
-			"Up/Down rules\n");
-		fabric_route_roots(p_ftree);
-	}
+	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
+		"Connecting switches that are unreachable within "
+		"Up/Down rules\n");
+	fabric_route_roots(p_ftree);
 
 	/* for each switch, set its fwd table */
 	cl_qmap_apply_func(&p_ftree->sw_tbl, set_sw_fwd_table, (void *)p_ftree);

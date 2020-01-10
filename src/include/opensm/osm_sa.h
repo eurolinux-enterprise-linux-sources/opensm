@@ -125,6 +125,7 @@ typedef struct osm_sa {
 	atomic32_t sa_trans_id;
 	osm_sa_mad_ctrl_t mad_ctrl;
 	cl_timer_t sr_timer;
+	boolean_t dirty;
 	cl_disp_reg_handle_t cpi_disp_h;
 	cl_disp_reg_handle_t nr_disp_h;
 	cl_disp_reg_handle_t pir_disp_h;
@@ -177,6 +178,10 @@ typedef struct osm_sa {
 *
 *	mad_ctrl
 *		Mad Controller
+*
+*	dirty
+*		A flag that denotes that SA DB is dirty and needs
+*		to be written to the dump file (if dumping is enabled)
 *
 * SEE ALSO
 *	SM object
@@ -431,7 +436,9 @@ int osm_sa_db_file_dump(struct osm_opensm *p_osm);
 *		[in] Pointer to an osm_opensm_t object.
 *
 * RETURN VALUES
-*	None
+*	 0 if the SA DB was actually dumped
+*	>0 if there was no need to dump the SA DB
+*	<0 if some error occurred.
 *
 *********/
 
@@ -465,22 +472,21 @@ int osm_sa_db_file_load(struct osm_opensm *p_osm);
 * SYNOPSIS
 */
 
-ib_api_status_t
-osm_mcmr_rcv_find_or_create_new_mgrp(IN osm_sa_t * sa, IN ib_net64_t comp_mask,
-				     IN ib_member_rec_t * p_recvd_mcmember_rec,
-				     OUT osm_mgrp_t ** pp_mgrp);
+osm_mgrp_t *osm_mcmr_rcv_find_or_create_new_mgrp(IN osm_sa_t * sa,
+						 IN ib_net64_t comp_mask,
+						 IN ib_member_rec_t *
+						 p_recvd_mcmember_rec);
 /*
 * PARAMETERS
 *	p_sa
 *		[in] Pointer to an osm_sa_t object.
+*	comp_mask
+*		[in] SA query component mask
 *	p_recvd_mcmember_rec
 *		[in] Received Multicast member record
 *
-*	pp_mgrp
-*		[out] pointer the osm_mgrp_t object
-*
 * RETURN VALUES
-*	IB_SUCCESS, IB_ERROR
+*	The pointer to MC group object found or created, NULL in case of errors
 *
 *********/
 

@@ -18,15 +18,45 @@
 
 prog=/usr/sbin/opensm
 PID_FILE=/var/run/opensm.pid
+[ -f /etc/sysconfig/opensm ] && . /etc/sysconfig/opensm
+
+[ -n "$PRIORITY" ] && prio="-p $PRIORITY"
+
 ACTION=$1
 
 start()
 {
     local OSM_PID=
+    if [ -z "$GUIDS" ]; then
+        CONFIGS=""
+        CONFIG_CNT=0
+        for conf in /etc/rdma/opensm.conf.[0-9]*; do
+            CONFIGS="$CONFIGS $conf"
+            let CONFIG_CNT++
+        done
+    else
+        GUID_CNT=0
+        for guid in $GUIDS; do
+            let GUID_CNT++
+        done
+    fi
     [ -f /var/lock/subsys/opensm ] && return 0
     # Start opensm
-    echo -n "Starting IB Subnet Manager:"
-    $prog -B > /dev/null 2>&1
+    echo -n "Starting IB Subnet Manager: "
+    [ -n "$PRIORITY" ] && echo -n "Priority=$PRIORITY "
+    [ -n "$GUIDS" ] && echo -n "$GUID_CNT guids "
+    [ -n "$CONFIGS" ] && echo -n "$CONFIG_CNT instances "
+    if [ -n "$GUIDS" ]; then
+        for guid in $GUIDS; do
+            $prog -B $prio -g $guid >/dev/null 2>&1
+        done
+    elif [ -n "$CONFIGS" ]; then
+        for config in $CONFIGS; do
+            $prog -B $prio -F $config >/dev/null 2>&1
+        done
+    else
+        $prog -B $prio >/dev/null 2>&1
+    fi
     sleep 1
     OSM_PID=`pidof $prog`
     checkpid $OSM_PID
@@ -42,7 +72,7 @@ stop()
 {
     [ -f /var/lock/subsys/opensm ] || return 0
 
-    echo -n "Stopping IB Subnet Manager."
+    echo -n "Stopping IB Subnet Manager(s)."
 
     OSM_PID=`cat $PID_FILE`
 
@@ -55,7 +85,7 @@ stop()
 	return 0
     fi
     # Kill opensm
-    kill -15 $OSM_PID > /dev/null 2>&1
+    kill -15 $OSM_PID >/dev/null 2>&1
     cnt=0
     while [ $cnt -lt 6 ]; do
         checkpid $OSM_PID
@@ -64,7 +94,7 @@ stop()
 	fi
         echo -n "."
 	sleep 1
-	cnt=$(( $cnt + 1 ))
+	let cnt++
     done
 
     checkpid $OSM_PID

@@ -275,6 +275,10 @@ static void show_usage(void)
 	       "          This option provides the means to define a weighting\n"
 	       "          factor per port for customizing the least weight\n"
 	       "          hops for the routing.\n\n");
+	printf("--dimn_ports_file, -O <path to file>\n"
+	       "          This option provides the means to define a mapping\n"
+	       "          between ports and dimension (Order) for controlling\n"
+	       "          Dimension Order Routing (DOR).\n\n");
 	printf("--honor_guid2lid, -x\n"
 	       "          This option forces OpenSM to honor the guid2lid file,\n"
 	       "          when it comes out of Standby state, if such file exists\n"
@@ -324,6 +328,8 @@ static void show_usage(void)
 	printf("--consolidate_ipv6_snm_req\n"
 	       "          Use shared MLID for IPv6 Solicited Node Multicast groups\n"
 	       "          per MGID scope and P_Key.\n\n");
+	printf("--log_prefix <prefix text>\n"
+	       "          Prefix to syslog messages from OpenSM.\n\n");
 	printf("--verbose, -v\n"
 	       "          This option increases the log verbosity level.\n"
 	       "          The -v option may be specified multiple times\n"
@@ -541,7 +547,7 @@ int main(int argc, char *argv[])
 	char *conf_template = NULL, *config_file = NULL;
 	uint32_t val;
 	const char *const short_option =
-	    "F:c:i:w:f:ed:D:g:l:L:s:t:a:u:m:X:R:zM:U:S:P:Y:ANBIQvVhoryxp:n:q:k:C:G:H:";
+	    "F:c:i:w:O:f:ed:D:g:l:L:s:t:a:u:m:X:R:zM:U:S:P:Y:ANBIQvVhoryxp:n:q:k:C:G:H:";
 
 	/*
 	   In the array below, the 2nd parameter specifies the number
@@ -558,6 +564,7 @@ int main(int argc, char *argv[])
 		{"guid", 1, NULL, 'g'},
 		{"ignore_guids", 1, NULL, 'i'},
 		{"hop_weights_file", 1, NULL, 'w'},
+		{"dimn_ports_file", 1, NULL, 'O'},
 		{"lmc", 1, NULL, 'l'},
 		{"sweep", 1, NULL, 's'},
 		{"timeout", 1, NULL, 't'},
@@ -607,8 +614,12 @@ int main(int argc, char *argv[])
 		{"lash_start_vl", 1, NULL, 6},
 		{"sm_sl", 1, NULL, 7},
 		{"retries", 1, NULL, 8},
+		{"log_prefix", 1, NULL, 9},
 		{NULL, 0, NULL, 0}	/* Required at the end of the array */
 	};
+
+	/* force stdout to be line-buffered */
+	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	/* Make sure that the opensm and complib were compiled using
 	   same modes (debug/free) */
@@ -691,6 +702,12 @@ int main(int argc, char *argv[])
 			opt.hop_weights_file = optarg;
 			printf(" Hop Weights File = %s\n",
 			       opt.hop_weights_file);
+			break;
+
+		case 'O':
+			opt.dimn_ports_file = optarg;
+			printf(" Dimension Ports File = %s\n",
+			       opt.dimn_ports_file);
 			break;
 
 		case 'g':
@@ -984,6 +1001,10 @@ int main(int argc, char *argv[])
 			opt.transaction_retries = strtoul(optarg, NULL, 0);
 			printf(" Transaction retries = %u\n",
 			       opt.transaction_retries);
+			break;
+		case 9:
+			SET_STR_OPT(opt.log_prefix, optarg);
+			printf("Log prefix = %s\n", opt.log_prefix);
 			break;
 		case 'h':
 		case '?':

@@ -100,6 +100,7 @@ typedef struct osm_switch {
 	uint16_t num_hops;
 	uint8_t **hops;
 	osm_port_profile_t *p_prof;
+	uint8_t *dimn_ports;
 	uint8_t *lft;
 	uint8_t *new_lft;
 	uint16_t lft_size;
@@ -109,6 +110,9 @@ typedef struct osm_switch {
 	unsigned endport_links;
 	unsigned need_update;
 	void *priv;
+	cl_map_item_t mgrp_item;
+	uint32_t num_of_mcm;
+	uint8_t is_mc_member;
 } osm_switch_t;
 /*
 * FIELDS
@@ -150,6 +154,15 @@ typedef struct osm_switch {
 *	need_update
 *		When set indicates that switch was probably reset, so
 *		fwd tables and rest cached data should be flushed
+*
+*	mgrp_item
+*		map item for switch in building mcast tree
+*
+*	num_of_mcm
+*		number of mcast members(ports) connected to switch
+*
+*	is_mc_member
+*		whether switch is a mcast member itself
 *
 * SEE ALSO
 *	Switch object
@@ -857,6 +870,35 @@ static inline uint8_t osm_switch_get_mft_max_position(IN osm_switch_t * p_sw)
 *		[in] Pointer to the switch object.
 *
 * RETURN VALUE
+*/
+
+/****f* OpenSM: Switch/osm_switch_get_dimn_port
+* NAME
+*	osm_switch_get_dimn_port
+*
+* DESCRIPTION
+*	Get the routing ordered port
+*
+* SYNOPSIS
+*/
+static inline uint8_t osm_switch_get_dimn_port(IN const osm_switch_t * p_sw,
+					       IN uint8_t port_num)
+{
+	CL_ASSERT(p_sw);
+	if (p_sw->dimn_ports == NULL)
+		return port_num;
+	return p_sw->dimn_ports[port_num];
+}
+/*
+* PARAMETERS
+*	p_sw
+*		[in] Pointer to the switch object.
+*
+*	port_num
+*		[in] Port number in the switch
+*
+* RETURN VALUES
+*	Returns the port number ordered for routing purposes.
 */
 
 /****f* OpenSM: Switch/osm_switch_recommend_path

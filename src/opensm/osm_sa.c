@@ -704,7 +704,13 @@ static void sa_dump_all_sa(osm_opensm_t * p_osm, FILE * file)
 
 int osm_sa_db_file_dump(osm_opensm_t * p_osm)
 {
-	return opensm_dump_to_file(p_osm, "opensm-sa.dump", sa_dump_all_sa);
+	int res = 1;
+	if (p_osm->sa.dirty) {
+		res = opensm_dump_to_file(
+			p_osm, "opensm-sa.dump", sa_dump_all_sa);
+		p_osm->sa.dirty = FALSE;
+	}
+	return res;
 }
 
 /*
@@ -735,10 +741,10 @@ static osm_mgrp_t *load_mcgroup(osm_opensm_t * p_osm, ib_net16_t mlid,
 
 	comp_mask = IB_MCR_COMPMASK_MTU | IB_MCR_COMPMASK_MTU_SEL
 	    | IB_MCR_COMPMASK_RATE | IB_MCR_COMPMASK_RATE_SEL;
-	if (osm_mcmr_rcv_find_or_create_new_mgrp(&p_osm->sa,
-						 comp_mask, p_mcm_rec,
-						 &p_mgrp) != IB_SUCCESS ||
-	    !p_mgrp || p_mgrp->mlid != mlid) {
+	if (!(p_mgrp = osm_mcmr_rcv_find_or_create_new_mgrp(&p_osm->sa,
+							    comp_mask,
+							    p_mcm_rec)) ||
+	    p_mgrp->mlid != mlid) {
 		OSM_LOG(&p_osm->log, OSM_LOG_ERROR,
 			"cannot create MC group with mlid 0x%04x and mgid "
 			"0x%016" PRIx64 ":0x%016" PRIx64 "\n", cl_ntoh16(mlid),
@@ -917,7 +923,7 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 	file = fopen(file_name, "r");
 	if (!file) {
 		OSM_LOG(&p_osm->log, OSM_LOG_ERROR | OSM_LOG_SYS, "ERR 4C02: "
-			"cannot open sa db file \'%s\'. Skip restoring\n",
+			"Can't open sa db file \'%s\'. Skip restoring\n",
 			file_name);
 		return -1;
 	}
@@ -1109,6 +1115,9 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 	 */
 	if (rereg_clients)
 		p_osm->subn.opt.no_clients_rereg = FALSE;
+
+	/* We've just finished loading SA DB file - clear the "dirty" flag */
+	p_osm->sa.dirty = FALSE;
 
 _error:
 	fclose(file);

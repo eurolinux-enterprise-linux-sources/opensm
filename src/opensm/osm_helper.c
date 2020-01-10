@@ -84,6 +84,8 @@ static const char *ib_sa_method_str[] = {
 	"UNKNOWN"		/* 16 */
 };
 
+#define OSM_SA_METHOD_STR_UNKNOWN_VAL (ARR_SIZE(ib_sa_method_str) - 1)
+
 static const char *ib_sa_resp_method_str[] = {
 	"RESERVED",		/* 80 */
 	"SubnAdmGetResp",	/* 81 */
@@ -109,8 +111,6 @@ static const char *ib_sa_resp_method_str[] = {
 	"SubnAdmDeleteResp",	/* 95 */
 	"UNKNOWN"
 };
-
-#define OSM_SA_METHOD_STR_UNKNOWN_VAL 0x16
 
 static const char *ib_sm_method_str[] = {
 	"RESERVED0",		/* 0 */
@@ -148,7 +148,7 @@ static const char *ib_sm_method_str[] = {
 	"UNKNOWN"		/* 20 */
 };
 
-#define OSM_SM_METHOD_STR_UNKNOWN_VAL 0x21
+#define OSM_SM_METHOD_STR_UNKNOWN_VAL (ARR_SIZE(ib_sm_method_str) - 1)
 
 static const char *ib_sm_attr_str[] = {
 	"RESERVED",		/* 0 */
@@ -187,7 +187,7 @@ static const char *ib_sm_attr_str[] = {
 	"UNKNOWN"		/* 21 - always highest value */
 };
 
-#define OSM_SM_ATTR_STR_UNKNOWN_VAL 0x21
+#define OSM_SM_ATTR_STR_UNKNOWN_VAL (ARR_SIZE(ib_sm_attr_str) - 1)
 
 static const char *ib_sa_attr_str[] = {
 	"RESERVED",		/* 0 */
@@ -437,7 +437,7 @@ static const char *ib_sa_attr_str[] = {
 	"UNKNOWN"		/* F4 - always highest value */
 };
 
-#define OSM_SA_ATTR_STR_UNKNOWN_VAL 0xF4
+#define OSM_SA_ATTR_STR_UNKNOWN_VAL (ARR_SIZE(ib_sa_attr_str) - 1)
 
 static int sprint_uint8_arr(char *buf, size_t size,
 			    const uint8_t * arr, size_t len)
@@ -2021,6 +2021,8 @@ static const char *disp_msg_str[] = {
 	"OSM_MSG_MAD_SLVL",
 	"OSM_MSG_MAD_GUIDINFO_RECORD",
 	"OSM_MSG_MAD_INFORM_INFO_RECORD",
+	"OSM_MSG_MAD_SWITCH_INFO_RECORD",
+	"OSM_MSG_MAD_MFT_RECORD",
 #if defined (VENDOR_RMPP_SUPPORT) && defined (DUAL_SIDED_RMPP)
 	"OSM_MSG_MAD_MULTIPATH_RECORD",
 #endif

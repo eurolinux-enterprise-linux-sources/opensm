@@ -2,6 +2,8 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2010 HNR Consulting. All rights reserved.
+ * Copyright (c) 2010 Sun Microsystems, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -91,12 +93,10 @@ void osm_vla_rcv_process(IN void *context, IN void *data)
 	cl_plock_excl_acquire(sm->p_lock);
 	p_port = osm_get_port_by_guid(sm->p_subn, port_guid);
 	if (!p_port) {
-		cl_plock_release(sm->p_lock);
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3F06: "
 			"No port object for port with GUID 0x%" PRIx64
 			"\n\t\t\t\tfor parent node GUID 0x%" PRIx64
-			", TID 0x%" PRIx64 "\n",
-			cl_ntoh64(port_guid),
+			", TID 0x%" PRIx64 "\n", cl_ntoh64(port_guid),
 			cl_ntoh64(node_guid), cl_ntoh64(p_smp->trans_id));
 		goto Exit;
 	}
@@ -134,15 +134,14 @@ void osm_vla_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	osm_dump_vl_arb_table(sm->p_log,
-			      port_guid, block_num,
-			      port_num, p_vla_tbl, OSM_LOG_DEBUG);
-
 	if ((block_num < 1) || (block_num > 4)) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 			"Got invalid block number 0x%X\n", block_num);
 		goto Exit;
 	}
+
+	osm_dump_vl_arb_table(sm->p_log, port_guid, block_num, port_num,
+			      p_vla_tbl, OSM_LOG_DEBUG);
 	osm_physp_set_vla_tbl(p_physp, p_vla_tbl, block_num);
 
 Exit:

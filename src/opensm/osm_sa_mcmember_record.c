@@ -405,8 +405,7 @@ static boolean_t validate_modify(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
 				"0x%016" PRIx64 " request:0x%016" PRIx64 "\n",
 				cl_ntoh64((*pp_mcm_port)->port_gid.unicast.
 					  interface_id),
-				cl_ntoh64(p_mad_addr->addr_type.gsi.grh_info.
-					  src_gid.unicast.interface_id));
+				cl_ntoh64(request_gid.unicast.interface_id));
 			return FALSE;
 		}
 	} else {
@@ -422,11 +421,9 @@ static boolean_t validate_modify(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
 					p_request_physp)) {
 			/* the request port is not part of the partition for this mgrp */
 			OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
-				"ProxyJoin but port not in partition. stored:"
-				"0x%016" PRIx64 " request:0x%016" PRIx64 "\n",
-				cl_ntoh64((*pp_mcm_port)->port->guid),
-				cl_ntoh64(p_mad_addr->addr_type.gsi.grh_info.
-					  src_gid.unicast.interface_id));
+				"Requesting port 0x%016" PRIx64 " has no P_Key 0x%04x\n",
+				cl_ntoh64(p_request_physp->port_guid),
+				cl_ntoh16(p_mgrp->mcmember_rec.pkey));
 			return FALSE;
 		}
 	}
@@ -871,21 +868,20 @@ Exit:
 /**********************************************************************
  Call this function to find or create a new mgrp.
 **********************************************************************/
-ib_api_status_t osm_mcmr_rcv_find_or_create_new_mgrp(IN osm_sa_t * sa,
-						     IN ib_net64_t comp_mask,
-						     IN ib_member_rec_t *
-						     p_recvd_mcmember_rec,
-						     OUT osm_mgrp_t ** pp_mgrp)
+osm_mgrp_t *osm_mcmr_rcv_find_or_create_new_mgrp(IN osm_sa_t * sa,
+						 IN ib_net64_t comp_mask,
+						 IN ib_member_rec_t *
+						 p_recvd_mcmember_rec)
 {
 	osm_mgrp_t *mgrp;
 
 	if ((mgrp = osm_get_mgrp_by_mgid(sa->p_subn,
-					 &p_recvd_mcmember_rec->mgid))) {
-		*pp_mgrp = mgrp;
-		return IB_SUCCESS;
-	}
-	return mcmr_rcv_create_new_mgrp(sa, comp_mask, p_recvd_mcmember_rec,
-					NULL, pp_mgrp);
+					 &p_recvd_mcmember_rec->mgid)))
+		return mgrp;
+	if (mcmr_rcv_create_new_mgrp(sa, comp_mask, p_recvd_mcmember_rec, NULL,
+				     &mgrp) == IB_SUCCESS)
+		return mgrp;
+	return NULL;
 }
 
 /*********************************************************************
