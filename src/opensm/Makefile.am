@@ -28,8 +28,8 @@ sbin_PROGRAMS = opensm
 opensm_LDFLAGS = -rdynamic
 opensm_DEPENDENCIES = libopensm.la
 opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
-		 osm_db_pack.c osm_drop_mgr.c \
-		 osm_inform.c osm_lid_mgr.c osm_lin_fwd_rcv.c \
+		 osm_db_pack.c osm_drop_mgr.c osm_guid_info_rcv.c \
+		 osm_guid_mgr.c osm_inform.c osm_lid_mgr.c osm_lin_fwd_rcv.c \
 		 osm_link_mgr.c osm_mcast_fwd_rcv.c \
 		 osm_mcast_mgr.c osm_mcast_tbl.c \
 		 osm_mcm_port.c osm_mesh.c osm_mtree.c osm_multicast.c osm_node.c \
@@ -53,10 +53,12 @@ opensm_SOURCES = main.c osm_console_io.c osm_console.c osm_db_files.c \
 		 osm_prtn.c osm_prtn_config.c osm_qos.c osm_router.c \
 		 osm_trap_rcv.c osm_ucast_mgr.c osm_ucast_updn.c \
 		 osm_ucast_lash.c osm_ucast_file.c osm_ucast_ftree.c \
-		 osm_torus.c osm_ucast_dnup.c osm_vl15intf.c \
+		 osm_torus.c osm_ucast_dnup.c \
+		 osm_ucast_dfsssp.c osm_vl15intf.c \
 		 osm_vl_arb_rcv.c st.c osm_perfmgr.c osm_perfmgr_db.c \
 		 osm_event_plugin.c osm_dump.c osm_ucast_cache.c \
-		 osm_qos_parser_y.y osm_qos_parser_l.l osm_qos_policy.c
+		 osm_qos_parser_y.y osm_qos_parser_l.l osm_qos_policy.c \
+		 osm_congestion_control.c
 
 AM_YFLAGS:= -d
 
@@ -75,6 +77,8 @@ opensminclude_HEADERS = \
 	$(srcdir)/../include/opensm/osm_db_pack.h \
 	$(srcdir)/../include/opensm/osm_event_plugin.h \
 	$(srcdir)/../include/opensm/osm_errors.h \
+	$(srcdir)/../include/opensm/osm_file_ids.h \
+	$(srcdir)/../include/opensm/osm_guid.h \
 	$(srcdir)/../include/opensm/osm_helper.h \
 	$(srcdir)/../include/opensm/osm_inform.h \
 	$(srcdir)/../include/opensm/osm_ucast_lash.h \
@@ -99,6 +103,7 @@ opensminclude_HEADERS = \
 	$(srcdir)/../include/opensm/osm_port_profile.h \
 	$(srcdir)/../include/opensm/osm_prefix_route.h \
 	$(srcdir)/../include/opensm/osm_qos_policy.h \
+	$(srcdir)/../include/opensm/osm_congestion_control.h \
 	$(srcdir)/../include/opensm/osm_remote_sm.h \
 	$(srcdir)/../include/opensm/osm_router.h \
 	$(srcdir)/../include/opensm/osm_sa.h \

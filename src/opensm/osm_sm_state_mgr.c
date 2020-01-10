@@ -48,6 +48,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SM_STATE_MGR_C
 #include <opensm/osm_sm.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_switch.h>
@@ -66,7 +68,7 @@ void osm_report_sm_state(osm_sm_t * sm)
 	char buf[64];
 	const char *state_str = osm_get_sm_mgr_state_str(sm->p_subn->sm_state);
 
-	osm_log(sm->p_log, OSM_LOG_SYS, "Entering %s state\n", state_str);
+	osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID, "Entering %s state\n", state_str);
 	snprintf(buf, sizeof(buf), "ENTERING SM %s STATE", state_str);
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, buf);
 }
@@ -76,10 +78,13 @@ static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
 	osm_madw_context_t context;
 	const osm_port_t *p_port;
 	ib_api_status_t status;
+	osm_dr_path_t dr_path;
+	ib_net64_t guid;
 
 	OSM_LOG_ENTER(sm->p_log);
 
 	memset(&context, 0, sizeof(context));
+	CL_PLOCK_ACQUIRE(sm->p_lock);
 	if (sm->p_subn->sm_state == IB_SMINFO_STATE_STANDBY) {
 		/*
 		 * We are in STANDBY state - this means we need to poll the
@@ -87,7 +92,7 @@ static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
 		 * Send a query of SubnGet(SMInfo) to the subn
 		 * master_sm_base_lid object.
 		 */
-		p_port = osm_get_port_by_guid(sm->p_subn, sm->master_sm_guid);
+		guid = sm->master_sm_guid;
 	} else {
 		/*
 		 * We are not in STANDBY - this means we are in MASTER state -
@@ -95,21 +100,27 @@ static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
 		 * under sm.
 		 * Send a query of SubnGet(SMInfo) to that SM.
 		 */
-		p_port = sm->p_polling_sm->p_port;
+		guid = sm->p_polling_sm->smi.guid;
 	}
+
+	p_port = osm_get_port_by_guid(sm->p_subn, guid);
+
 	if (p_port == NULL) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3203: "
 			"No port object for GUID 0x%016" PRIx64 "\n",
-			cl_ntoh64(sm->master_sm_guid));
+			cl_ntoh64(guid));
+		CL_PLOCK_RELEASE(sm->p_lock);
 		goto Exit;
 	}
 
-	context.smi_context.port_guid = p_port->guid;
+	context.smi_context.port_guid = guid;
 	context.smi_context.set_method = FALSE;
+	memcpy(&dr_path, osm_physp_get_dr_path_ptr(p_port->p_physp), sizeof(osm_dr_path_t));
 
-	status = osm_req_get(sm, osm_physp_get_dr_path_ptr(p_port->p_physp),
+	status = osm_req_get(sm, &dr_path,
 			     IB_MAD_ATTR_SM_INFO, 0, CL_DISP_MSGID_NONE,
 			     &context);
+	CL_PLOCK_RELEASE(sm->p_lock);
 
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3204: "
@@ -403,6 +414,10 @@ ib_api_status_t osm_sm_state_mgr_process(osm_sm_t * sm,
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 				"Forcing heavy sweep. "
 				"Received OSM_SM_SIGNAL_HANDOVER or OSM_SM_SIGNAL_POLLING_TIMEOUT\n");
+			/* Force set_client_rereg_on_sweep, we don't know what the other
+			 * SM may have configure/done on the fabric.
+			 */
+			sm->p_subn->set_client_rereg_on_sweep = TRUE;
 			sm->p_polling_sm = NULL;
 			sm->p_subn->force_heavy_sweep = TRUE;
 			osm_sm_signal(sm, OSM_SIGNAL_SWEEP);

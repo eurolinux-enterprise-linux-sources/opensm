@@ -50,6 +50,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SMINFO_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -179,7 +181,7 @@ static void smi_rcv_process_set_request(IN osm_sm_t * sm,
 		goto Exit;
 	}
 
-	CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
+	CL_PLOCK_ACQUIRE(sm->p_lock);
 
 	p_smi->guid = sm->p_subn->sm_port_guid;
 	p_smi->act_count = cl_hton32(sm->p_subn->p_osm->stats.qp0_mads_sent);
@@ -245,6 +247,8 @@ static void smi_rcv_process_set_request(IN osm_sm_t * sm,
 		goto Exit;
 	}
 
+	CL_PLOCK_RELEASE(sm->p_lock);
+
 	/* check legality of the needed transition in the SM state machine */
 	status = osm_sm_state_mgr_check_legality(sm, sm_signal);
 	if (status != IB_SUCCESS) {
@@ -258,7 +262,6 @@ static void smi_rcv_process_set_request(IN osm_sm_t * sm,
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 2F08: "
 				"Error sending response (%s)\n",
 				ib_get_err_str(status));
-		CL_PLOCK_RELEASE(sm->p_lock);
 		goto Exit;
 	}
 
@@ -278,10 +281,11 @@ static void smi_rcv_process_set_request(IN osm_sm_t * sm,
 			"Received a STANDBY signal. Updating "
 			"sm_state_mgr master_guid: 0x%016" PRIx64 "\n",
 			cl_ntoh64(sm_smi->guid));
+		CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
 		sm->master_sm_guid = sm_smi->guid;
+		CL_PLOCK_RELEASE(sm->p_lock);
 	}
 
-	CL_PLOCK_RELEASE(sm->p_lock);
 	status = osm_sm_state_mgr_process(sm, sm_signal);
 
 	if (status != IB_SUCCESS)
@@ -321,8 +325,8 @@ static void smi_rcv_process_get_sm(IN osm_sm_t * sm,
 			/* save on the sm the guid of the current master. */
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 				"Found master SM. Updating sm_state_mgr master_guid: 0x%016"
-				PRIx64 "\n", cl_ntoh64(p_sm->p_port->guid));
-			sm->master_sm_guid = p_sm->p_port->guid;
+				PRIx64 "\n", cl_ntoh64(p_smi->guid));
+			sm->master_sm_guid = p_smi->guid;
 			break;
 		case IB_SMINFO_STATE_DISCOVERING:
 		case IB_SMINFO_STATE_STANDBY:
@@ -334,8 +338,8 @@ static void smi_rcv_process_get_sm(IN osm_sm_t * sm,
 				OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 					"Found higher SM. Updating sm_state_mgr master_guid:"
 					" 0x%016" PRIx64 "\n",
-					cl_ntoh64(p_sm->p_port->guid));
-				sm->master_sm_guid = p_sm->p_port->guid;
+					cl_ntoh64(p_smi->guid));
+				sm->master_sm_guid = p_smi->guid;
 			}
 			break;
 		default:
@@ -359,7 +363,7 @@ static void smi_rcv_process_get_sm(IN osm_sm_t * sm,
 		case IB_SMINFO_STATE_STANDBY:
 			/* This should be the response from the sm we are polling. */
 			/* If it is - then signal master is alive */
-			if (sm->master_sm_guid == p_sm->p_port->guid) {
+			if (sm->master_sm_guid == p_sm->smi.guid) {
 				/* Make sure that it is an SM with higher priority than us.
 				   If we started polling it when it was master, and it moved
 				   to standby - then it might be with a lower priority than
@@ -385,8 +389,22 @@ static void smi_rcv_process_get_sm(IN osm_sm_t * sm,
 				osm_sm_state_mgr_signal_master_is_alive(sm);
 			else {
 				/* This is a response we got while sweeping the subnet.
-				   We will handle a case of handover needed later on, when the sweep
-				   is done and all SMs are recongnized. */
+				 *
+				 * If this is during a heavy sweep, we will handle a case of
+				 * handover needed later on, when the sweep is done and all
+				 * SMs are recognized.
+				 *
+				 * If this is during a light sweep, initiate a heavy sweep
+				 * to initiate handover scenarios.
+				 *
+				 * Note that it does not matter if the remote SM is lower
+				 * or higher priority.  If it is lower priority, we must
+				 * wait for it HANDOVER.  If it is higher priority, we need
+				 * to HANDOVER to it.  Both cases are handled after doing
+				 * a heavy sweep.
+				 */
+				if (light_sweep)
+					sm->p_subn->force_heavy_sweep = TRUE;
 			}
 			break;
 		case IB_SMINFO_STATE_STANDBY:
@@ -433,7 +451,7 @@ static void smi_rcv_process_get_response(IN osm_sm_t * sm,
 	p_sm_tbl = &sm->p_subn->sm_guid_tbl;
 	port_guid = p_smi->guid;
 
-	osm_dump_sm_info(sm->p_log, p_smi, OSM_LOG_DEBUG);
+	osm_dump_sm_info_v2(sm->p_log, p_smi, FILE_ID, OSM_LOG_DEBUG);
 
 	/* Check that the sm_key of the found SM is the same as ours,
 	   or is zero. If not - OpenSM cannot continue with configuration!. */
@@ -441,8 +459,8 @@ static void smi_rcv_process_get_response(IN osm_sm_t * sm,
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 2F18: "
 			"Got SM with sm_key that doesn't match our "
 			"local key. Exiting\n");
-		osm_log(sm->p_log, OSM_LOG_SYS,
-			"Found remote SM with non-matching sm_key. Exiting\n");
+		osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID,
+			   "Found remote SM with non-matching sm_key. Exiting\n");
 		osm_exit_flag = TRUE;
 		goto Exit;
 	}
@@ -482,7 +500,7 @@ static void smi_rcv_process_get_response(IN osm_sm_t * sm,
 			goto _unlock_and_exit;
 		}
 
-		osm_remote_sm_init(p_sm, p_port, p_smi);
+		osm_remote_sm_init(p_sm, p_smi);
 
 		cl_qmap_insert(p_sm_tbl, port_guid, &p_sm->map_item);
 	} else
@@ -519,7 +537,7 @@ static void smi_rcv_process_set_response(IN osm_sm_t * sm,
 	}
 
 	p_smi = ib_smp_get_payload_ptr(p_smp);
-	osm_dump_sm_info(sm->p_log, p_smi, OSM_LOG_DEBUG);
+	osm_dump_sm_info_v2(sm->p_log, p_smi, FILE_ID, OSM_LOG_DEBUG);
 
 	/* Check the AttributeModifier */
 	if (p_smp->attr_mod != IB_SMINFO_ATTR_MOD_HANDOVER) {
@@ -547,6 +565,12 @@ void osm_sminfo_rcv_process(IN void *context, IN void *data)
 	CL_ASSERT(p_madw);
 
 	p_smp = osm_madw_get_smp_ptr(p_madw);
+	if (ib_smp_get_status(p_smp)) {
+		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
+			"MAD status 0x%x received\n",
+			cl_ntoh16(ib_smp_get_status(p_smp)));
+		goto Exit;
+	}
 
 	/* Determine if this is a request for our own SMInfo or if
 	   this is a response to our request for another SM's SMInfo. */

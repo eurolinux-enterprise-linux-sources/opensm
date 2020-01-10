@@ -48,6 +48,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_LFT_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_switch.h>
 #include <opensm/osm_helper.h>
@@ -139,7 +141,8 @@ static void lftr_rcv_by_comp_mask(IN cl_map_item_t * p_map_item, IN void *cxt)
 			cl_ntoh64(p_sw->p_node->node_info.node_guid));
 		return;
 	}
-	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_physp))
+	if (!osm_physp_share_pkey(sa->p_log, p_req_physp,
+				  p_physp, sa->p_subn->opt.allow_both_pkeys))
 		return;
 
 	/* get the port 0 of the switch */
@@ -203,7 +206,7 @@ void osm_lftr_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -212,6 +215,10 @@ void osm_lftr_rcv_process(IN void *ctx, IN void *data)
 			"Cannot find requester physical port\n");
 		goto Exit;
 	}
+
+	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+		"Requester port GUID 0x%" PRIx64 "\n",
+		cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
 
 	cl_qlist_init(&rec_list);
 

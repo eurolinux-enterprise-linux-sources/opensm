@@ -49,6 +49,8 @@
 #include <string.h>
 #include <complib/cl_debug.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SM_MAD_CTRL_C
 #include <opensm/osm_sm_mad_ctrl.h>
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_madw.h>
@@ -196,7 +198,7 @@ static void sm_mad_ctrl_process_get_resp(IN osm_sm_mad_ctrl_t * p_ctrl,
 	if (p_smp->mgmt_class == IB_MCLASS_SUBN_DIR && !ib_smp_is_d(p_smp)) {
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3102: "
 			"'D' bit not set in returned SMP\n");
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 	}
 
 	p_old_madw = transaction_context;
@@ -223,6 +225,9 @@ static void sm_mad_ctrl_process_get_resp(IN osm_sm_mad_ctrl_t * p_ctrl,
 		break;
 	case IB_MAD_ATTR_NODE_INFO:
 		msg_id = OSM_MSG_MAD_NODE_INFO;
+		break;
+	case IB_MAD_ATTR_GUID_INFO:
+		msg_id = OSM_MSG_MAD_GUID_INFO;
 		break;
 	case IB_MAD_ATTR_SWITCH_INFO:
 		msg_id = OSM_MSG_MAD_SWITCH_INFO;
@@ -251,7 +256,6 @@ static void sm_mad_ctrl_process_get_resp(IN osm_sm_mad_ctrl_t * p_ctrl,
 	case IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO:
 		msg_id = OSM_MSG_MAD_MLNX_EXT_PORT_INFO;
 		break;
-	case IB_MAD_ATTR_GUID_INFO:
 	case IB_MAD_ATTR_CLASS_PORT_INFO:
 	case IB_MAD_ATTR_NOTICE:
 	case IB_MAD_ATTR_INFORM_INFO:
@@ -260,7 +264,7 @@ static void sm_mad_ctrl_process_get_resp(IN osm_sm_mad_ctrl_t * p_ctrl,
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3103: "
 			"Unsupported attribute 0x%X\n",
 			cl_ntoh16(p_smp->attr_id));
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		osm_mad_pool_put(p_ctrl->p_mad_pool, p_madw);
 		goto Exit;
 	}
@@ -390,7 +394,7 @@ static void sm_mad_ctrl_process_set(IN osm_sm_mad_ctrl_t * p_ctrl,
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3107: "
 			"Unsupported attribute 0x%X\n",
 			cl_ntoh16(p_smp->attr_id));
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		osm_mad_pool_put(p_ctrl->p_mad_pool, p_madw);
 		goto Exit;
 	}
@@ -469,7 +473,7 @@ static void sm_mad_ctrl_process_trap(IN osm_sm_mad_ctrl_t * p_ctrl,
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3109: "
 			"Unsupported attribute 0x%X\n",
 			cl_ntoh16(p_smp->attr_id));
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		osm_mad_pool_put(p_ctrl->p_mad_pool, p_madw);
 		goto Exit;
 	}
@@ -537,7 +541,7 @@ static void sm_mad_ctrl_process_trap_repress(IN osm_sm_mad_ctrl_t * p_ctrl,
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3105: "
 			"Unsupported attribute 0x%X\n",
 			cl_ntoh16(p_smp->attr_id));
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		osm_mad_pool_put(p_ctrl->p_mad_pool, p_madw);
 		break;
 	}
@@ -571,7 +575,7 @@ static void log_rcv_cb_error(osm_log_t *p_log, ib_smp_t *p_smp, ib_net16_t statu
 		cl_ntoh64(p_smp->trans_id),
 		p_smp->mgmt_class == IB_MCLASS_SUBN_DIR ? buf : "");
 
-	osm_dump_dr_smp(p_log, p_smp, OSM_LOG_VERBOSE);
+	osm_dump_dr_smp_v2(p_log, p_smp, FILE_ID, OSM_LOG_VERBOSE);
 }
 
 /*
@@ -620,7 +624,7 @@ static void sm_mad_ctrl_rcv_callback(IN osm_madw_t * p_madw,
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR,
 			"Ignoring received mad - since we are exiting\n");
 
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_DEBUG);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_DEBUG);
 
 		/* retire the mad or put it back */
 		if (ib_smp_is_response(p_smp)) {
@@ -634,8 +638,8 @@ static void sm_mad_ctrl_rcv_callback(IN osm_madw_t * p_madw,
 		goto Exit;
 	}
 
-	if (osm_log_is_active(p_ctrl->p_log, OSM_LOG_FRAMES))
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_FRAMES);
+	if (OSM_LOG_IS_ACTIVE_V2(p_ctrl->p_log, OSM_LOG_FRAMES))
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_FRAMES);
 
 	if (p_smp->mgmt_class == IB_MCLASS_SUBN_DIR)
 		status = ib_smp_get_status(p_smp);
@@ -673,7 +677,7 @@ static void sm_mad_ctrl_rcv_callback(IN osm_madw_t * p_madw,
 		cl_atomic_inc(&p_ctrl->p_stats->qp0_mads_rcvd_unknown);
 		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3112: "
 			"Unsupported method = 0x%X\n", p_smp->method);
-		osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		osm_mad_pool_put(p_ctrl->p_mad_pool, p_madw);
 		goto Exit;
 	}
@@ -739,9 +743,16 @@ static void sm_mad_ctrl_send_err_cb(IN void *context, IN osm_madw_t * p_madw)
 			cl_ntoh16(p_smp->attr_id),
 			ib_get_sm_attr_str(p_smp->attr_id));
 		p_ctrl->p_subn->subnet_initialization_error = TRUE;
+	} else if (p_madw->status == IB_TIMEOUT &&
+		   p_smp->method == IB_MAD_METHOD_GET) {
+		OSM_LOG(p_ctrl->p_log, OSM_LOG_ERROR, "ERR 3120 "
+			"Timeout while getting attribute 0x%X (%s); "
+			"Possible mis-set mkey?\n",
+			cl_ntoh16(p_smp->attr_id),
+			ib_get_sm_attr_str(p_smp->attr_id));
 	}
 
-	osm_dump_dr_smp(p_ctrl->p_log, p_smp, OSM_LOG_VERBOSE);
+	osm_dump_dr_smp_v2(p_ctrl->p_log, p_smp, FILE_ID, OSM_LOG_VERBOSE);
 
 	/*
 	   Since we did not get any response we suspect the DR path

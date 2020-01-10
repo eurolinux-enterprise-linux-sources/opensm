@@ -27,12 +27,12 @@
 
 Summary: InfiniBand subnet manager and administration
 Name: opensm
-Version: 3.3.13
+Version: 3.3.15
 Release: %rel%{?dist}
 License: GPLv2 or BSD
 Group: System Environment/Daemons
 URL: http://openfabrics.org/
-Source: http://www.openfabrics.org/downloads/management/opensm-3.3.13.tar.gz
+Source: http://www.openfabrics.org/downloads/management/opensm-3.3.15.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: libibumad-devel, libtool
 Requires: %{name}-libs = %{version}-%{release}, logrotate

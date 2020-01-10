@@ -50,6 +50,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_VL_ARB_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -140,8 +142,8 @@ void osm_vla_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	osm_dump_vl_arb_table(sm->p_log, port_guid, block_num, port_num,
-			      p_vla_tbl, OSM_LOG_DEBUG);
+	osm_dump_vl_arb_table_v2(sm->p_log, port_guid, block_num, port_num,
+			         p_vla_tbl, FILE_ID, OSM_LOG_DEBUG);
 	osm_physp_set_vla_tbl(p_physp, p_vla_tbl, block_num);
 
 Exit:

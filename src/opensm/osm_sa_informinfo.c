@@ -52,6 +52,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_INFORMINFO_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_port.h>
 #include <opensm/osm_node.h>
@@ -116,7 +118,8 @@ static boolean_t validate_ports_access_rights(IN osm_sa_t * sa,
 		/* make sure that the requester and destination port can access
 		   each other according to the current partitioning. */
 		if (!osm_physp_share_pkey
-		    (sa->p_log, p_port->p_physp, p_requester_physp)) {
+		    (sa->p_log, p_port->p_physp, p_requester_physp,
+		     sa->p_subn->opt.allow_both_pkeys)) {
 			OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 				"port and requester don't share pkey\n");
 			valid = FALSE;
@@ -165,7 +168,8 @@ static boolean_t validate_ports_access_rights(IN osm_sa_t * sa,
 			/* make sure that the requester and destination port can access
 			   each other according to the current partitioning. */
 			if (!osm_physp_share_pkey
-			    (sa->p_log, p_port->p_physp, p_requester_physp)) {
+			    (sa->p_log, p_port->p_physp, p_requester_physp,
+			     sa->p_subn->opt.allow_both_pkeys)) {
 				OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 					"port and requester don't share pkey\n");
 				valid = FALSE;
@@ -273,7 +277,8 @@ static void sa_inform_info_rec_by_comp_mask(IN osm_sa_t * sa,
 	p_subscriber_physp = p_subscriber_port->p_physp;
 	/* make sure that the requester and subscriber port can access each
 	   other according to the current partitioning. */
-	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_subscriber_physp)) {
+	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_subscriber_physp,
+				  sa->p_subn->opt.allow_both_pkeys)) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"requester and subscriber ports don't share pkey\n");
 		goto Exit;
@@ -323,7 +328,7 @@ static void infr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	p_rcvd_rec =
 	    (ib_inform_info_record_t *) ib_sa_mad_get_payload_ptr(p_rcvd_mad);
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -333,9 +338,13 @@ static void infr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 		goto Exit;
 	}
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_inform_info_record(sa->p_log, p_rcvd_rec,
-					    OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_inform_info_record_v2(sa->p_log, p_rcvd_rec,
+					       FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	cl_qlist_init(&rec_list);
 
@@ -398,9 +407,9 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	    (ib_inform_info_t *) ib_sa_mad_get_payload_ptr(p_sa_mad);
 
 #if 0
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_inform_info(sa->p_log, p_recvd_inform_info,
-				     OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG))
+		osm_dump_inform_info_v2(sa->p_log, p_recvd_inform_info,
+				        FILE_ID, OSM_LOG_DEBUG);
 #endif
 
 	/* Grab the lock */
@@ -423,7 +432,7 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	if (res != IB_SUCCESS) {
 		cl_plock_release(sa->p_lock);
 
-		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4308 "
+		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4308: "
 			"Subscribe Request from unknown LID: %u\n",
 			cl_ntoh16(p_madw->mad_addr.dest_lid));
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
@@ -437,7 +446,7 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	if (p_recvd_inform_info->subscribe > 1) {
 		cl_plock_release(sa->p_lock);
 
-		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4308 "
+		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 430A: "
 			"Invalid subscribe: %d\n",
 			p_recvd_inform_info->subscribe);
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);

@@ -48,6 +48,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_SW_INFO_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_node.h>
 #include <opensm/osm_helper.h>
@@ -136,7 +138,8 @@ static void sir_rcv_create_sir(IN osm_sa_t * sa, IN const osm_switch_t * p_sw,
 			cl_ntoh64(p_sw->p_node->node_info.node_guid));
 		goto Exit;
 	}
-	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_physp))
+	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_physp,
+				  sa->p_subn->opt.allow_both_pkeys))
 		goto Exit;
 
 	/* get the port 0 of the switch */
@@ -174,8 +177,8 @@ static void sir_rcv_by_comp_mask(IN cl_map_item_t * p_map_item, IN void *cxt)
 
 	OSM_LOG_ENTER(p_ctxt->sa->p_log);
 
-	osm_dump_switch_info(p_ctxt->sa->p_log, &p_sw->switch_info,
-			     OSM_LOG_VERBOSE);
+	osm_dump_switch_info_v2(p_ctxt->sa->p_log, &p_sw->switch_info,
+			        FILE_ID, OSM_LOG_VERBOSE);
 
 	if (comp_mask & IB_SWIR_COMPMASK_LID) {
 		match_lid = p_rcvd_rec->lid;
@@ -221,7 +224,7 @@ void osm_sir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -231,9 +234,13 @@ void osm_sir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_switch_info_record(sa->p_log, p_rcvd_rec,
-					    OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_switch_info_record_v2(sa->p_log, p_rcvd_rec,
+					       FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	cl_qlist_init(&rec_list);
 

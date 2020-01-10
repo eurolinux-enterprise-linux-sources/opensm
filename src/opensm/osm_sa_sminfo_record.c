@@ -50,6 +50,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_SMINFO_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
@@ -121,6 +123,7 @@ static void sa_smir_by_comp_mask(IN osm_sa_t * sa,
 	const ib_sminfo_record_t *const p_rcvd_rec = p_ctxt->p_rcvd_rec;
 	const osm_physp_t *const p_req_physp = p_ctxt->p_req_physp;
 	ib_net64_t const comp_mask = p_ctxt->comp_mask;
+	osm_port_t *p_port;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -142,8 +145,15 @@ static void sa_smir_by_comp_mask(IN osm_sa_t * sa,
 	}
 
 	/* Implement any other needed search cases */
+	p_port = osm_get_port_by_guid(sa->p_subn, p_rem_sm->smi.guid);
 
-	smir_rcv_new_smir(sa, p_rem_sm->p_port, p_ctxt->p_list,
+        if (p_port == NULL) {
+                OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2810: "
+                        "No port for remote sm\n");
+                goto Exit;
+        }
+
+	smir_rcv_new_smir(sa, p_port, p_ctxt->p_list,
 			  p_rem_sm->smi.guid, p_rem_sm->smi.act_count,
 			  p_rem_sm->smi.pri_state, p_req_physp);
 
@@ -200,7 +210,7 @@ void osm_smir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -210,8 +220,12 @@ void osm_smir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_sm_info_record(sa->p_log, p_rcvd_rec, OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_sm_info_record_v2(sa->p_log, p_rcvd_rec, FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	p_smi = &p_rcvd_rec->sm_info;
 
@@ -254,7 +268,8 @@ void osm_smir_rcv_process(IN void *ctx, IN void *data)
 		if (!p_port || local_port == p_port) {
 			if (FALSE ==
 			    osm_physp_share_pkey(sa->p_log, p_req_physp,
-						 local_port->p_physp)) {
+						 local_port->p_physp,
+						 sa->p_subn->opt.allow_both_pkeys)) {
 				cl_plock_release(sa->p_lock);
 				OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2805: "
 					"Cannot get SMInfo record due to pkey violation\n");

@@ -51,6 +51,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_qmap.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_UCAST_FTREE_C
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_switch.h>
 
@@ -63,7 +65,7 @@
  *    Switches are stored in two cl_qmaps - one is
  *    ordered by guid, and the other by a key that is
  *    generated from tuple. Since cl_qmap supports only
- *    a 64-bit key, the maximal tuple lenght is 8 bytes.
+ *    a 64-bit key, the maximal tuple length is 8 bytes.
  *    which means that maximal tree rank is 8.
  * Note that the above also implies that each switch
  * can have at max 255 up/down ports.
@@ -476,7 +478,7 @@ static void port_group_dump(IN ftree_fabric_t * p_ftree,
 	if (!p_group)
 		return;
 
-	if (!osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
 		return;
 
 	size = cl_ptr_vector_get_size(&p_group->ports);
@@ -519,6 +521,7 @@ static void port_group_add_port(IN ftree_port_group_t * p_group,
 	}
 
 	p_port = port_create(port_num, remote_port_num);
+	CL_ASSERT(p_port);
 	cl_ptr_vector_insert(&p_group->ports, p_port, NULL);
 }
 
@@ -641,7 +644,7 @@ static void sw_dump(IN ftree_fabric_t * p_ftree, IN ftree_sw_t * p_sw)
 	if (!p_sw)
 		return;
 
-	if (!osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
 		return;
 
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_DEBUG,
@@ -765,7 +768,7 @@ static int set_hops_on_remote_sw(IN ftree_port_group_t * p_group,
 	CL_ASSERT(p_group->remote_node_type == IB_NODE_TYPE_SWITCH);
 	p_remote_sw->hops[target_lid] = hops;
 
-	/* If taget lid is a switch we set the min hop table values
+	/* If target lid is a switch we set the min hop table values
 	 * for each port on the associated osm_sw struct */
 	if (!is_target_sw)
 		return 0;
@@ -857,7 +860,7 @@ static void hca_dump(IN ftree_fabric_t * p_ftree, IN ftree_hca_t * p_hca)
 	if (!p_hca)
 		return;
 
-	if (!osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
 		return;
 
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_DEBUG,
@@ -911,6 +914,7 @@ static void hca_add_port(IN ftree_hca_t * p_hca, IN uint8_t port_num,
 					    remote_port_guid, remote_node_guid,
 					    remote_node_type,
 					    p_remote_hca_or_sw, is_cn, is_io);
+		CL_ASSERT(p_group);
 		p_hca->up_port_groups[p_hca->up_port_groups_num++] = p_group;
 	}
 	port_group_add_port(p_group, port_num, remote_port_num);
@@ -1146,7 +1150,7 @@ static void fabric_dump(ftree_fabric_t * p_ftree)
 	ftree_hca_t *p_hca;
 	ftree_sw_t *p_sw;
 
-	if (!osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
 		return;
 
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_DEBUG, "\n"
@@ -1225,7 +1229,7 @@ static void fabric_dump_general_info(IN ftree_fabric_t * p_ftree)
 				i);
 	}
 
-	if (osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_VERBOSE)) {
+	if (OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_VERBOSE)) {
 		OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
 			"  - Root switches:\n");
 		for (p_sw = (ftree_sw_t *) cl_qmap_head(&p_ftree->sw_tbl);
@@ -1631,8 +1635,8 @@ static int fabric_create_leaf_switch_array(IN ftree_fabric_t * p_ftree)
 	all_switches_at_leaf_level = (ftree_sw_t **)
 	    malloc(cl_qmap_count(&p_ftree->sw_tbl) * sizeof(ftree_sw_t *));
 	if (!all_switches_at_leaf_level) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_SYS,
-			"Fat-tree routing: Memory allocation failed\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_SYS, FILE_ID,
+			   "Fat-tree routing: Memory allocation failed\n");
 		res = -1;
 		goto Exit;
 	}
@@ -1683,8 +1687,8 @@ static int fabric_create_leaf_switch_array(IN ftree_fabric_t * p_ftree)
 	p_ftree->leaf_switches = (ftree_sw_t **)
 	    malloc(p_ftree->leaf_switches_num * sizeof(ftree_sw_t *));
 	if (!p_ftree->leaf_switches) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_SYS,
-			"Fat-tree routing: Memory allocation failed\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_SYS, FILE_ID,
+			   "Fat-tree routing: Memory allocation failed\n");
 		free(all_switches_at_leaf_level);
 		res = -1;
 		goto Exit;
@@ -1751,8 +1755,8 @@ static boolean_t fabric_validate_topology(IN ftree_fabric_t * p_ftree)
 	reference_sw_arr =
 	    (ftree_sw_t **) malloc(tree_rank * sizeof(ftree_sw_t *));
 	if (reference_sw_arr == NULL) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_SYS,
-			"Fat-tree routing: Memory allocation failed\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_SYS, FILE_ID,
+			   "Fat-tree routing: Memory allocation failed\n");
 		return FALSE;
 	}
 	memset(reference_sw_arr, 0, tree_rank * sizeof(ftree_sw_t *));
@@ -2216,7 +2220,7 @@ fabric_route_upgoing_by_going_down(IN ftree_fabric_t * p_ftree,
 			/* Loop in the fabric - we already routed the remote switch
 			   on our way UP, and now we see it again on our way DOWN */
 			OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_DEBUG,
-				"Loop of lenght %d in the fabric:\n                             "
+				"Loop of length %d in the fabric:\n                             "
 				"Switch %s (LID %u) closes loop through switch %s (LID %u)\n",
 				current_hops,
 				tuple_to_str(p_remote_sw->tuple),
@@ -2278,7 +2282,7 @@ fabric_route_upgoing_by_going_down(IN ftree_fabric_t * p_ftree,
 							    target_lid,	/* LID that we're routing to */
 							    is_real_lid,	/* whether the target LID is real or dummy */
 							    is_main_path,	/* whether this is path to HCA that should by tracked by counters */
-							    is_target_a_sw,	/* Wheter target lid is a switch or not */
+							    is_target_a_sw,	/* Whether target lid is a switch or not */
 							    current_hops + 1);	/* Number of hops done to this point */
 		created_route |= routed;
 		/* Counters are promoted only if a route toward a node is created */
@@ -2345,7 +2349,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 							   target_lid,	/* LID that we're routing to */
 							   is_real_lid,	/* whether this target LID is real or dummy */
 							   is_main_path,	/* whether this path to HCA should by tracked by counters */
-							   is_target_a_sw,	/* Wheter target lid is a switch or not */
+							   is_target_a_sw,	/* Whether target lid is a switch or not */
 							   current_hops);	/* Number of hops done up to this point */
 
 	/* recursion stop condition - if it's a root switch, */
@@ -2373,7 +2377,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 										    target_lid,	/* LID that we're routing to */
 										    is_real_lid,	/* whether this target LID is real or dummy */
 										    is_main_path,	/* whether this is path to HCA that should by tracked by counters */
-										    is_target_a_sw,	/* Wheter target lid is a switch or not */
+										    is_target_a_sw,	/* Whether target lid is a switch or not */
 										    reverse_hop_credit - 1,	/* Remaining reverse_hops allowed */
 										    reverse_hops + 1,	/* Number of reverse_hops done up to this point */
 										    current_hops
@@ -2502,7 +2506,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 										    target_lid,	/* LID that we're routing to */
 										    is_real_lid,	/* whether this target LID is real or dummy */
 										    is_main_path,	/* whether this is path to HCA that should by tracked by counters */
-										    is_target_a_sw,	/* Wheter target lid is a switch or not */
+										    is_target_a_sw,	/* Whether target lid is a switch or not */
 										    reverse_hop_credit,	/* Remaining reverse_hops allowed */
 										    reverse_hops,	/* Number of reverse_hops done up to this point */
 										    current_hops
@@ -2568,7 +2572,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 		/* Routing REAL lids on SECONDARY path means routing
 		   switch-to-switch or switch-to-CA paths.
 		   We can safely assume that switch will initiate very
-		   few traffic, so there's no point waisting runtime on
+		   few traffic, so there's no point wasting runtime on
 		   trying to balance these routes - always pick port 0. */
 		p_min_port = NULL;
 		ports_num = (uint16_t) cl_ptr_vector_get_size(&p_group->ports);
@@ -2602,7 +2606,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 							    target_lid,	/* LID that we're routing to */
 							    TRUE,	/* whether the target LID is real or dummy */
 							    FALSE,	/* whether this is path to HCA that should by tracked by counters */
-							    is_target_a_sw,	/* Wheter target lid is a switch or not */
+							    is_target_a_sw,	/* Whether target lid is a switch or not */
 							    reverse_hop_credit,	/* Remaining reverse_hops allowed */
 							    reverse_hops,	/* Number of reverse_hops done up to this point */
 							    current_hops + 1);
@@ -2635,7 +2639,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 		/* Routing REAL lids on SECONDARY path means routing
 		   switch-to-switch or switch-to-CA paths.
 		   We can safely assume that switch will initiate very
-		   few traffic, so there's no point waisting runtime on
+		   few traffic, so there's no point wasting runtime on
 		   trying to balance these routes - always pick port 0. */
 
 		p_min_port = NULL;
@@ -2670,7 +2674,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 							    target_lid,	/* LID that we're routing to */
 							    TRUE,	/* whether the target LID is real or dummy */
 							    FALSE,	/* whether this is path to HCA that should by tracked by counters */
-							    is_target_a_sw,	/* Wheter target lid is a switch or not */
+							    is_target_a_sw,	/* Whether target lid is a switch or not */
 							    reverse_hop_credit,	/* Remaining reverse_hops allowed */
 							    reverse_hops,	/* Number of reverse_hops done up to this point */
 							    current_hops + 1);
@@ -2707,7 +2711,7 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 								    target_lid,	/* LID that we're routing to */
 								    TRUE,	/* whether the target LID is real or dummy */
 								    TRUE,	/* whether this is path to HCA that should by tracked by counters */
-								    is_target_a_sw,	/* Wheter target lid is a switch or not */
+								    is_target_a_sw,	/* Whether target lid is a switch or not */
 								    reverse_hop_credit - 1,	/* Remaining reverse_hops allowed */
 								    reverse_hops + 1,	/* Number of reverse_hops done up to this point */
 								    current_hops
@@ -2797,7 +2801,7 @@ static void fabric_route_to_cns(IN ftree_fabric_t * p_ftree)
 							   hca_lid,	/* LID that we're routing to */
 							   TRUE,	/* whether this HCA LID is real or dummy */
 							   TRUE,	/* whether this path to HCA should by tracked by counters */
-							   FALSE,	/* wheter target lid is a switch or not */
+							   FALSE,	/* whether target lid is a switch or not */
 							   0,	/* Number of reverse hops allowed */
 							   0,	/* Number of reverse hops done yet */
 							   1);	/* Number of hops done yet */
@@ -2823,7 +2827,7 @@ static void fabric_route_to_cns(IN ftree_fabric_t * p_ftree)
 								   0,	/* LID that we're routing to - ignored for dummy HCA */
 								   FALSE,	/* whether this HCA LID is real or dummy */
 								   TRUE,	/* whether this path to HCA should by tracked by counters */
-								   FALSE,	/* Wheter the target LID is a switch or not */
+								   FALSE,	/* Whether the target LID is a switch or not */
 								   0,	/* Number of reverse hops allowed */
 								   0,	/* Number of reverse hops done yet */
 								   1);	/* Number of hops done yet */
@@ -2910,7 +2914,7 @@ static void fabric_route_to_non_cns(IN ftree_fabric_t * p_ftree)
 							   hca_lid,	/* LID that we're routing to */
 							   TRUE,	/* whether this HCA LID is real or dummy */
 							   TRUE,	/* whether this path to HCA should by tracked by counters */
-							   FALSE,	/* Wheter the target LID is a switch or not */
+							   FALSE,	/* Whether the target LID is a switch or not */
 							   p_hca_port_group->is_io ? p_ftree->p_osm->subn.opt.max_reverse_hops : 0,	/* Number or reverse hops allowed */
 							   0,	/* Number or reverse hops done yet */
 							   1);	/* Number of hops done yet */
@@ -2963,7 +2967,7 @@ static void fabric_route_to_switches(IN ftree_fabric_t * p_ftree)
 						   p_sw->base_lid,	/* LID that we're routing to */
 						   TRUE,	/* whether the target LID is a real or dummy */
 						   FALSE,	/* whether this path to HCA should by tracked by counters */
-						   TRUE,	/* Wheter the target LID is a switch or not */
+						   TRUE,	/* Whether the target LID is a switch or not */
 						   0,	/* Number of reverse hops allowed */
 						   0,	/* Number of reverse hops done yet */
 						   0);	/* Number of hops done yet */
@@ -3885,29 +3889,29 @@ static int construct_fabric(IN void *context)
 	fabric_clear(p_ftree);
 
 	if (p_ftree->p_osm->subn.opt.lmc > 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"LMC > 0 is not supported by fat-tree routing.\n"
-			"Falling back to default routing\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "LMC > 0 is not supported by fat-tree routing.\n"
+			   "Falling back to default routing\n");
 		status = -1;
 		goto Exit;
 	}
 
 	if (cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl) < 2) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric has %u switches - topology is not fat-tree.\n"
-			"Falling back to default routing\n",
-			cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl));
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric has %u switches - topology is not fat-tree.\n"
+			   "Falling back to default routing\n",
+			   cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl));
 		status = -1;
 		goto Exit;
 	}
 
 	if ((cl_qmap_count(&p_ftree->p_osm->subn.node_guid_tbl) -
 	     cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl)) < 2) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric has %u nodes (%u switches) - topology is not fat-tree.\n"
-			"Falling back to default routing\n",
-			cl_qmap_count(&p_ftree->p_osm->subn.node_guid_tbl),
-			cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl));
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric has %u nodes (%u switches) - topology is not fat-tree.\n"
+			   "Falling back to default routing\n",
+			   cl_qmap_count(&p_ftree->p_osm->subn.node_guid_tbl),
+			   cl_qmap_count(&p_ftree->p_osm->subn.sw_guid_tbl));
 		status = -1;
 		goto Exit;
 	}
@@ -3920,9 +3924,9 @@ static int construct_fabric(IN void *context)
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
 		"Populating FatTree Switch and CA tables\n");
 	if (fabric_populate_nodes(p_ftree) != 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric topology is not fat-tree - "
-			"falling back to default routing\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric topology is not fat-tree - "
+			   "falling back to default routing\n");
 		status = -1;
 		goto Exit;
 	}
@@ -3930,18 +3934,18 @@ static int construct_fabric(IN void *context)
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
 		"Reading guid files provided by user\n");
 	if (fabric_read_guid_files(p_ftree) != 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Failed reading guid files - "
-			"falling back to default routing\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Failed reading guid files - "
+			   "falling back to default routing\n");
 		status = -1;
 		goto Exit;
 	}
 
 	if (cl_qmap_count(&p_ftree->hca_tbl) < 2) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric has %u CAs - topology is not fat-tree.\n"
-			"Falling back to default routing\n",
-			cl_qmap_count(&p_ftree->hca_tbl));
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric has %u CAs - topology is not fat-tree.\n"
+			   "Falling back to default routing\n",
+			   cl_qmap_count(&p_ftree->hca_tbl));
 		status = -1;
 		goto Exit;
 	}
@@ -3952,8 +3956,8 @@ static int construct_fabric(IN void *context)
 	   whole tree rank after filling ports and marking CNs. */
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE, "Ranking FatTree\n");
 	if (fabric_rank(p_ftree) != 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Failed ranking the tree\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Failed ranking the tree\n");
 		status = -1;
 		goto Exit;
 	}
@@ -3966,13 +3970,13 @@ static int construct_fabric(IN void *context)
 	OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_VERBOSE,
 		"Populating CA & switch ports\n");
 	if (fabric_populate_ports(p_ftree) != 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric topology is not a fat-tree\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric topology is not a fat-tree\n");
 		status = -1;
 		goto Exit;
 	} else if (p_ftree->cn_num == 0) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric has no valid compute nodes\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric has no valid compute nodes\n");
 		status = -1;
 		goto Exit;
 	}
@@ -3983,10 +3987,10 @@ static int construct_fabric(IN void *context)
 
 	if (fabric_get_rank(p_ftree) > FAT_TREE_MAX_RANK ||
 	    fabric_get_rank(p_ftree) < FAT_TREE_MIN_RANK) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric rank is %u (should be between %u and %u)\n",
-			fabric_get_rank(p_ftree), FAT_TREE_MIN_RANK,
-			FAT_TREE_MAX_RANK);
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric rank is %u (should be between %u and %u)\n",
+			   fabric_get_rank(p_ftree), FAT_TREE_MIN_RANK,
+			   FAT_TREE_MAX_RANK);
 		status = -1;
 		goto Exit;
 	}
@@ -3996,8 +4000,8 @@ static int construct_fabric(IN void *context)
 	   As a by-product, this function also runs basic topology
 	   validation - it checks that all the CNs are at the same rank. */
 	if (fabric_mark_leaf_switches(p_ftree)) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric topology is not a fat-tree\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric topology is not a fat-tree\n");
 		status = -1;
 		goto Exit;
 	}
@@ -4014,8 +4018,8 @@ static int construct_fabric(IN void *context)
 	   switches at the same leaf rank w/o CNs, if this is the order of indexing.
 	   In any case, the first and the last switches in the array are REAL leafs. */
 	if (fabric_create_leaf_switch_array(p_ftree)) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric topology is not a fat-tree\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric topology is not a fat-tree\n");
 		status = -1;
 		goto Exit;
 	}
@@ -4027,15 +4031,15 @@ static int construct_fabric(IN void *context)
 	fabric_dump_general_info(p_ftree);
 
 	/* dump full tree topology */
-	if (osm_log_is_active(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
+	if (OSM_LOG_IS_ACTIVE_V2(&p_ftree->p_osm->log, OSM_LOG_DEBUG))
 		fabric_dump(p_ftree);
 
 	/* the fabric is required to be PURE fat-tree only if the root
 	   guid file hasn't been provided by user */
 	if (!fabric_roots_provided(p_ftree) &&
 	    !fabric_validate_topology(p_ftree)) {
-		osm_log(&p_ftree->p_osm->log, OSM_LOG_INFO,
-			"Fabric topology is not a fat-tree\n");
+		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
+			   "Fabric topology is not a fat-tree\n");
 		status = -1;
 		goto Exit;
 	}

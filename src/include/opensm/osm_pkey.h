@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2010 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -82,15 +82,21 @@ struct osm_physp;
 * SYNOPSIS
 */
 typedef struct osm_pkeybl {
+	cl_ptr_vector_t accum_pkeys;
 	cl_ptr_vector_t blocks;
 	cl_ptr_vector_t new_blocks;
 	cl_map_t keys;
 	cl_qlist_t pending;
+	uint16_t last_pkey_idx;
 	uint16_t used_blocks;
 	uint16_t max_blocks;
 } osm_pkey_tbl_t;
 /*
 * FIELDS
+*	accum_pkeys
+*		Accumulated pkeys with pkey index. Used to
+*		preserve pkey index.
+*
 *	blocks
 *		The IBA defined blocks of pkey values, updated from the subnet
 *
@@ -288,6 +294,57 @@ static inline ib_pkey_table_t *osm_pkey_tbl_new_block_get(const osm_pkey_tbl_t *
 		&p_pkey_tbl->new_blocks, block) : NULL);
 };
 
+/****f* OpenSM: osm_pkey_tbl_set_accum_pkeys
+* NAME
+*  osm_pkey_tbl_set_accum_pkeys
+*
+* DESCRIPTION
+*   Stores the given pkey and pkey index in the "accum_pkeys" array
+*
+* SYNOPSIS
+*/
+cl_status_t
+osm_pkey_tbl_set_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
+			     IN uint16_t pkey, IN uint16_t pkey_idx);
+/*
+* p_pkey_tbl
+*   [in] Pointer to the PKey table
+*
+* pkey
+*   [in] PKey to store
+*
+* pkey_idx
+*   [in] The overall index
+*
+* RETURN VALUES
+*   CL_SUCCESS if OK
+*   CL_INSUFFICIENT_MEMORY if failed
+*
+*********/
+
+/****f* OpenSM: osm_pkey_tbl_clear_accum_pkeys
+* NAME
+*  osm_pkey_tbl_clear_accum_pkeys
+*
+* DESCRIPTION
+*   Clears the given pkey in the "accum_pkeys" array
+*
+* SYNOPSIS
+*/
+void
+osm_pkey_tbl_clear_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
+			       IN uint16_t pkey);
+/*
+* p_pkey_tbl
+*   [in] Pointer to the PKey table
+*
+* pkey
+*   [in] PKey to clear
+*
+* NOTES
+*
+*********/
+
 /****f* OpenSM: osm_pkey_tbl_set_new_entry
 * NAME
 *  osm_pkey_tbl_set_new_entry
@@ -415,16 +472,21 @@ osm_pkey_tbl_get_block_and_idx(IN osm_pkey_tbl_t * p_pkey_tbl,
 */
 ib_api_status_t
 osm_pkey_tbl_set(IN osm_pkey_tbl_t * p_pkey_tbl,
-		 IN uint16_t block, IN ib_pkey_table_t * p_tbl);
+		 IN uint16_t block, IN ib_pkey_table_t * p_tbl,
+		 IN boolean_t allow_both_pkeys);
 /*
 *  p_pkey_tbl
-*     [in] Pointer to osm_pkey_tbl_t object.
+*     [in] Pointer to osm_pkey_tbl_t object
 *
 *  block
 *     [in] The block number to set
 *
 *  p_tbl
 *     [in] The IB PKey block to copy to the object
+*
+*  allow_both_pkeys
+*     [in] Whether both full and limited membership on same partition
+*          are allowed
 *
 * RETURN VALUES
 *  IB_SUCCESS or IB_ERROR
@@ -444,7 +506,8 @@ osm_pkey_tbl_set(IN osm_pkey_tbl_t * p_pkey_tbl,
 */
 boolean_t osm_physp_share_this_pkey(IN const struct osm_physp * p_physp1,
 				    IN const struct osm_physp * p_physp2,
-				    IN ib_net16_t pkey);
+				    IN ib_net16_t pkey,
+				    IN boolean_t allow_both_pkeys);
 /*
 * PARAMETERS
 *
@@ -456,6 +519,9 @@ boolean_t osm_physp_share_this_pkey(IN const struct osm_physp * p_physp1,
 *
 *  pkey
 *     [in] value of P_Key to check.
+*
+*  allow_both_pkeys
+*     [in] whether both pkeys allowed policy is being used.
 *
 * RETURN VALUES
 *  Returns TRUE if the two ports are matching.
@@ -475,7 +541,8 @@ boolean_t osm_physp_share_this_pkey(IN const struct osm_physp * p_physp1,
 * SYNOPSIS
 */
 ib_net16_t osm_physp_find_common_pkey(IN const struct osm_physp *p_physp1,
-				      IN const struct osm_physp *p_physp2);
+				      IN const struct osm_physp *p_physp2,
+				      IN boolean_t allow_both_pkeys);
 /*
 * PARAMETERS
 *
@@ -484,6 +551,10 @@ ib_net16_t osm_physp_find_common_pkey(IN const struct osm_physp *p_physp1,
 *
 *  p_physp2
 *     [in] Pointer to an osm_physp_t object.
+*
+*  allow_both_pkeys
+*     [in] Whether both full and limited membership on same partition
+*          are allowed
 *
 * RETURN VALUES
 *  Returns value of first shared P_Key or INVALID P_Key (0x0) if not
@@ -519,7 +590,8 @@ ib_net16_t osm_physp_find_common_pkey(IN const struct osm_physp *p_physp1,
 */
 boolean_t osm_physp_share_pkey(IN osm_log_t * p_log,
 			       IN const struct osm_physp * p_physp_1,
-			       IN const struct osm_physp * p_physp_2);
+			       IN const struct osm_physp * p_physp_2,
+			       IN boolean_t allow_both_pkeys);
 
 /*
 * PARAMETERS
@@ -531,6 +603,10 @@ boolean_t osm_physp_share_pkey(IN osm_log_t * p_log,
 *
 *  p_physp_2
 *     [in] Pointer to an osm_physp_t object.
+*
+*  allow_both_pkeys
+*     [in] Whether both full and limited membership on same partition
+*          are allowed
 *
 * RETURN VALUES
 *  Returns TRUE if the 2 physical ports are matching.
@@ -566,7 +642,8 @@ boolean_t osm_physp_share_pkey(IN osm_log_t * p_log,
 */
 boolean_t osm_port_share_pkey(IN osm_log_t * p_log,
 			      IN const struct osm_port * p_port_1,
-			      IN const struct osm_port * p_port_2);
+			      IN const struct osm_port * p_port_2,
+			      IN boolean_t allow_both_pkeys);
 
 /*
 * PARAMETERS

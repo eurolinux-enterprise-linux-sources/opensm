@@ -50,6 +50,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_SERVICE_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_port.h>
 #include <opensm/osm_node.h>
@@ -87,7 +89,7 @@ match_service_pkey_with_ports_pkey(IN osm_sa_t * sa,
 	ib_net64_t service_guid;
 	osm_port_t *service_port;
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -97,6 +99,9 @@ match_service_pkey_with_ports_pkey(IN osm_sa_t * sa,
 		valid = FALSE;
 		goto Exit;
 	}
+	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+		"Requester port GUID 0x%" PRIx64 "\n",
+		cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
 
 	if ((comp_mask & IB_SR_COMPMASK_SPKEY) == IB_SR_COMPMASK_SPKEY) {
 		/* We have a ServiceP_Key - check matching on requester port,
@@ -108,12 +113,13 @@ match_service_pkey_with_ports_pkey(IN osm_sa_t * sa,
 			goto Exit;
 		}
 
-		/* Make sure it matches the port of the ServiceGid */
-		if (comp_mask & IB_SR_COMPMASK_SGID) {
+		/* If unicast, make sure it matches the port of the ServiceGid */
+		if (comp_mask & IB_SR_COMPMASK_SGID &&
+		    !ib_gid_is_multicast(&p_service_rec->service_gid)) {
 			service_guid =
 			    p_service_rec->service_gid.unicast.interface_id;
 			service_port =
-			    osm_get_port_by_guid(sa->p_subn, service_guid);
+			    osm_get_port_by_alias_guid(sa->p_subn, service_guid);
 			if (!service_port) {
 				OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2405: "
 					"No port object for port 0x%016" PRIx64
@@ -449,7 +455,7 @@ static void sr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 
 	CL_ASSERT(p_madw);
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -463,9 +469,13 @@ static void sr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	p_recvd_service_rec =
 	    (ib_service_record_t *) ib_sa_mad_get_payload_ptr(p_sa_mad);
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_service_record(sa->p_log, p_recvd_service_rec,
-					OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_service_record_v2(sa->p_log, p_recvd_service_rec,
+					   FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	cl_qlist_init(&sr_match_item.sr_list);
 	sr_match_item.p_service_rec = p_recvd_service_rec;
@@ -516,9 +526,9 @@ static void sr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 
 	comp_mask = p_sa_mad->comp_mask;
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_service_record(sa->p_log, p_recvd_service_rec,
-					OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG))
+		osm_dump_service_record_v2(sa->p_log, p_recvd_service_rec,
+					   FILE_ID, OSM_LOG_DEBUG);
 
 	if ((comp_mask & (IB_SR_COMPMASK_SID | IB_SR_COMPMASK_SGID)) !=
 	    (IB_SR_COMPMASK_SID | IB_SR_COMPMASK_SGID)) {
@@ -614,9 +624,9 @@ static void sr_rcv_process_delete_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	p_recvd_service_rec =
 	    (ib_service_record_t *) ib_sa_mad_get_payload_ptr(p_sa_mad);
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_service_record(sa->p_log, p_recvd_service_rec,
-					OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG))
+		osm_dump_service_record_v2(sa->p_log, p_recvd_service_rec,
+					   FILE_ID, OSM_LOG_DEBUG);
 
 	/* Grab the lock */
 	cl_plock_excl_acquire(sa->p_lock);

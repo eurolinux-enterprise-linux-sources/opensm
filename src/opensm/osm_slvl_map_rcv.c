@@ -49,6 +49,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SLVL_MAP_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -143,10 +145,10 @@ void osm_slvl_rcv_process(IN void *context, IN void *p_data)
 		cl_ntoh64(port_guid), cl_ntoh64(node_guid),
 		cl_ntoh64(p_smp->trans_id));
 
-	osm_dump_slvl_map_table(sm->p_log, port_guid,
-				startinport == endinport ? startinport : 0xff,
-				startoutport == endoutport ? startoutport : 0xff,
-				p_slvl_tbl, OSM_LOG_DEBUG);
+	osm_dump_slvl_map_table_v2(sm->p_log, port_guid,
+				   startinport == endinport ? startinport : 0xff,
+				   startoutport == endoutport ? startoutport : 0xff,
+				   p_slvl_tbl, FILE_ID, OSM_LOG_DEBUG);
 
 	for (out_port = startoutport; out_port <= endoutport; out_port++) {
 		p_physp = osm_node_get_physp_ptr(p_node, out_port);

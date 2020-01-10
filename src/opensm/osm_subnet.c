@@ -5,6 +5,7 @@
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -55,6 +56,8 @@
 #include <ctype.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_log.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SUBNET_C
 #include <opensm/osm_subnet.h>
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_log.h>
@@ -64,17 +67,22 @@
 #include <opensm/osm_remote_sm.h>
 #include <opensm/osm_partition.h>
 #include <opensm/osm_node.h>
+#include <opensm/osm_guid.h>
 #include <opensm/osm_multicast.h>
 #include <opensm/osm_inform.h>
 #include <opensm/osm_console.h>
 #include <opensm/osm_perfmgr.h>
+#include <opensm/osm_congestion_control.h>
 #include <opensm/osm_event_plugin.h>
 #include <opensm/osm_qos_policy.h>
 #include <opensm/osm_service.h>
+#include <opensm/osm_db.h>
+#include <opensm/osm_db_pack.h>
 
 static const char null_str[] = "(null)";
 
 #define OPT_OFFSET(opt) offsetof(osm_subn_opt_t, opt)
+#define ARR_SIZE(a) (sizeof(a)/sizeof((a)[0]))
 
 typedef struct opt_rec {
 	const char *name;
@@ -85,6 +93,117 @@ typedef struct opt_rec {
 	void (*setup_fn)(osm_subn_t *p_subn, void *p_val);
 	int  can_update;
 } opt_rec_t;
+
+static const char *module_name_str[] = {
+	"main.c",
+	"osm_console.c",
+	"osm_console_io.c",
+	"osm_db_files.c",
+	"osm_db_pack.c",
+	"osm_drop_mgr.c",
+	"osm_dump.c",
+	"osm_event_plugin.c",
+	"osm_guid_info_rcv.c",
+	"osm_guid_mgr.c",
+	"osm_helper.c",
+	"osm_inform.c",
+	"osm_lid_mgr.c",
+	"osm_lin_fwd_rcv.c",
+	"osm_link_mgr.c",
+	"osm_log.c",
+	"osm_mad_pool.c",
+	"osm_mcast_fwd_rcv.c",
+	"osm_mcast_mgr.c",
+	"osm_mcast_tbl.c",
+	"osm_mcm_port.c",
+	"osm_mesh.c",
+	"osm_mlnx_ext_port_info_rcv.c",
+	"osm_mtree.c",
+	"osm_multicast.c",
+	"osm_node.c",
+	"osm_node_desc_rcv.c",
+	"osm_node_info_rcv.c",
+	"osm_opensm.c",
+	"osm_perfmgr.c",
+	"osm_perfmgr_db.c",
+	"osm_pkey.c",
+	"osm_pkey_mgr.c",
+	"osm_pkey_rcv.c",
+	"osm_port.c",
+	"osm_port_info_rcv.c",
+	"osm_prtn.c",
+	"osm_prtn_config.c",
+	"osm_qos.c",
+	"osm_qos_parser_l.c",
+	"osm_qos_parser_y.c",
+	"osm_qos_policy.c",
+	"osm_remote_sm.c",
+	"osm_req.c",
+	"osm_resp.c",
+	"osm_router.c",
+	"osm_sa.c",
+	"osm_sa_class_port_info.c",
+	"osm_sa_guidinfo_record.c",
+	"osm_sa_informinfo.c",
+	"osm_sa_lft_record.c",
+	"osm_sa_link_record.c",
+	"osm_sa_mad_ctrl.c",
+	"osm_sa_mcmember_record.c",
+	"osm_sa_mft_record.c",
+	"osm_sa_multipath_record.c",
+	"osm_sa_node_record.c",
+	"osm_sa_path_record.c",
+	"osm_sa_pkey_record.c",
+	"osm_sa_portinfo_record.c",
+	"osm_sa_service_record.c",
+	"osm_sa_slvl_record.c",
+	"osm_sa_sminfo_record.c",
+	"osm_sa_sw_info_record.c",
+	"osm_sa_vlarb_record.c",
+	"osm_service.c",
+	"osm_slvl_map_rcv.c",
+	"osm_sm.c",
+	"osm_sminfo_rcv.c",
+	"osm_sm_mad_ctrl.c",
+	"osm_sm_state_mgr.c",
+	"osm_state_mgr.c",
+	"osm_subnet.c",
+	"osm_sw_info_rcv.c",
+	"osm_switch.c",
+	"osm_torus.c",
+	"osm_trap_rcv.c",
+	"osm_ucast_cache.c",
+	"osm_ucast_dnup.c",
+	"osm_ucast_file.c",
+	"osm_ucast_ftree.c",
+	"osm_ucast_lash.c",
+	"osm_ucast_mgr.c",
+	"osm_ucast_updn.c",
+	"osm_vendor_ibumad.c",
+	"osm_vl15intf.c",
+	"osm_vl_arb_rcv.c",
+	"st.c",
+	"osm_ucast_dfsssp.c",
+	/* Add new module names here ... */
+	/* FILE_ID define in those modules must be identical to index here */
+	/* last FILE_ID is currently 88 */
+};
+
+#define MOD_NAME_STR_UNKNOWN_VAL (ARR_SIZE(module_name_str))
+
+static int find_module_name(const char *name, uint8_t *file_id)
+{
+	uint8_t i;
+
+	for (i = 0; i < MOD_NAME_STR_UNKNOWN_VAL; i++) {
+		if (strcmp(name, module_name_str[i]) == 0) {
+			if (file_id)
+				*file_id = i;
+			return 0;
+		}
+	}
+	return 1;
+}
 
 static void log_report(const char *fmt, ...)
 {
@@ -183,6 +302,22 @@ static void opts_parse_uint32(IN osm_subn_t *p_subn, IN char *p_key,
 		*p_val1 = *p_val2 = val;
 	}
 }
+
+static void opts_parse_net32(IN osm_subn_t *p_subn, IN char *p_key,
+			     IN char *p_val_str, void *p_v1, void *p_v2,
+			     void (*pfn)(osm_subn_t *, void *))
+{
+	uint32_t *p_val1 = p_v1, *p_val2 = p_v2;
+	uint32_t val = strtoul(p_val_str, NULL, 0);
+
+	if (cl_hton32(val) != *p_val1) {
+		log_config_value(p_key, "%u", val);
+		if (pfn)
+			pfn(p_subn, &val);
+		*p_val1 = *p_val2 = cl_hton32(val);
+	}
+}
+
 
 static void opts_parse_int32(IN osm_subn_t *p_subn, IN char *p_key,
 			     IN char *p_val_str, void *p_v1, void *p_v2,
@@ -289,6 +424,274 @@ static void opts_parse_charp(IN osm_subn_t *p_subn, IN char *p_key,
 	}
 }
 
+static void opts_parse_256bit(IN osm_subn_t *p_subn, IN char *p_key,
+			      IN char *p_val_str, void *p_v1, void *p_v2,
+			      void (*pfn)(osm_subn_t *, void *))
+{
+	uint8_t *p_val1 = p_v1, *p_val2 = p_v2;
+	uint8_t val[IB_CC_PORT_MASK_DATA_SIZE] = { 0 };
+	char tmpbuf[3] = { 0 };
+	uint8_t tmpint;
+	int numdigits = 0;
+	int startindex;
+	char *strptr = p_val_str;
+	char *ptr;
+	int i;
+
+	/* parse like it's hypothetically a 256 bit integer code
+	 *
+	 * store "big endian"
+	 */
+
+	if (!strncmp(strptr, "0x", 2) || !strncmp(strptr, "0X", 2))
+		strptr+=2;
+
+	for (ptr = strptr; *ptr; ptr++) {
+		if (!isxdigit(*ptr)) {
+			log_report("invalid hex digit in bitmask\n");
+			return;
+		}
+		numdigits++;
+	}
+
+	if (!numdigits) {
+		log_report("invalid length bitmask\n");
+		return;
+	}
+
+	/* max of 2 hex chars per byte */
+	if (numdigits > IB_CC_PORT_MASK_DATA_SIZE * 2)
+		numdigits = IB_CC_PORT_MASK_DATA_SIZE * 2;
+
+	startindex = IB_CC_PORT_MASK_DATA_SIZE - ((numdigits - 1) / 2) - 1;
+
+	if (numdigits % 2) {
+		memcpy(tmpbuf, strptr, 1);
+		strptr += 1;
+	}
+	else {
+		memcpy(tmpbuf, strptr, 2);
+		strptr += 2;
+	}
+
+	tmpint = strtoul(tmpbuf, NULL, 16);
+	val[startindex] = tmpint;
+
+	for (i = (startindex + 1); i < IB_CC_PORT_MASK_DATA_SIZE; i++) {
+		memcpy(tmpbuf, strptr, 2);
+		strptr += 2;
+		tmpint = strtoul(tmpbuf, NULL, 16);
+		val[i] = tmpint;
+	}
+
+	if (memcmp(val, p_val1, IB_CC_PORT_MASK_DATA_SIZE)) {
+		log_config_value(p_key, "%s", p_val_str);
+		if (pfn)
+			pfn(p_subn, val);
+		memcpy(p_val1, val, IB_CC_PORT_MASK_DATA_SIZE);
+		memcpy(p_val2, val, IB_CC_PORT_MASK_DATA_SIZE);
+	}
+
+}
+
+static void opts_parse_cct_entry(IN osm_subn_t *p_subn, IN char *p_key,
+				 IN char *p_val_str, void *p_v1, void *p_v2,
+				 void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cct_entry_t *p_cct1 = p_v1, *p_cct2 = p_v2;
+	osm_cct_entry_t cct;
+	char buf[512] = { 0 };
+	char *ptr;
+
+	strncpy(buf, p_val_str, 511);
+
+	if (!(ptr = strchr(buf, ':'))) {
+		log_report("invalid CCT entry\n");
+		return;
+	}
+
+	*ptr = '\0';
+	ptr++;
+
+	cct.shift = strtoul(buf, NULL, 0);
+	cct.multiplier = strtoul(ptr, NULL, 0);
+
+	if (cct.shift != p_cct1->shift
+	    || cct.multiplier != p_cct1->multiplier) {
+		log_config_value(p_key, "%s", p_val_str);
+		if (pfn)
+			pfn(p_subn, &cct);
+		p_cct1->shift = p_cct2->shift = cct.shift;
+		p_cct1->multiplier = p_cct2->multiplier = cct.multiplier;
+	}
+}
+
+static void opts_parse_cc_cct(IN osm_subn_t *p_subn, IN char *p_key,
+			      IN char *p_val_str, void *p_v1, void *p_v2,
+			      void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cct_t *p_val1 = p_v1, *p_val2 = p_v2;
+	const char *current_str = p_val1->input_str ? p_val1->input_str : null_str;
+
+	if (p_val_str && strcmp(p_val_str, current_str)) {
+		osm_cct_t newcct;
+		char *new;
+		unsigned int len = 0;
+		char *lasts;
+		char *tok;
+		char *ptr;
+
+		/* special case the "(null)" string */
+		new = strcmp(null_str, p_val_str) ? strdup(p_val_str) : NULL;
+
+		if (!new) {
+			log_config_value(p_key, "%s", p_val_str);
+			if (pfn)
+				pfn(p_subn, NULL);
+			memset(p_val1->entries, '\0', sizeof(p_val1->entries));
+			memset(p_val2->entries, '\0', sizeof(p_val2->entries));
+			p_val1->entries_len = p_val2->entries_len = 0;
+			p_val1->input_str = p_val2->input_str = NULL;
+			return;
+		}
+
+		memset(&newcct, '\0', sizeof(newcct));
+
+		tok = strtok_r(new, ",", &lasts);
+		while (tok && len < OSM_CCT_ENTRY_MAX) {
+
+			if (!(ptr = strchr(tok, ':'))) {
+				log_report("invalid CCT entry\n");
+				free(new);
+				return;
+			}
+			*ptr = '\0';
+			ptr++;
+
+			newcct.entries[len].shift = strtoul(tok, NULL, 0);
+			newcct.entries[len].multiplier = strtoul(ptr, NULL, 0);
+			len++;
+			tok = strtok_r(NULL, ",", &lasts);
+		}
+
+		free(new);
+
+		newcct.entries_len = len;
+		newcct.input_str = strdup(p_val_str);
+
+		log_config_value(p_key, "%s", p_val_str);
+		if (pfn)
+			pfn(p_subn, &newcct);
+		if (p_val1->input_str && p_val1->input_str != p_val2->input_str)
+			free(p_val1->input_str);
+		if (p_val2->input_str)
+			free(p_val2->input_str);
+		memcpy(p_val1->entries, newcct.entries, sizeof(newcct.entries));
+		memcpy(p_val2->entries, newcct.entries, sizeof(newcct.entries));
+		p_val1->entries_len = p_val2->entries_len = newcct.entries_len;
+		p_val1->input_str = p_val2->input_str = newcct.input_str;
+	}
+}
+
+static int parse_ca_cong_common(char *p_val_str, uint8_t *sl, unsigned int *val_offset) {
+	char *new, *lasts, *sl_str, *val_str;
+	uint8_t sltmp;
+
+	new = strcmp(null_str, p_val_str) ? strdup(p_val_str) : NULL;
+	if (!new)
+		return -1;
+
+	sl_str = strtok_r(new, " \t", &lasts);
+	val_str = strtok_r(NULL, " \t", &lasts);
+
+	if (!val_str) {
+		log_report("value must be specified in addition to SL\n");
+		free(new);
+		return -1;
+	}
+
+	sltmp = strtoul(sl_str, NULL, 0);
+	if (sltmp >= IB_CA_CONG_ENTRY_DATA_SIZE) {
+		log_report("invalid SL specified\n");
+		free(new);
+		return -1;
+	}
+
+	*sl = sltmp;
+	*val_offset = (unsigned int)(val_str - new);
+
+	free(new);
+	return 0;
+}
+
+static void opts_parse_ccti_timer(IN osm_subn_t *p_subn, IN char *p_key,
+				  IN char *p_val_str, void *p_v1, void *p_v2,
+				  void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cacongestion_entry_t *p_val1 = p_v1, *p_val2 = p_v2;
+	unsigned int val_offset = 0;
+	uint8_t sl = 0;
+
+	if (parse_ca_cong_common(p_val_str, &sl, &val_offset) < 0)
+		return;
+
+	opts_parse_net16(p_subn, p_key, p_val_str + val_offset,
+			 &p_val1[sl].ccti_timer,
+			 &p_val2[sl].ccti_timer,
+			 pfn);
+}
+
+static void opts_parse_ccti_increase(IN osm_subn_t *p_subn, IN char *p_key,
+				     IN char *p_val_str, void *p_v1, void *p_v2,
+				     void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cacongestion_entry_t *p_val1 = p_v1, *p_val2 = p_v2;
+	unsigned int val_offset = 0;
+	uint8_t sl = 0;
+
+	if (parse_ca_cong_common(p_val_str, &sl, &val_offset) < 0)
+		return;
+
+	opts_parse_uint8(p_subn, p_key, p_val_str + val_offset,
+			 &p_val1[sl].ccti_increase,
+			 &p_val2[sl].ccti_increase,
+			 pfn);
+}
+
+static void opts_parse_trigger_threshold(IN osm_subn_t *p_subn, IN char *p_key,
+					 IN char *p_val_str, void *p_v1, void *p_v2,
+					 void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cacongestion_entry_t *p_val1 = p_v1, *p_val2 = p_v2;
+	unsigned int val_offset = 0;
+	uint8_t sl = 0;
+
+	if (parse_ca_cong_common(p_val_str, &sl, &val_offset) < 0)
+		return;
+
+	opts_parse_uint8(p_subn, p_key, p_val_str + val_offset,
+			 &p_val1[sl].trigger_threshold,
+			 &p_val2[sl].trigger_threshold,
+			 pfn);
+}
+
+static void opts_parse_ccti_min(IN osm_subn_t *p_subn, IN char *p_key,
+				IN char *p_val_str, void *p_v1, void *p_v2,
+				void (*pfn)(osm_subn_t *, void *))
+{
+	osm_cacongestion_entry_t *p_val1 = p_v1, *p_val2 = p_v2;
+	unsigned int val_offset = 0;
+	uint8_t sl = 0;
+
+	if (parse_ca_cong_common(p_val_str, &sl, &val_offset) < 0)
+		return;
+
+	opts_parse_uint8(p_subn, p_key, p_val_str + val_offset,
+			 &p_val1[sl].ccti_min,
+			 &p_val2[sl].ccti_min,
+			 pfn);
+}
+
 static const opt_rec_t opt_tbl[] = {
 	{ "guid", OPT_OFFSET(guid), opts_parse_net64, NULL, 0 },
 	{ "m_key", OPT_OFFSET(m_key), opts_parse_net64, NULL, 1 },
@@ -296,6 +699,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "sa_key", OPT_OFFSET(sa_key), opts_parse_net64, NULL, 1 },
 	{ "subnet_prefix", OPT_OFFSET(subnet_prefix), opts_parse_net64, NULL, 1 },
 	{ "m_key_lease_period", OPT_OFFSET(m_key_lease_period), opts_parse_net16, NULL, 1 },
+	{ "m_key_protection_level", OPT_OFFSET(m_key_protect_bits), opts_parse_uint8, NULL, 1 },
 	{ "sweep_interval", OPT_OFFSET(sweep_interval), opts_parse_uint32, NULL, 1 },
 	{ "max_wire_smps", OPT_OFFSET(max_wire_smps), opts_parse_uint32, NULL, 1 },
 	{ "max_wire_smps2", OPT_OFFSET(max_wire_smps2), opts_parse_uint32, NULL, 1 },
@@ -306,8 +710,8 @@ static const opt_rec_t opt_tbl[] = {
 	{ "transaction_retries", OPT_OFFSET(transaction_retries), opts_parse_uint32, NULL, 0 },
 	{ "max_msg_fifo_timeout", OPT_OFFSET(max_msg_fifo_timeout), opts_parse_uint32, NULL, 1 },
 	{ "sm_priority", OPT_OFFSET(sm_priority), opts_parse_uint8, opts_setup_sm_priority, 1 },
-	{ "lmc", OPT_OFFSET(lmc), opts_parse_uint8, NULL, 1 },
-	{ "lmc_esp0", OPT_OFFSET(lmc_esp0), opts_parse_boolean, NULL, 1 },
+	{ "lmc", OPT_OFFSET(lmc), opts_parse_uint8, NULL, 0 },
+	{ "lmc_esp0", OPT_OFFSET(lmc_esp0), opts_parse_boolean, NULL, 0 },
 	{ "max_op_vls", OPT_OFFSET(max_op_vls), opts_parse_uint8, NULL, 1 },
 	{ "force_link_speed", OPT_OFFSET(force_link_speed), opts_parse_uint8, NULL, 1 },
 	{ "force_link_speed_ext", OPT_OFFSET(force_link_speed_ext), opts_parse_uint8, NULL, 1 },
@@ -344,6 +748,9 @@ static const opt_rec_t opt_tbl[] = {
 	{ "accum_log_file", OPT_OFFSET(accum_log_file), opts_parse_boolean, opts_setup_accum_log_file, 1 },
 	{ "partition_config_file", OPT_OFFSET(partition_config_file), opts_parse_charp, NULL, 0 },
 	{ "no_partition_enforcement", OPT_OFFSET(no_partition_enforcement), opts_parse_boolean, NULL, 1 },
+	{ "part_enforce", OPT_OFFSET(part_enforce), opts_parse_charp, NULL, 1 },
+	{ "allow_both_pkeys", OPT_OFFSET(allow_both_pkeys), opts_parse_boolean, NULL, 1 },
+	{ "sm_assigned_guid", OPT_OFFSET(sm_assigned_guid), opts_parse_uint8, NULL, 1 },
 	{ "qos", OPT_OFFSET(qos), opts_parse_boolean, NULL, 1 },
 	{ "qos_policy_file", OPT_OFFSET(qos_policy_file), opts_parse_charp, NULL, 0 },
 	{ "dump_files_dir", OPT_OFFSET(dump_files_dir), opts_parse_charp, NULL, 0 },
@@ -372,7 +779,10 @@ static const opt_rec_t opt_tbl[] = {
 	{ "perfmgr_redir", OPT_OFFSET(perfmgr_redir), opts_parse_boolean, NULL, 0 },
 	{ "perfmgr_sweep_time_s", OPT_OFFSET(perfmgr_sweep_time_s), opts_parse_uint16, NULL, 0 },
 	{ "perfmgr_max_outstanding_queries", OPT_OFFSET(perfmgr_max_outstanding_queries), opts_parse_uint32, NULL, 0 },
+	{ "perfmgr_ignore_cas", OPT_OFFSET(perfmgr_ignore_cas), opts_parse_boolean, NULL, 0 },
 	{ "event_db_dump_file", OPT_OFFSET(event_db_dump_file), opts_parse_charp, NULL, 0 },
+	{ "perfmgr_rm_nodes", OPT_OFFSET(perfmgr_rm_nodes), opts_parse_boolean, NULL, 0 },
+	{ "perfmgr_log_errors", OPT_OFFSET(perfmgr_log_errors), opts_parse_boolean, NULL, 0 },
 #endif				/* ENABLE_OSM_PERF_MGR */
 	{ "event_plugin_name", OPT_OFFSET(event_plugin_name), opts_parse_charp, NULL, 0 },
 	{ "event_plugin_options", OPT_OFFSET(event_plugin_options), opts_parse_charp, NULL, 0 },
@@ -402,6 +812,24 @@ static const opt_rec_t opt_tbl[] = {
 	{ "qos_rtr_vlarb_high", OPT_OFFSET(qos_rtr_options.vlarb_high), opts_parse_charp, NULL, 1 },
 	{ "qos_rtr_vlarb_low", OPT_OFFSET(qos_rtr_options.vlarb_low), opts_parse_charp, NULL, 1 },
 	{ "qos_rtr_sl2vl", OPT_OFFSET(qos_rtr_options.sl2vl), opts_parse_charp, NULL, 1 },
+	{ "congestion_control", OPT_OFFSET(congestion_control), opts_parse_boolean, NULL, 1 },
+	{ "cc_key", OPT_OFFSET(cc_key), opts_parse_net64, NULL, 0},
+	{ "cc_max_outstanding_mads", OPT_OFFSET(cc_max_outstanding_mads), opts_parse_uint32, NULL, 0 },
+	{ "cc_sw_cong_setting_control_map", OPT_OFFSET(cc_sw_cong_setting_control_map), opts_parse_net32, NULL, 1},
+	{ "cc_sw_cong_setting_victim_mask", OPT_OFFSET(cc_sw_cong_setting_victim_mask), opts_parse_256bit, NULL, 1},
+	{ "cc_sw_cong_setting_credit_mask", OPT_OFFSET(cc_sw_cong_setting_credit_mask), opts_parse_256bit, NULL, 1},
+	{ "cc_sw_cong_setting_threshold", OPT_OFFSET(cc_sw_cong_setting_threshold), opts_parse_uint8, NULL, 1},
+	{ "cc_sw_cong_setting_packet_size", OPT_OFFSET(cc_sw_cong_setting_packet_size), opts_parse_uint8, NULL, 1},
+	{ "cc_sw_cong_setting_credit_starvation_threshold", OPT_OFFSET(cc_sw_cong_setting_credit_starvation_threshold), opts_parse_uint8, NULL, 1},
+	{ "cc_sw_cong_setting_credit_starvation_return_delay", OPT_OFFSET(cc_sw_cong_setting_credit_starvation_return_delay), opts_parse_cct_entry, NULL, 1},
+	{ "cc_sw_cong_setting_marking_rate", OPT_OFFSET(cc_sw_cong_setting_marking_rate), opts_parse_net16, NULL, 1},
+	{ "cc_ca_cong_setting_port_control", OPT_OFFSET(cc_ca_cong_setting_port_control), opts_parse_net16, NULL, 1},
+	{ "cc_ca_cong_setting_control_map", OPT_OFFSET(cc_ca_cong_setting_control_map), opts_parse_net16, NULL, 1},
+	{ "cc_ca_cong_setting_ccti_timer", OPT_OFFSET(cc_ca_cong_entries), opts_parse_ccti_timer, NULL, 1},
+	{ "cc_ca_cong_setting_ccti_increase", OPT_OFFSET(cc_ca_cong_entries), opts_parse_ccti_increase, NULL, 1},
+	{ "cc_ca_cong_setting_trigger_threshold", OPT_OFFSET(cc_ca_cong_entries), opts_parse_trigger_threshold, NULL, 1},
+	{ "cc_ca_cong_setting_ccti_min", OPT_OFFSET(cc_ca_cong_entries), opts_parse_ccti_min, NULL, 1},
+	{ "cc_cct", OPT_OFFSET(cc_cct), opts_parse_cc_cct, NULL, 1},
 	{ "enable_quirks", OPT_OFFSET(enable_quirks), opts_parse_boolean, NULL, 1 },
 	{ "no_clients_rereg", OPT_OFFSET(no_clients_rereg), opts_parse_boolean, NULL, 1 },
 	{ "prefix_routes_file", OPT_OFFSET(prefix_routes_file), opts_parse_charp, NULL, 0 },
@@ -409,12 +837,133 @@ static const opt_rec_t opt_tbl[] = {
 	{ "lash_start_vl", OPT_OFFSET(lash_start_vl), opts_parse_uint8, NULL, 1 },
 	{ "sm_sl", OPT_OFFSET(sm_sl), opts_parse_uint8, NULL, 1 },
 	{ "log_prefix", OPT_OFFSET(log_prefix), opts_parse_charp, NULL, 1 },
+	{ "per_module_logging_file", OPT_OFFSET(per_module_logging_file), opts_parse_charp, NULL, 0 },
 	{0}
 };
 
 static int compar_mgids(const void *m1, const void *m2)
 {
 	return memcmp(m1, m2, sizeof(ib_gid_t));
+}
+
+static void subn_validate_g2m(osm_subn_t *p_subn)
+{
+	cl_qlist_t guids;
+	osm_db_guid_elem_t *p_item;
+	uint64_t mkey;
+	boolean_t valid_entry;
+
+	OSM_LOG_ENTER(&(p_subn->p_osm->log));
+	cl_qlist_init(&guids);
+
+	if (osm_db_guid2mkey_guids(p_subn->p_g2m, &guids)) {
+		OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR, "ERR 7506: "
+			"could not get mkey guid list\n");
+		goto Exit;
+	}
+
+	while ((p_item = (osm_db_guid_elem_t *) cl_qlist_remove_head(&guids))
+	       != (osm_db_guid_elem_t *) cl_qlist_end(&guids)) {
+		valid_entry = TRUE;
+
+		if (p_item->guid == 0) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7507: found invalid zero guid");
+			valid_entry = FALSE;
+		} else if (osm_db_guid2mkey_get(p_subn->p_g2m, p_item->guid,
+						&mkey)) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7508: could not get mkey for guid:0x%016"
+				PRIx64 "\n", p_item->guid);
+			valid_entry = FALSE;
+		}
+
+		if (valid_entry == FALSE) {
+			if (osm_db_guid2mkey_delete(p_subn->p_g2m,
+						    p_item->guid))
+				OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+					"ERR 7509: failed to delete entry for "
+					"guid:0x%016" PRIx64 "\n",
+					p_item->guid);
+		}
+	}
+
+Exit:
+	OSM_LOG_EXIT(&(p_subn->p_osm->log));
+}
+
+static void subn_validate_neighbor(osm_subn_t *p_subn)
+{
+	cl_qlist_t entries;
+	osm_db_neighbor_elem_t *p_item;
+	boolean_t valid_entry;
+	uint64_t guid;
+	uint8_t port;
+
+	OSM_LOG_ENTER(&(p_subn->p_osm->log));
+	cl_qlist_init(&entries);
+
+	if (osm_db_neighbor_guids(p_subn->p_neighbor, &entries)) {
+		OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR, "ERR 7512: "
+			"could not get neighbor entry list\n");
+		goto Exit;
+	}
+
+	while ((p_item =
+		(osm_db_neighbor_elem_t *) cl_qlist_remove_head(&entries))
+	       != (osm_db_neighbor_elem_t *) cl_qlist_end(&entries)) {
+		valid_entry = TRUE;
+
+		OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_DEBUG,
+			"Validating neighbor for 0x%016" PRIx64 ", port %d\n",
+			p_item->guid, p_item->portnum);
+		if (p_item->guid == 0) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7513: found invalid zero guid\n");
+			valid_entry = FALSE;
+		} else if (p_item->portnum == 0) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7514: found invalid zero port\n");
+			valid_entry = FALSE;
+		} else if (osm_db_neighbor_get(p_subn->p_neighbor,
+					       p_item->guid, p_item->portnum,
+					       &guid, &port)) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7515: could not find neighbor for "
+				"guid: 0x%016" PRIx64 "\n", p_item->guid);
+			valid_entry = FALSE;
+		} else if (guid == 0) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7516: found invalid neighbor "
+				"zero guid");
+			valid_entry = FALSE;
+		} else if (port == 0) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7517: found invalid neighbor "
+				"zero port\n");
+			valid_entry = FALSE;
+		} else if (osm_db_neighbor_get(p_subn->p_neighbor,
+					       guid, port, &guid, &port) ||
+			guid != p_item->guid || port != p_item->portnum) {
+			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+				"ERR 7518: neighbor does not point "
+				"back at us\n");
+			valid_entry = FALSE;
+		}
+
+		if (valid_entry == FALSE) {
+			if (osm_db_neighbor_delete(p_subn->p_neighbor,
+						   p_item->guid,
+						   p_item->portnum))
+				OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
+					"ERR 7519: failed to delete entry for "
+					"guid:0x%016" PRIx64 " port:%u\n",
+					p_item->guid, p_item->portnum);
+		}
+	}
+
+Exit:
+	OSM_LOG_EXIT(&(p_subn->p_osm->log));
 }
 
 void osm_subn_construct(IN osm_subn_t * p_subn)
@@ -425,9 +974,11 @@ void osm_subn_construct(IN osm_subn_t * p_subn)
 	cl_qmap_init(&p_subn->node_guid_tbl);
 	cl_qmap_init(&p_subn->port_guid_tbl);
 	cl_qmap_init(&p_subn->alias_port_guid_tbl);
+	cl_qmap_init(&p_subn->assigned_guids_tbl);
 	cl_qmap_init(&p_subn->sm_guid_tbl);
 	cl_qlist_init(&p_subn->sa_sr_list);
 	cl_qlist_init(&p_subn->sa_infr_list);
+	cl_qlist_init(&p_subn->alias_guid_list);
 	cl_qlist_init(&p_subn->prefix_routes_list);
 	cl_qmap_init(&p_subn->rtr_guid_tbl);
 	cl_qmap_init(&p_subn->prtn_pkey_tbl);
@@ -452,6 +1003,7 @@ static void subn_opt_destroy(IN osm_subn_opt_t * p_opt)
 	free(p_opt->partition_config_file);
 	free(p_opt->qos_policy_file);
 	free(p_opt->dump_files_dir);
+	free(p_opt->part_enforce);
 	free(p_opt->lid_matrix_dump_file);
 	free(p_opt->lfts_file);
 	free(p_opt->root_guid_file);
@@ -474,12 +1026,14 @@ static void subn_opt_destroy(IN osm_subn_opt_t * p_opt)
 	subn_destroy_qos_options(&p_opt->qos_sw0_options);
 	subn_destroy_qos_options(&p_opt->qos_swe_options);
 	subn_destroy_qos_options(&p_opt->qos_rtr_options);
+	free(p_opt->cc_cct.input_str);
 }
 
 void osm_subn_destroy(IN osm_subn_t * p_subn)
 {
 	int i;
 	osm_node_t *p_node, *p_next_node;
+	osm_assigned_guids_t *p_assigned_guids, *p_next_assigned_guids;
 	osm_alias_guid_t *p_alias_guid, *p_next_alias_guid;
 	osm_port_t *p_port, *p_next_port;
 	osm_switch_t *p_sw, *p_next_sw;
@@ -497,6 +1051,14 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 		osm_node_delete(&p_node);
 	}
 
+	p_next_assigned_guids = (osm_assigned_guids_t *) cl_qmap_head(&p_subn->assigned_guids_tbl);
+	while (p_next_assigned_guids !=
+	       (osm_assigned_guids_t *) cl_qmap_end(&p_subn->assigned_guids_tbl)) {
+		p_assigned_guids = p_next_assigned_guids;
+		p_next_assigned_guids = (osm_assigned_guids_t *) cl_qmap_next(&p_assigned_guids->map_item);
+		osm_assigned_guids_delete(&p_assigned_guids);
+	}
+
 	p_next_alias_guid = (osm_alias_guid_t *) cl_qmap_head(&p_subn->alias_port_guid_tbl);
 	while (p_next_alias_guid !=
 	       (osm_alias_guid_t *) cl_qmap_end(&p_subn->alias_port_guid_tbl)) {
@@ -504,6 +1066,9 @@ void osm_subn_destroy(IN osm_subn_t * p_subn)
 		p_next_alias_guid = (osm_alias_guid_t *) cl_qmap_next(&p_alias_guid->map_item);
 		osm_alias_guid_delete(&p_alias_guid);
 	}
+
+	while (cl_qlist_count(&p_subn->alias_guid_list))
+		osm_guid_work_obj_delete((osm_guidinfo_work_obj_t *) cl_qlist_remove_head(&p_subn->alias_guid_list));
 
 	p_next_port = (osm_port_t *) cl_qmap_head(&p_subn->port_guid_tbl);
 	while (p_next_port !=
@@ -609,6 +1174,64 @@ ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
 	p_subn->sweeping_enabled = TRUE;
 	p_subn->last_sm_port_state = 1;
 
+	/* Initialize the guid2mkey database */
+	p_subn->p_g2m = osm_db_domain_init(&(p_osm->db), "guid2mkey");
+	if (!p_subn->p_g2m) {
+		OSM_LOG(&(p_osm->log), OSM_LOG_ERROR, "ERR 7510: "
+			"Error initializing Guid-to-MKey persistent database\n");
+		return IB_ERROR;
+	}
+
+	if (osm_db_restore(p_subn->p_g2m)) {
+#ifndef __WIN__
+		/*
+		 * When Windows is BSODing, it might corrupt files that
+		 * were previously opened for writing, even if the files
+		 * are closed, so we might see corrupted guid2mkey file.
+		 */
+		if (p_subn->opt.exit_on_fatal) {
+			osm_log(&(p_osm->log), OSM_LOG_SYS,
+				"FATAL: Error restoring Guid-to-Mkey "
+				"persistent database\n");
+			return IB_ERROR;
+		} else
+#endif
+			OSM_LOG(&(p_osm->log), OSM_LOG_ERROR,
+				"ERR 7511: Error restoring Guid-to-Mkey "
+				"persistent database\n");
+	}
+
+	subn_validate_g2m(p_subn);
+
+	/* Initialize the neighbor database */
+	p_subn->p_neighbor = osm_db_domain_init(&(p_osm->db), "neighbors");
+	if (!p_subn->p_neighbor) {
+		OSM_LOG(&(p_osm->log), OSM_LOG_ERROR, "ERR 7520: Error "
+			"initializing neighbor link persistent database\n");
+		return IB_ERROR;
+	}
+
+	if (osm_db_restore(p_subn->p_neighbor)) {
+#ifndef __WIN__
+		/*
+		 * When Windows is BSODing, it might corrupt files that
+		 * were previously opened for writing, even if the files
+		 * are closed, so we might see corrupted neighbors file.
+		 */
+		if (p_subn->opt.exit_on_fatal) {
+			osm_log(&(p_osm->log), OSM_LOG_SYS,
+				"FATAL: Error restoring neighbor link "
+				"persistent database\n");
+			return IB_ERROR;
+		} else
+#endif
+			OSM_LOG(&(p_osm->log), OSM_LOG_ERROR,
+				"ERR 7521: Error restoring neighbor link "
+				"persistent database\n");
+	}
+
+	subn_validate_neighbor(p_subn);
+
 	return IB_SUCCESS;
 }
 
@@ -692,15 +1315,55 @@ osm_port_t *osm_get_port_by_guid(IN osm_subn_t const *p_subn, IN ib_net64_t guid
 	return p_port;
 }
 
-osm_port_t *osm_get_port_by_alias_guid(IN osm_subn_t const *p_subn,
-				       IN ib_net64_t guid)
+osm_alias_guid_t *osm_get_alias_guid_by_guid(IN osm_subn_t const *p_subn,
+					     IN ib_net64_t guid)
 {
 	osm_alias_guid_t *p_alias_guid;
 
 	p_alias_guid = (osm_alias_guid_t *) cl_qmap_get(&(p_subn->alias_port_guid_tbl), guid);
 	if (p_alias_guid == (osm_alias_guid_t *) cl_qmap_end(&(p_subn->alias_port_guid_tbl)))
 		return NULL;
+	return p_alias_guid;
+}
+
+osm_port_t *osm_get_port_by_alias_guid(IN osm_subn_t const *p_subn,
+				       IN ib_net64_t guid)
+{
+	osm_alias_guid_t *p_alias_guid;
+
+	p_alias_guid = osm_get_alias_guid_by_guid(p_subn, guid);
+	if (!p_alias_guid)
+		return NULL;
 	return p_alias_guid->p_base_port;
+}
+
+osm_assigned_guids_t *osm_assigned_guids_new(IN const ib_net64_t port_guid,
+					     IN const uint32_t num_guids)
+{
+	osm_assigned_guids_t *p_assigned_guids;
+
+	p_assigned_guids = calloc(1, sizeof(*p_assigned_guids) +
+				     sizeof(ib_net64_t) * (num_guids - 1));
+	if (p_assigned_guids)
+		p_assigned_guids->port_guid = port_guid;
+	return p_assigned_guids;
+}
+
+void osm_assigned_guids_delete(IN OUT osm_assigned_guids_t ** pp_assigned_guids)
+{
+	free(*pp_assigned_guids);
+	*pp_assigned_guids = NULL;
+}
+
+osm_assigned_guids_t *osm_get_assigned_guids_by_guid(IN osm_subn_t const *p_subn,
+						     IN ib_net64_t port_guid)
+{
+	osm_assigned_guids_t *p_assigned_guids;
+
+	p_assigned_guids = (osm_assigned_guids_t *) cl_qmap_get(&(p_subn->assigned_guids_tbl), port_guid);
+	if (p_assigned_guids == (osm_assigned_guids_t *) cl_qmap_end(&(p_subn->assigned_guids_tbl)))
+		return NULL;
+	return p_assigned_guids;
 }
 
 osm_port_t *osm_get_port_by_lid_ho(IN osm_subn_t const * subn, IN uint16_t lid)
@@ -714,7 +1377,7 @@ osm_mgrp_t *osm_get_mgrp_by_mgid(IN osm_subn_t * subn, IN ib_gid_t * mgid)
 {
 	osm_mgrp_t *mgrp;
 
-	mgrp= (osm_mgrp_t *)cl_fmap_get(&subn->mgrp_mgid_tbl, mgid);
+	mgrp = (osm_mgrp_t *)cl_fmap_get(&subn->mgrp_mgid_tbl, mgid);
 	if (mgrp != (osm_mgrp_t *)cl_fmap_end(&subn->mgrp_mgid_tbl))
 		return mgrp;
 	return NULL;
@@ -727,7 +1390,7 @@ int is_mlnx_ext_port_info_supported(ib_net16_t devid)
 	devid_ho = cl_ntoh16(devid);
 	if (devid_ho == 0xc738)
 		return 1;
-	if (devid_ho >= 0x1003 && devid_ho <= 0x1010)
+	if (devid_ho >= 0x1003 && devid_ho <= 0x1011)
 		return 1;
 	return 0;
 }
@@ -758,6 +1421,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->sa_key = OSM_DEFAULT_SA_KEY;
 	p_opt->subnet_prefix = IB_DEFAULT_SUBNET_PREFIX;
 	p_opt->m_key_lease_period = 0;
+	p_opt->m_key_protect_bits = 0;
 	p_opt->sweep_interval = OSM_DEFAULT_SWEEP_INTERVAL_SECS;
 	p_opt->max_wire_smps = OSM_DEFAULT_SMP_MAX_ON_WIRE;
 	p_opt->max_wire_smps2 = p_opt->max_wire_smps;
@@ -807,7 +1471,10 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->perfmgr_sweep_time_s = OSM_PERFMGR_DEFAULT_SWEEP_TIME_S;
 	p_opt->perfmgr_max_outstanding_queries =
 	    OSM_PERFMGR_DEFAULT_MAX_OUTSTANDING_QUERIES;
+	p_opt->perfmgr_ignore_cas = FALSE;
 	p_opt->event_db_dump_file = NULL; /* use default */
+	p_opt->perfmgr_rm_nodes = TRUE;
+	p_opt->perfmgr_log_errors = TRUE;
 #endif				/* ENABLE_OSM_PERF_MGR */
 
 	p_opt->event_plugin_name = NULL;
@@ -822,6 +1489,9 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->log_max_size = 0;
 	p_opt->partition_config_file = strdup(OSM_DEFAULT_PARTITION_CONFIG_FILE);
 	p_opt->no_partition_enforcement = FALSE;
+	p_opt->part_enforce = strdup(OSM_PARTITION_ENFORCE_BOTH);
+	p_opt->allow_both_pkeys = FALSE;
+	p_opt->sm_assigned_guid = 0;
 	p_opt->qos = FALSE;
 	p_opt->qos_policy_file = strdup(OSM_DEFAULT_QOS_POLICY_FILE);
 	p_opt->accum_log_file = TRUE;
@@ -848,6 +1518,9 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->torus_conf_file = strdup(OSM_DEFAULT_TORUS_CONF_FILE);
 	p_opt->do_mesh_analysis = FALSE;
 	p_opt->exit_on_fatal = TRUE;
+	p_opt->congestion_control = FALSE;
+	p_opt->cc_key = OSM_DEFAULT_CC_KEY;
+	p_opt->cc_max_outstanding_mads = OSM_PERFMGR_DEFAULT_MAX_OUTSTANDING_QUERIES;
 	p_opt->enable_quirks = FALSE;
 	p_opt->no_clients_rereg = FALSE;
 	p_opt->prefix_routes_file = strdup(OSM_DEFAULT_PREFIX_ROUTES_FILE);
@@ -855,11 +1528,14 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->lash_start_vl = 0;
 	p_opt->sm_sl = OSM_DEFAULT_SL;
 	p_opt->log_prefix = NULL;
+	p_opt->per_module_logging_file = strdup(OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE);
 	subn_init_qos_options(&p_opt->qos_options, NULL);
 	subn_init_qos_options(&p_opt->qos_ca_options, NULL);
 	subn_init_qos_options(&p_opt->qos_sw0_options, NULL);
 	subn_init_qos_options(&p_opt->qos_swe_options, NULL);
 	subn_init_qos_options(&p_opt->qos_rtr_options, NULL);
+	p_opt->cc_cct.entries_len = 0;
+	p_opt->cc_cct.input_str = NULL;
 }
 
 static char *clean_val(char *val)
@@ -994,6 +1670,83 @@ static ib_api_status_t parse_prefix_routes_file(IN osm_subn_t * p_subn)
 		}
 
 		if (append_prefix_route(p_subn, prefix, guid) != IB_SUCCESS) {
+			errors++;
+			break;
+		}
+	}
+
+	fclose(fp);
+	return (errors == 0) ? IB_SUCCESS : IB_ERROR;
+}
+
+static ib_api_status_t insert_per_module_debug(IN osm_subn_t * p_subn,
+					       char *mod_name,
+					       osm_log_level_t level)
+{
+	uint8_t index;
+
+	if (find_module_name(mod_name, &index)) {
+		OSM_LOG(&p_subn->p_osm->log, OSM_LOG_ERROR,
+			"Module name %s not found\n", mod_name);
+		return IB_ERROR;
+	}
+	osm_set_log_per_module(&p_subn->p_osm->log, index, level);
+	return IB_SUCCESS;
+}
+
+static ib_api_status_t parse_per_mod_logging_file(IN osm_subn_t * p_subn)
+{
+	osm_log_t *log = &p_subn->p_osm->log;
+	FILE *fp;
+	char buf[1024];
+	int line = 0;
+	int errors = 0;
+
+	osm_reset_log_per_module(log);
+
+	if (p_subn->opt.per_module_logging_file == NULL)
+		return IB_SUCCESS;
+
+	fp = fopen(p_subn->opt.per_module_logging_file, "r");
+	if (!fp) {
+		if (errno == ENOENT)
+			return IB_SUCCESS;
+
+		OSM_LOG(log, OSM_LOG_ERROR, "fopen(%s) failed: %s",
+			p_subn->opt.per_module_logging_file, strerror(errno));
+		return IB_ERROR;
+	}
+
+	while (fgets(buf, sizeof buf, fp) != NULL) {
+		char *p_mod_name, *p_level, *p_extra, *p_last;
+		osm_log_level_t level;
+
+		line++;
+		if (errors > 10)
+			break;
+
+		p_mod_name = strtok_r(buf, " =,\t\n", &p_last);
+		if (!p_mod_name)
+			continue; /* ignore blank lines */
+
+		if (*p_mod_name == '#')
+			continue; /* ignore comment lines */
+
+		p_level = strtok_r(NULL, " \t\n", &p_last);
+		if (!p_level) {
+			OSM_LOG(log, OSM_LOG_ERROR, "%s:%d: missing log level\n",
+				p_subn->opt.per_module_logging_file, line);
+			errors++;
+			continue;
+		}
+		p_extra = strtok_r(NULL, " \t\n", &p_last);
+		if (p_extra && *p_extra != '#') {
+			OSM_LOG(log, OSM_LOG_INFO, "%s:%d: extra tokens ignored\n",
+				p_subn->opt.per_module_logging_file, line);
+		}
+
+		level = strtoul(p_level, NULL, 0);
+		if (insert_per_module_debug(p_subn, p_mod_name, level) != IB_SUCCESS) {
 			errors++;
 			break;
 		}
@@ -1205,6 +1958,27 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		p_opts->console = strdup(OSM_DEFAULT_CONSOLE);
 	}
 
+	if (p_opts->no_partition_enforcement == TRUE) {
+		strcpy(p_opts->part_enforce, OSM_PARTITION_ENFORCE_OFF);
+		p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_OFF;
+	} else {
+		if (strcmp(p_opts->part_enforce, OSM_PARTITION_ENFORCE_BOTH) == 0)
+			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_BOTH;
+		else if (strcmp(p_opts->part_enforce, OSM_PARTITION_ENFORCE_IN) == 0)
+			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_IN;
+		else if (strcmp(p_opts->part_enforce, OSM_PARTITION_ENFORCE_OUT) == 0)
+			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_OUT;
+		else if (strcmp(p_opts->part_enforce, OSM_PARTITION_ENFORCE_OFF) == 0)
+			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_OFF;
+		else {
+			log_report(" Invalid Cached Option Value:part_enforce = %s"
+	                           ", Using Default:%s\n",
+	                           p_opts->part_enforce = OSM_PARTITION_ENFORCE_BOTH);
+			p_opts->part_enforce = OSM_PARTITION_ENFORCE_BOTH;
+			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_BOTH;
+		}
+	}
+
 	if (p_opts->qos) {
 		subn_verify_qos_set(&p_opts->qos_options, "qos");
 		subn_verify_qos_set(&p_opts->qos_ca_options, "qos_ca");
@@ -1232,6 +2006,44 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 	}
 #endif
 
+	if (p_opts->m_key_protect_bits > 3) {
+		log_report(" Invalid Cached Option Value:"
+			   "m_key_protection_level = %u Setting to %u "
+			   "instead\n", p_opts->m_key_protect_bits, 2);
+		p_opts->m_key_protect_bits = 2;
+	}
+	if (p_opts->m_key_protect_bits && p_opts->m_key_lease_period) {
+		if (!p_opts->sweep_interval) {
+			log_report(" Sweep disabled with protected mkey "
+				   "leases in effect; re-enabling sweeping "
+				   "with interval %u\n",
+				   cl_ntoh16(p_opts->m_key_lease_period) - 1);
+			p_opts->sweep_interval =
+				cl_ntoh16(p_opts->m_key_lease_period) - 1;
+		}
+		if (p_opts->sweep_interval >=
+			cl_ntoh16(p_opts->m_key_lease_period)) {
+			log_report(" Sweep interval %u >= mkey lease period "
+				   "%u. Setting lease period to %u\n",
+				   p_opts->sweep_interval,
+				   cl_ntoh16(p_opts->m_key_lease_period),
+				   p_opts->sweep_interval + 1);
+			p_opts->m_key_lease_period =
+				cl_hton16(p_opts->sweep_interval + 1);
+		}
+	}
+
+	if (p_opts->root_guid_file != NULL) {
+		FILE *root_file = fopen(p_opts->root_guid_file, "r");
+		if (!root_file) {
+			log_report("Root guid file provided: %s doesn't exist.\n"
+				    "Using default roots discovery algorithm\n",
+				    p_opts->root_guid_file);
+			p_opts->root_guid_file = NULL;
+		} else
+			fclose(root_file);
+	}
+
 	return 0;
 }
 
@@ -1239,9 +2051,10 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 {
 	char line[1024];
 	FILE *opts_file;
-	char *p_key, *p_val;
+	char *p_key, *p_val, *pound_sign;
 	const opt_rec_t *r;
 	void *p_field1, *p_field2;
+	int token_matched;
 
 	opts_file = fopen(file_name, "r");
 	if (!opts_file) {
@@ -1264,6 +2077,12 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 	p_opts->file_opts->file_opts = NULL;
 
 	while (fgets(line, 1023, opts_file) != NULL) {
+		pound_sign = strchr(line,'#');
+		token_matched = 0;
+		/* Truncate any comments. */
+		if (pound_sign)
+			*pound_sign = '\0';
+
 		/* get the first token */
 		p_key = strtok_r(line, " \t\n", &p_val);
 		if (!p_key)
@@ -1275,6 +2094,7 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 			if (strcmp(r->name, p_key))
 				continue;
 
+			token_matched = 1;
 			p_field1 = (void *)p_opts->file_opts + r->opt_offset;
 			p_field2 = (void *)p_opts + r->opt_offset;
 			/* don't call setup function first time */
@@ -1282,6 +2102,9 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 				    NULL);
 			break;
 		}
+
+		if (!token_matched)
+			log_report(" Unrecognized token: \"%s\"\n", p_key);
 	}
 	fclose(opts_file);
 
@@ -1296,8 +2119,9 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 	osm_subn_opt_t *p_opts = &p_subn->opt;
 	const opt_rec_t *r;
 	FILE *opts_file;
-	char *p_key, *p_val;
+	char *p_key, *p_val, *pound_sign;
 	void *p_field1, *p_field2;
+	int token_matched;
 
 	if (!p_opts->config_file)
 		return 0;
@@ -1324,6 +2148,13 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 			      &p_opts->file_opts->qos_rtr_options);
 
 	while (fgets(line, 1023, opts_file) != NULL) {
+		pound_sign = strchr(line,'#');
+		token_matched = 0;
+
+		/* Truncate any comments. */
+		if (pound_sign)
+			*pound_sign = '\0';
+
 		/* get the first token */
 		p_key = strtok_r(line, " \t\n", &p_val);
 		if (!p_key)
@@ -1332,7 +2163,12 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 		p_val = clean_val(p_val);
 
 		for (r = opt_tbl; r->name; r++) {
-			if (!r->can_update || strcmp(r->name, p_key))
+			if (strcmp(r->name, p_key))
+				continue;
+
+			token_matched = 1;
+
+			if (strcmp(r->name, p_key))
 				continue;
 
 			p_field1 = (void *)p_opts->file_opts + r->opt_offset;
@@ -1341,6 +2177,8 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 				    r->setup_fn);
 			break;
 		}
+		if (!token_matched)
+                       log_report(" Unrecognized token: \"%s\"\n", p_key);
 	}
 	fclose(opts_file);
 
@@ -1348,11 +2186,16 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 
 	parse_prefix_routes_file(p_subn);
 
+	parse_per_mod_logging_file(p_subn);
+
 	return 0;
 }
 
 int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 {
+	int cacongoutputcount = 0;
+	int i;
+
 	fprintf(out,
 		"#\n# DEVICE ATTRIBUTES OPTIONS\n#\n"
 		"# The port GUID on which the OpenSM is running\n"
@@ -1361,6 +2204,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"m_key 0x%016" PRIx64 "\n\n"
 		"# The lease period used for the M_Key on this subnet in [sec]\n"
 		"m_key_lease_period %u\n\n"
+		"# The protection level used for the M_Key on this subnet\n"
+		"m_key_protection_level %u\n\n"
 		"# SM_Key value of the SM used for SM authentication\n"
 		"sm_key 0x%016" PRIx64 "\n\n"
 		"# SM_Key value to qualify rcv SA queries as 'trusted'\n"
@@ -1442,6 +2287,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		cl_ntoh64(p_opts->guid),
 		cl_ntoh64(p_opts->m_key),
 		cl_ntoh16(p_opts->m_key_lease_period),
+		p_opts->m_key_protect_bits,
 		cl_ntoh64(p_opts->sm_key),
 		cl_ntoh64(p_opts->sa_key),
 		cl_ntoh64(p_opts->subnet_prefix),
@@ -1466,10 +2312,25 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"#\n# PARTITIONING OPTIONS\n#\n"
 		"# Partition configuration file to be used\n"
 		"partition_config_file %s\n\n"
-		"# Disable partition enforcement by switches\n"
-		"no_partition_enforcement %s\n\n",
+		"# Disable partition enforcement by switches (DEPRECATED)\n"
+		"# This option is DEPRECATED. Please use part_enforce instead\n"
+		"no_partition_enforcement %s\n\n"
+		"# Partition enforcement type (for switches)\n"
+		"# Values are both, out, in and off\n"
+		"# Default is both (outbound and inbound enforcement)\n"
+		"part_enforce %s\n\n"
+		"# Allow both full and limited membership on the same partition\n"
+		"allow_both_pkeys %s\n\n"
+		"# SM assigned GUID byte where GUID is formed from OpenFabrics OUI\n"
+		"# followed by 40 bits xy 00 ab cd ef where xy is the SM assigned GUID byte\n"
+		"# and ab cd ef is an SM autogenerated 24 bits\n"
+		"# SM assigned GUID byte should be configured as subnet unique\n"
+		"sm_assigned_guid 0x%02x\n\n",
 		p_opts->partition_config_file,
-		p_opts->no_partition_enforcement ? "TRUE" : "FALSE");
+		p_opts->no_partition_enforcement ? "TRUE" : "FALSE",
+		p_opts->part_enforce,
+		p_opts->allow_both_pkeys ? "TRUE" : "FALSE",
+		p_opts->sm_assigned_guid);
 
 	fprintf(out,
 		"#\n# SWEEP OPTIONS\n#\n"
@@ -1515,7 +2376,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# commas so that specific ordering of routing algorithms will\n"
 		"# be tried if earlier routing engines fail.\n"
 		"# Supported engines: minhop, updn, dnup, file, ftree, lash,\n"
-		"#    dor, torus-2QoS\n"
+		"#    dor, torus-2QoS, dfsssp, sssp\n"
 		"routing_engine %s\n\n", p_opts->routing_engine_names ?
 		p_opts->routing_engine_names : null_str);
 
@@ -1677,11 +2538,19 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# sweep time in seconds\n"
 		"perfmgr_sweep_time_s %u\n\n"
 		"# Max outstanding queries\n"
-		"perfmgr_max_outstanding_queries %u\n\n",
+		"perfmgr_max_outstanding_queries %u\n"
+		"perfmgr_ignore_cas %s\n\n"
+		"# Remove missing nodes from DB\n"
+		"perfmgr_rm_nodes %s\n\n"
+		"# Log error counters to opensm.log\n"
+		"perfmgr_log_errors %s\n\n",
 		p_opts->perfmgr ? "TRUE" : "FALSE",
 		p_opts->perfmgr_redir ? "TRUE" : "FALSE",
 		p_opts->perfmgr_sweep_time_s,
-		p_opts->perfmgr_max_outstanding_queries);
+		p_opts->perfmgr_max_outstanding_queries,
+		p_opts->perfmgr_ignore_cas ? "TRUE" : "FALSE",
+		p_opts->perfmgr_rm_nodes ? "TRUE" : "FALSE",
+		p_opts->perfmgr_log_errors ? "TRUE" : "FALSE");
 
 	fprintf(out,
 		"#\n# Event DB Options\n#\n"
@@ -1719,6 +2588,12 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"log_max_size %lu\n\n"
 		"# If TRUE will accumulate the log over multiple OpenSM sessions\n"
 		"accum_log_file %s\n\n"
+		"# Per module logging configuration file\n"
+		"# Each line in config file contains <module_name><separator><log_flags>\n"
+		"# where module_name is file name including .c\n"
+		"# separator is either = , space, or tab\n"
+		"# log_flags is the same flags as used in the coarse/overall logging\n"
+		"per_module_logging_file %s\n\n"
 		"# The directory to hold the file OpenSM dumps\n"
 		"dump_files_dir %s\n\n"
 		"# If TRUE enables new high risk options and hardware specific quirks\n"
@@ -1746,6 +2621,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->log_file,
 		p_opts->log_max_size,
 		p_opts->accum_log_file ? "TRUE" : "FALSE",
+		p_opts->per_module_logging_file ?
+			p_opts->per_module_logging_file : null_str,
 		p_opts->dump_files_dir,
 		p_opts->enable_quirks ? "TRUE" : "FALSE",
 		p_opts->no_clients_rereg ? "TRUE" : "FALSE",
@@ -1781,6 +2658,164 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 	subn_dump_qos_options(out,
 			      "QoS Router ports options", "qos_rtr",
 			      &p_opts->qos_rtr_options);
+	fprintf(out, "\n");
+
+	fprintf(out,
+		"#\n# Congestion Control OPTIONS (EXPERIMENTAL)\n#\n\n"
+		"# Enable Congestion Control Configuration\n"
+		"congestion_control %s\n\n"
+		"# CCKey to use when configuring congestion control\n"
+		"# note that this does not configure a new CCkey, only the CCkey to use\n"
+		"cc_key 0x%016" PRIx64 "\n\n"
+		"# Congestion Control Max outstanding MAD\n"
+		"cc_max_outstanding_mads %u\n\n",
+		p_opts->congestion_control ? "TRUE" : "FALSE",
+		cl_ntoh64(p_opts->cc_key),
+		p_opts->cc_max_outstanding_mads);
+
+	fprintf(out,
+		"#\n# Congestion Control SwitchCongestionSetting options\n#\n"
+		"# Control Map - bitmask indicating which of the following attributes are to be used\n"
+		"# bit 0 - victim mask\n"
+		"# bit 1 - credit mask\n"
+		"# bit 2 - threshold + packet size\n"
+		"# bit 3 - credit starvation threshold + return delay valid\n"
+		"# bit 4 - marking rate valid\n"
+		"cc_sw_cong_setting_control_map 0x%X\n\n",
+		cl_ntoh32(p_opts->cc_sw_cong_setting_control_map));
+
+	fprintf(out,
+		"# Victim Mask - 256 bit mask representing switch ports, mark packets with FECN\n"
+		"# whether they are the source or victim of congestion\n"
+		"# bit 0 - port 0 (enhanced port)\n"
+		"# bit 1 - port 1\n"
+		"# ...\n"
+		"# bit 254 - port 254\n"
+		"# bit 255 - reserved\n"
+		"cc_sw_cong_setting_victim_mask 0x");
+
+	for (i = 0; i < IB_CC_PORT_MASK_DATA_SIZE; i++)
+		fprintf(out, "%02X", p_opts->cc_sw_cong_setting_victim_mask[i]);
+	fprintf(out, "\n\n");
+
+	fprintf(out,
+		"# Credit Mask - 256 bit mask representing switch ports to apply credit starvation\n"
+		"# bit 0 - port 0 (enhanced port)\n"
+		"# bit 1 - port 1\n"
+		"# ...\n"
+		"# bit 254 - port 254\n"
+		"# bit 255 - reserved\n"
+		"cc_sw_cong_setting_credit_mask 0x");
+
+	for (i = 0; i < IB_CC_PORT_MASK_DATA_SIZE; i++)
+		fprintf(out, "%02X", p_opts->cc_sw_cong_setting_credit_mask[i]);
+	fprintf(out, "\n\n");
+
+	fprintf(out,
+		"# Threshold - value indicating aggressiveness of congestion marking\n"
+		"# 0x0 - none, 0x1 - loose, ..., 0xF - aggressive\n"
+		"cc_sw_cong_setting_threshold 0x%02X\n\n"
+		"# Packet Size - any packet less than this size will not be marked with a FECN\n"
+		"# units are in credits\n"
+		"cc_sw_cong_setting_packet_size %u\n\n"
+		"# Credit Starvation Threshold - value indicating aggressiveness of credit starvation\n"
+		"# 0x0 - none, 0x1 - loose, ..., 0xF - aggressive\n"
+		"cc_sw_cong_setting_credit_starvation_threshold 0x%02X\n\n"
+		"# Credit Starvation Return Delay - in CCT entry shift:multiplier format, see IB spec\n"
+		"cc_sw_cong_setting_credit_starvation_return_delay %u:%u\n\n"
+		"# Marking Rate - mean number of packets between markings\n"
+		"cc_sw_cong_setting_marking_rate %u\n\n",
+		p_opts->cc_sw_cong_setting_threshold,
+		p_opts->cc_sw_cong_setting_packet_size,
+		p_opts->cc_sw_cong_setting_credit_starvation_threshold,
+		p_opts->cc_sw_cong_setting_credit_starvation_return_delay.shift,
+		p_opts->cc_sw_cong_setting_credit_starvation_return_delay.multiplier,
+		cl_ntoh16(p_opts->cc_sw_cong_setting_marking_rate));
+
+	fprintf(out,
+		"#\n# Congestion Control CA Congestion Setting options\n#\n"
+		"# Port Control\n"
+		"# bit 0 = 0, QP based congestion control\n"
+		"# bit 0 = 1, SL/port based congestion control\n"
+		"cc_ca_cong_setting_port_control 0x%04X\n\n"
+		"# Control Map - 16 bit bitmask indicating which SLs should be configured\n"
+		"cc_ca_cong_setting_control_map 0x%04X\n\n",
+		cl_ntoh16(p_opts->cc_ca_cong_setting_port_control),
+		cl_ntoh16(p_opts->cc_ca_cong_setting_control_map));
+
+	fprintf(out,
+		"#\n# CA Congestion Setting Entries\n#\n"
+		"# Each of congestion control settings below configures the CA Congestion\n"
+		"# Settings for an individual SL.  The SL must be specified before the value.\n"
+		"# These options may be specified multiple times to configure different values\n"
+		"# for different SLs.\n"
+		"#\n"
+		"# ccti timer - when expires decrements 1 from the CCTI\n"
+		"# ccti increase - number to be added to the table index on receipt of a BECN\n"
+		"# trigger threshold - when the ccti is equal to this, an event is logged\n"
+		"# ccti min - the minimum value for the ccti.  This imposes a minimum rate\n"
+		"#            on the injection rate\n\n");
+
+	for (i = 0; i < IB_CA_CONG_ENTRY_DATA_SIZE; i++) {
+		/* Don't output unless one of the settings has been set, there's no need
+		 * to output 16 chunks of this with all defaults of 0 */
+		if (p_opts->cc_ca_cong_entries[i].ccti_timer
+		    || p_opts->cc_ca_cong_entries[i].ccti_increase
+		    || p_opts->cc_ca_cong_entries[i].trigger_threshold
+		    || p_opts->cc_ca_cong_entries[i].ccti_min) {
+			fprintf(out,
+				"# SL = %u\n"
+				"cc_ca_cong_setting_ccti_timer %u %u\n"
+				"cc_ca_cong_setting_ccti_increase %u %u\n"
+				"cc_ca_cong_setting_trigger_threshold %u %u\n"
+				"cc_ca_cong_setting_ccti_min %u %u\n\n",
+				i,
+				i,
+				cl_ntoh16(p_opts->cc_ca_cong_entries[i].ccti_timer),
+				i,
+				p_opts->cc_ca_cong_entries[i].ccti_increase,
+				i,
+				p_opts->cc_ca_cong_entries[i].trigger_threshold,
+				i,
+				p_opts->cc_ca_cong_entries[i].ccti_min);
+			cacongoutputcount++;
+		}
+	}
+
+	/* If by chance all the CA Cong Settings are default, output atleast 1 chunk
+         * for illustration */
+	if (!cacongoutputcount)
+		fprintf(out,
+			"# SL = 0\n"
+			"cc_ca_cong_setting_ccti_timer 0 %u\n"
+			"cc_ca_cong_setting_ccti_increase 0 %u\n"
+			"cc_ca_cong_setting_trigger_threshold 0 %u\n"
+			"cc_ca_cong_setting_ccti_min 0 %u\n\n",
+			cl_ntoh16(p_opts->cc_ca_cong_entries[0].ccti_timer),
+			p_opts->cc_ca_cong_entries[0].ccti_increase,
+			p_opts->cc_ca_cong_entries[0].trigger_threshold,
+			p_opts->cc_ca_cong_entries[0].ccti_min);
+
+	fprintf(out,
+		"#\n# Congestion Control Table\n#\n"
+		"# Comma separated list of CCT entries representing CCT.\n"
+		"# Format is shift:multipler,shift_multiplier,shift:multiplier,...\n"
+		"cc_cct ");
+
+	if (!p_opts->cc_cct.entries_len) {
+		fprintf(out, "%s\n", null_str);
+	}
+	else {
+		fprintf(out, "%u:%u",
+			p_opts->cc_cct.entries[0].shift,
+			p_opts->cc_cct.entries[0].multiplier);
+		for (i = 0; i < p_opts->cc_cct.entries_len; i++) {
+			fprintf(out, ",%u:%u",
+				p_opts->cc_cct.entries[0].shift,
+				p_opts->cc_cct.entries[0].multiplier);
+		}
+		fprintf(out, "\n");
+	}
 	fprintf(out, "\n");
 
 	fprintf(out,

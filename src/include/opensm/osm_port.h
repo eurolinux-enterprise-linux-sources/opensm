@@ -66,6 +66,7 @@ BEGIN_C_DECLS
 struct osm_port;
 struct osm_node;
 struct osm_mgrp;
+struct osm_sm;
 
 /****h* OpenSM/Physical Port
 * NAME
@@ -119,6 +120,15 @@ typedef struct osm_physp {
 	ib_vl_arb_table_t vl_arb[4];
 	cl_ptr_vector_t slvl_by_port;
 	uint8_t hop_wf;
+	union {
+		struct {
+			ib_sw_cong_setting_t sw_cong_setting;
+		} sw;
+		struct {
+			ib_ca_cong_setting_t ca_cong_setting;
+			ib_cc_tbl_t cc_tbl[OSM_CCT_ENTRY_MAD_BLOCKS];
+		} ca;
+	} cc;
 } osm_physp_t;
 /*
 * FIELDS
@@ -186,6 +196,15 @@ typedef struct osm_physp {
 *	hop_wf
 *		Hop weighting factor to be used in the routing.
 *
+*	sw_cong_setting
+*		Physical port switch congestion settings (switches only)
+*
+*	ca_cong_setting
+*		Physical port ca congestion settings (cas only)
+*
+*	cc_tbl
+*		Physical port ca congestion control table (cas only)
+*
 * SEE ALSO
 *	Port
 *********/
@@ -245,7 +264,7 @@ void osm_physp_init(IN osm_physp_t * p_physp, IN ib_net64_t port_guid,
 *
 *	h_bind
 *		[in] Bind handle on which this port is accessed.
-*		Caller should use OSM_INVALID_BIND_HANDLE if the bind
+*		Caller should use OSM_BIND_INVALID_HANDLE if the bind
 *		handle to this port is unknown.
 *
 *	hop_count
@@ -431,22 +450,9 @@ static inline void osm_physp_set_health(IN osm_physp_t * p_physp,
 *
 * SYNOPSIS
 */
-static inline void osm_physp_set_port_info(IN osm_physp_t * p_physp,
-					   IN const ib_port_info_t * p_pi)
-{
-	CL_ASSERT(p_pi);
-	CL_ASSERT(osm_physp_is_valid(p_physp));
-
-	if (ib_port_info_get_port_state(p_pi) == IB_LINK_DOWN) {
-		/* If PortState is down, only copy PortState */
-		/* and PortPhysicalState per C14-24-2.1 */
-		ib_port_info_set_port_state(&p_physp->port_info, IB_LINK_DOWN);
-		ib_port_info_set_port_phys_state
-		    (ib_port_info_get_port_phys_state(p_pi),
-		     &p_physp->port_info);
-	} else
-		p_physp->port_info = *p_pi;
-}
+void osm_physp_set_port_info(IN osm_physp_t * p_physp,
+					   IN const ib_port_info_t * p_pi,
+					   IN const struct osm_sm * p_sm);
 
 /*
 * PARAMETERS
@@ -455,6 +461,9 @@ static inline void osm_physp_set_port_info(IN osm_physp_t * p_physp,
 *
 *	p_pi
 *		[in] Pointer to the IBA defined PortInfo at this port number.
+*
+*	p_sm
+*		[in] Pointer to an osm_sm_t object.
 *
 * RETURN VALUES
 *	This function does not return a value.
@@ -1377,7 +1386,8 @@ void osm_port_get_lid_range_ho(IN const osm_port_t * p_port,
 * SYNOPSIS
 */
 uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
-				IN const osm_physp_t * p_physp);
+				IN const osm_physp_t * p_physp,
+				IN uint8_t current_mtu);
 /*
 * PARAMETERS
 *	p_log
@@ -1385,6 +1395,9 @@ uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
 *
 *	p_physp
 *		[in] Pointer to an osm_physp_t object.
+*
+*	current_mtu
+*		[in] Current neighbor mtu on this port
 *
 * RETURN VALUES
 *	The MTU of the link to be used.
@@ -1407,7 +1420,8 @@ uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
 */
 uint8_t osm_physp_calc_link_op_vls(IN osm_log_t * p_log,
 				   IN const osm_subn_t * p_subn,
-				   IN const osm_physp_t * p_physp);
+				   IN const osm_physp_t * p_physp,
+				   IN uint8_t current_op_vls);
 /*
 * PARAMETERS
 *	p_log
@@ -1418,6 +1432,9 @@ uint8_t osm_physp_calc_link_op_vls(IN osm_log_t * p_log,
 *
 *	p_physp
 *		[in] Pointer to an osm_physp_t object.
+*
+*	current_op_vls
+*		[in] Current operational VL on the port
 *
 * RETURN VALUES
 *	The OP_VLS of the link to be used.

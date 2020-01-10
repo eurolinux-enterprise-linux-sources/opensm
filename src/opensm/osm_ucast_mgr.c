@@ -51,6 +51,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_UCAST_MGR_C
 #include <opensm/osm_ucast_mgr.h>
 #include <opensm/osm_sm.h>
 #include <opensm/osm_log.h>
@@ -905,7 +907,7 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 
 	OSM_LOG_ENTER(p_mgr->p_log);
 
-	CL_ASSERT(p_sw);
+	CL_ASSERT(p_sw && p_sw->max_lid_ho);
 
 	p_node = p_sw->p_node;
 

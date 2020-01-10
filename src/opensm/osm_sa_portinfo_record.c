@@ -50,6 +50,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_PORTINFO_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_port.h>
 #include <opensm/osm_node.h>
@@ -198,9 +200,9 @@ static void sa_pir_check_physp(IN osm_sa_t * sa, IN const osm_physp_t * p_physp,
 	p_comp_pi = &p_rcvd_rec->port_info;
 	p_pi = &p_physp->port_info;
 
-	osm_dump_port_info(sa->p_log, osm_node_get_node_guid(p_physp->p_node),
-			   p_physp->port_guid, p_physp->port_num,
-			   &p_physp->port_info, OSM_LOG_DEBUG);
+	osm_dump_port_info_v2(sa->p_log, osm_node_get_node_guid(p_physp->p_node),
+			      p_physp->port_guid, p_physp->port_num,
+			      &p_physp->port_info, FILE_ID, OSM_LOG_DEBUG);
 
 	/* We have to re-check the base_lid, since if the given
 	   base_lid in p_pi is zero - we are comparing on all ports. */
@@ -472,8 +474,8 @@ static void sa_pir_by_comp_mask(IN osm_sa_t * sa, IN osm_node_t * p_node,
 			/* Check that the p_physp is valid, and that the
 			   p_physp and the p_req_physp share a pkey. */
 			if (p_physp &&
-			    osm_physp_share_pkey(sa->p_log, p_req_physp,
-						 p_physp))
+			    osm_physp_share_pkey(sa->p_log, p_req_physp, p_physp,
+						 sa->p_subn->opt.allow_both_pkeys))
 				sa_pir_check_physp(sa, p_physp, p_ctxt);
 		}
 	} else {
@@ -484,8 +486,8 @@ static void sa_pir_by_comp_mask(IN osm_sa_t * sa, IN osm_node_t * p_node,
 
 			/* if the requester and the p_physp don't share a pkey -
 			   continue */
-			if (!osm_physp_share_pkey
-			    (sa->p_log, p_req_physp, p_physp))
+			if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_physp,
+						  sa->p_subn->opt.allow_both_pkeys))
 				continue;
 
 			sa_pir_check_physp(sa, p_physp, p_ctxt);
@@ -538,7 +540,7 @@ void osm_pir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -548,8 +550,12 @@ void osm_pir_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_portinfo_record(sa->p_log, p_rcvd_rec, OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_portinfo_record_v2(sa->p_log, p_rcvd_rec, FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	cl_qlist_init(&rec_list);
 

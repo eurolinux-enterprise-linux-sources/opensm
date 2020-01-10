@@ -85,6 +85,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_qmap.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_LID_MGR_C
 #include <opensm/osm_lid_mgr.h>
 #include <opensm/osm_sm.h>
 #include <opensm/osm_log.h>
@@ -247,9 +249,9 @@ ib_api_status_t osm_lid_mgr_init(IN osm_lid_mgr_t * p_mgr, IN osm_sm_t * sm)
 			 * are closed, so we might see corrupted guid2lid file.
 			 */
 			if (p_mgr->p_subn->opt.exit_on_fatal) {
-				osm_log(p_mgr->p_log, OSM_LOG_SYS,
-					"FATAL: Error restoring Guid-to-Lid "
-					"persistent database\n");
+				osm_log_v2(p_mgr->p_log, OSM_LOG_SYS, FILE_ID,
+					   "FATAL: Error restoring Guid-to-Lid "
+					   "persistent database\n");
 				status = IB_ERROR;
 				goto Exit;
 			} else
@@ -798,6 +800,7 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 	uint8_t op_vls;
 	uint8_t port_num;
 	boolean_t send_set = FALSE;
+	boolean_t update_mkey = FALSE;
 	int ret = 0;
 
 	OSM_LOG_ENTER(p_mgr->p_log);
@@ -860,8 +863,10 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 		send_set = TRUE;
 
 	p_pi->m_key = p_mgr->p_subn->opt.m_key;
-	if (memcmp(&p_pi->m_key, &p_old_pi->m_key, sizeof(p_pi->m_key)))
+	if (memcmp(&p_pi->m_key, &p_old_pi->m_key, sizeof(p_pi->m_key))) {
+		update_mkey = TRUE;
 		send_set = TRUE;
+	}
 
 	p_pi->subnet_prefix = p_mgr->p_subn->opt.subnet_prefix;
 	if (memcmp(&p_pi->subnet_prefix, &p_old_pi->subnet_prefix,
@@ -882,6 +887,11 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 	p_pi->m_key_lease_period = p_mgr->p_subn->opt.m_key_lease_period;
 	if (memcmp(&p_pi->m_key_lease_period, &p_old_pi->m_key_lease_period,
 		   sizeof(p_pi->m_key_lease_period)))
+		send_set = TRUE;
+
+	p_pi->mkey_lmc = 0;
+	ib_port_info_set_mpb(p_pi, p_mgr->p_subn->opt.m_key_protect_bits);
+	if (ib_port_info_get_mpb(p_pi) != ib_port_info_get_mpb(p_old_pi))
 		send_set = TRUE;
 
 	/*
@@ -905,18 +915,18 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 			   sizeof(p_pi->link_width_enabled)))
 			send_set = TRUE;
 
-		/* M_KeyProtectBits are currently always zero */
-		p_pi->mkey_lmc = p_mgr->p_subn->opt.lmc;
+		/* p_pi->mkey_lmc is initialized earlier */
+		ib_port_info_set_lmc(p_pi, p_mgr->p_subn->opt.lmc);
 		if (ib_port_info_get_lmc(p_pi) !=
-		    ib_port_info_get_lmc(p_old_pi) ||
-		    ib_port_info_get_mpb(p_pi) !=
-		    ib_port_info_get_mpb(p_old_pi))
+		    ib_port_info_get_lmc(p_old_pi))
 			send_set = TRUE;
 
 		/* calc new op_vls and mtu */
 		op_vls = osm_physp_calc_link_op_vls(p_mgr->p_log, p_mgr->p_subn,
-						    p_physp);
-		mtu = osm_physp_calc_link_mtu(p_mgr->p_log, p_physp);
+					      p_physp,
+					      ib_port_info_get_op_vls(p_old_pi));
+		mtu = osm_physp_calc_link_mtu(p_mgr->p_log, p_physp,
+					      ib_port_info_get_neighbor_mtu(p_old_pi));
 
 		ib_port_info_set_neighbor_mtu(p_pi, mtu);
 
@@ -989,12 +999,10 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 
 		/* Determine if enhanced switch port 0 and if so set LMC */
 		if (osm_switch_sp0_is_lmc_capable(p_node->sw, p_mgr->p_subn)) {
-			/* M_KeyProtectBits are currently always zero */
-			p_pi->mkey_lmc = p_mgr->p_subn->opt.lmc;
+			/* p_pi->mkey_lmc is initialized earlier */
+			ib_port_info_set_lmc(p_pi, p_mgr->p_subn->opt.lmc);
 			if (ib_port_info_get_lmc(p_pi) !=
-			    ib_port_info_get_lmc(p_old_pi) ||
-			    ib_port_info_get_mpb(p_pi) !=
-			    ib_port_info_get_mpb(p_old_pi))
+			    ib_port_info_get_lmc(p_old_pi))
 				send_set = TRUE;
 		}
 	}
@@ -1012,7 +1020,9 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 	   the cli_rereg bit. We know that the port was just discovered if its
 	   is_new field is set.
 	 */
-	if ((p_mgr->p_subn->first_time_master_sweep == TRUE || p_port->is_new)
+	if ((p_mgr->p_subn->first_time_master_sweep == TRUE
+	     || p_mgr->p_subn->set_client_rereg_on_sweep == TRUE
+	     || p_port->is_new)
 	    && !p_mgr->p_subn->opt.no_clients_rereg
 	    && (p_old_pi->capability_mask & IB_PORT_CAP_HAS_CLIENT_REREG)) {
 		OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
@@ -1029,8 +1039,13 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 	   2. first_time_master_sweep flag on the subnet is TRUE. This means the
 	   SM just became master, and it then needs to send a PortInfo Set to
 	   every port.
+	   3. set_client_rereg_on_sweep is TRUE.  The one situation in which this
+	   is true but first_time_master_sweep is FALSE is when the SM receives
+	   a HANDOVER while in master.  We don't want to re-setup everything by
+	   setting first_time_master_sweep, but we do want to reset up this.
 	 */
-	if (p_mgr->p_subn->first_time_master_sweep == TRUE)
+	if (p_mgr->p_subn->first_time_master_sweep == TRUE
+	    || p_mgr->p_subn->set_client_rereg_on_sweep == TRUE)
 		send_set = TRUE;
 
 	if (!send_set)
@@ -1042,6 +1057,13 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 			     CL_DISP_MSGID_NONE, &context);
 	if (status != IB_SUCCESS)
 		ret = -1;
+	/* If we sent a new mkey above, update our guid2mkey map
+	   now, on the assumption that the SubnSet succeeds
+	*/
+	if (update_mkey)
+		osm_db_guid2mkey_set(p_mgr->p_subn->p_g2m,
+				     cl_ntoh64(p_physp->port_guid),
+				     cl_ntoh64(p_pi->m_key));
 
 Exit:
 	OSM_LOG_EXIT(p_mgr->p_log);

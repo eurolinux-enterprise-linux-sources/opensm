@@ -2,6 +2,7 @@
  * Copyright 2009 Sandia Corporation.  Under the terms of Contract
  * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
  * certain rights in this software.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  *
  * This software is available to you under a choice of one of two
@@ -49,6 +50,8 @@
 #  include <config.h>
 #endif				/* HAVE_CONFIG_H */
 
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_TORUS_C
 #include <opensm/osm_log.h>
 #include <opensm/osm_port.h>
 #include <opensm/osm_switch.h>
@@ -716,14 +719,14 @@ bool build_link(struct fabric *f,
 		OSM_LOG(&f->osm->log, OSM_LOG_ERROR,
 			"ERR 4E0A: missing switch w/GUID 0x%04"PRIx64"\n",
 			cl_ntoh64(sw_guid0));
-			goto out;
+		goto out;
 	}
 	sw1 = find_f_sw(f, sw_guid1);
 	if (!sw1) {
 		OSM_LOG(&f->osm->log, OSM_LOG_ERROR,
 			"ERR 4E0B: missing switch w/GUID 0x%04"PRIx64"\n",
 			cl_ntoh64(sw_guid1));
-			goto out;
+		goto out;
 	}
 	l = alloc_flink(f);
 	if (!l)
@@ -7052,7 +7055,7 @@ bool verify_setup(struct torus *t, struct fabric *f)
 					"ERR 4E21: port_order configured using "
 					"port %u, but only %u ports in "
 					"switch w/ GUID 0x%04"PRIx64"\n",
-					t->port_order[p],  sw->port_cnt - 1,
+					t->port_order[p], sw->port_cnt - 1,
 					cl_ntoh64(sw->n_id));
 				goto out;
 			}
@@ -9047,16 +9050,25 @@ int route_torus(struct torus *t)
 }
 
 uint8_t torus_path_sl(void *context, uint8_t path_sl_hint,
-		      const osm_port_t *osm_sport,
-		      const osm_port_t *osm_dport)
+		      const ib_net16_t slid, const ib_net16_t dlid)
 {
 	struct torus_context *ctx = context;
-	osm_log_t *log = &ctx->osm->log;
+	osm_opensm_t *p_osm = ctx->osm;
+	osm_log_t *log = &p_osm->log;
+	osm_port_t *osm_sport, *osm_dport;
 	struct endpoint *sport, *dport;
 	struct t_switch *ssw, *dsw;
 	struct torus *t;
 	guid_t guid;
 	unsigned sl = 0;
+
+	osm_sport = osm_get_port_by_lid(&p_osm->subn, slid);
+	if (!osm_sport)
+		goto out;
+
+	osm_dport = osm_get_port_by_lid(&p_osm->subn, dlid);
+	if (!osm_dport)
+		goto out;
 
 	sport = osm_sport->priv;
 	if (!(sport && sport->osm_port == osm_sport)) {

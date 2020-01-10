@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
+ * Copyright (c) 2012 Mellanox Technologies LTD. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -48,6 +49,8 @@
 #include <sys/stat.h>
 #include <complib/cl_debug.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PRTN_C
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_partition.h>
 #include <opensm/osm_node.h>
@@ -142,13 +145,23 @@ ib_api_status_t osm_prtn_add_port(osm_log_t * p_log, osm_subn_t * p_subn,
 		return status;
 	}
 
-	if (cl_map_remove(&p->part_guid_tbl, guid) ||
-	    cl_map_remove(&p->full_guid_tbl, guid))
-		OSM_LOG(p_log, OSM_LOG_VERBOSE, "port 0x%" PRIx64 " already "
-			"in partition \'%s\' (0x%04x). Will overwrite\n",
-			cl_ntoh64(guid), p->name, cl_ntoh16(p->pkey));
-
 	p_tbl = (full == TRUE) ? &p->full_guid_tbl : &p->part_guid_tbl;
+
+	if (p_subn->opt.allow_both_pkeys) {
+		if (cl_map_remove(p_tbl, guid))
+			OSM_LOG(p_log, OSM_LOG_ERROR, "port 0x%" PRIx64
+				" already in partition \'%s\' (0x%04x) full %d."
+				" Will overwrite\n",
+				cl_ntoh64(guid), p->name, cl_ntoh16(p->pkey),
+				full);
+	} else {
+		if (cl_map_remove(&p->part_guid_tbl, guid) ||
+		    cl_map_remove(&p->full_guid_tbl, guid))
+			OSM_LOG(p_log, OSM_LOG_VERBOSE, "port 0x%" PRIx64
+				" already in partition \'%s\' (0x%04x)."
+				" Will overwrite\n",
+				cl_ntoh64(guid), p->name, cl_ntoh16(p->pkey));
+	}
 
 	if (cl_map_insert(p_tbl, guid, p_physp) == NULL)
 		return IB_INSUFFICIENT_MEMORY;
@@ -203,11 +216,11 @@ track_mgrp_w_partition(osm_log_t *p_log, osm_prtn_t *p, osm_mgrp_t *mgrp,
 		p->nmgrps++;
 	} else {
 		OSM_LOG(p_log, OSM_LOG_ERROR,
-		        "realloc error to create MC group (%s) in "
-		        "partition (pkey 0x%04x)\n",
-		        inet_ntop(AF_INET6, mgid->raw,
-		                gid_str, sizeof gid_str),
-		        cl_ntoh16(pkey));
+			"realloc error to create MC group (%s) in "
+			"partition (pkey 0x%04x)\n",
+			inet_ntop(AF_INET6, mgid->raw,
+				  gid_str, sizeof gid_str),
+			cl_ntoh16(pkey));
 		mgrp->well_known = FALSE;
 		osm_mgrp_cleanup(p_subn, mgrp);
 		return (IB_ERROR);

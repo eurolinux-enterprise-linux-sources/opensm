@@ -51,6 +51,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PORT_INFO_RCV_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
@@ -310,7 +312,7 @@ static void pi_rcv_process_switch_port(IN osm_sm_t * sm, IN osm_node_t * p_node,
 	/*
 	   Update the PortInfo attribute.
 	 */
-	osm_physp_set_port_info(p_physp, p_pi);
+	osm_physp_set_port_info(p_physp, p_pi, sm);
 
 	if (port_num == 0) {
 		/* Determine if base switch port 0 */
@@ -335,7 +337,7 @@ static void pi_rcv_process_ca_or_router_port(IN osm_sm_t * sm,
 
 	pi_rcv_check_and_fix_lid(sm->p_log, p_pi, p_physp);
 
-	osm_physp_set_port_info(p_physp, p_pi);
+	osm_physp_set_port_info(p_physp, p_pi, sm);
 
 	pi_rcv_process_endport(sm, p_physp, p_pi);
 
@@ -460,8 +462,8 @@ static void pi_rcv_process_set(IN osm_sm_t * sm, IN osm_node_t * p_node,
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0F10: "
 				"Received error status for SetResp()\n");
 		}
-		osm_dump_port_info(sm->p_log, osm_node_get_node_guid(p_node),
-				   port_guid, port_num, p_pi, level);
+		osm_dump_port_info_v2(sm->p_log, osm_node_get_node_guid(p_node),
+				      port_guid, port_num, p_pi, FILE_ID, level);
 	}
 
 	OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
@@ -473,7 +475,7 @@ static void pi_rcv_process_set(IN osm_sm_t * sm, IN osm_node_t * p_node,
 		cl_ntoh64(osm_node_get_node_guid(p_node)),
 		cl_ntoh64(p_smp->trans_id));
 
-	osm_physp_set_port_info(p_physp, p_pi);
+	osm_physp_set_port_info(p_physp, p_pi, sm);
 
 	OSM_LOG_EXIT(sm->p_log);
 }
@@ -508,8 +510,8 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 	port_guid = p_context->port_guid;
 	node_guid = p_context->node_guid;
 
-	osm_dump_port_info(sm->p_log, node_guid, port_guid, port_num, p_pi,
-			   OSM_LOG_DEBUG);
+	osm_dump_port_info_v2(sm->p_log, node_guid, port_guid, port_num, p_pi,
+			      FILE_ID, OSM_LOG_DEBUG);
 
 	/* On receipt of client reregister, clear the reregister bit so
 	   reregistering won't be sent again and again */
@@ -566,7 +568,6 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 	if (p_context->set_method)
 		pi_rcv_process_set(sm, p_node, port_num, p_madw);
 	else {
-		p_port->discovery_count++;
 
 		/*
 		   This PortInfo arrived because we did a Get() method,
@@ -586,8 +587,8 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 		/* Update the directed route path to this port
 		   in case the old path is no longer usable. */
 		p_dr_path = osm_physp_get_dr_path_ptr(p_physp);
-		osm_dr_path_init(p_dr_path, osm_madw_get_bind_handle(p_madw),
-				 p_smp->hop_count, p_smp->initial_path);
+		osm_dr_path_init(p_dr_path, p_smp->hop_count,
+				 p_smp->initial_path);
 
 		/* if port just inited or reached INIT state (external reset)
 		   request update for port related tables */
@@ -598,10 +599,13 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 		switch (osm_node_get_type(p_node)) {
 		case IB_NODE_TYPE_CA:
 		case IB_NODE_TYPE_ROUTER:
+			p_port->discovery_count++;
 			pi_rcv_process_ca_or_router_port(sm, p_node, p_physp,
 							 p_pi);
 			break;
 		case IB_NODE_TYPE_SWITCH:
+			if (port_num == 0)
+				p_port->discovery_count++;
 			pi_rcv_process_switch_port(sm, p_node, p_physp, p_pi);
 			break;
 		default:

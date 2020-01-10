@@ -50,6 +50,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_SLVL_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_port.h>
 #include <opensm/osm_node.h>
@@ -141,7 +143,8 @@ static void sa_slvl_by_comp_mask(IN osm_sa_t * sa, IN const osm_port_t * p_port,
 			p_port->p_physp->port_num);
 		p_out_physp = p_port->p_physp;
 		/* check that the p_out_physp and the p_req_physp share a pkey */
-		if (osm_physp_share_pkey(sa->p_log, p_req_physp, p_out_physp))
+		if (osm_physp_share_pkey(sa->p_log, p_req_physp, p_out_physp,
+					 sa->p_subn->opt.allow_both_pkeys))
 			sa_slvl_create(sa, p_out_physp, p_ctxt, 0);
 	} else {
 		if (comp_mask & IB_SLVL_COMPMASK_OUT_PORT)
@@ -173,8 +176,8 @@ static void sa_slvl_by_comp_mask(IN osm_sa_t * sa, IN const osm_port_t * p_port,
 
 				/* if the requester and the p_out_physp don't share a pkey -
 				   continue */
-				if (!osm_physp_share_pkey
-				    (sa->p_log, p_req_physp, p_out_physp))
+				if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_out_physp,
+							  sa->p_subn->opt.allow_both_pkeys))
 					continue;
 
 				sa_slvl_create(sa, p_out_physp, p_ctxt,
@@ -229,7 +232,7 @@ void osm_slvl_rec_rcv_process(IN void *ctx, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -238,6 +241,9 @@ void osm_slvl_rec_rcv_process(IN void *ctx, IN void *data)
 			"Cannot find requester physical port\n");
 		goto Exit;
 	}
+	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+		"Requester port GUID 0x%" PRIx64 "\n",
+		cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
 
 	cl_qlist_init(&rec_list);
 

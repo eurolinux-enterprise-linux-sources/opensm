@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
@@ -185,6 +185,23 @@ typedef struct osm_pi_context {
 } osm_pi_context_t;
 /*********/
 
+/****s* OpenSM: MAD Wrapper/osm_gi_context_t
+* NAME
+*	osm_gi_context_t
+*
+* DESCRIPTION
+*	Context needed by recipient of GUIDInfo attribute.
+*
+* SYNOPSIS
+*/
+typedef struct osm_gi_context {
+	ib_net64_t node_guid;
+	ib_net64_t port_guid;
+	boolean_t set_method;
+	uint8_t port_num;
+} osm_gi_context_t;
+/*********/
+
 /****s* OpenSM: MAD Wrapper/osm_nd_context_t
 * NAME
 *	osm_nd_context_t
@@ -323,6 +340,19 @@ typedef struct osm_perfmgr_context {
 } osm_perfmgr_context_t;
 /*********/
 
+/****s* OpenSM: MAD Wrapper/osm_cc_context_t
+* DESCRIPTION
+*	Context for Congestion Control MADs
+*/
+typedef struct osm_cc_context {
+	ib_net64_t node_guid;
+	ib_net64_t port_guid;
+	uint8_t port;
+	uint8_t mad_method;	/* was this a get or a set */
+	ib_net32_t attr_mod;
+} osm_cc_context_t;
+/*********/
+
 #ifndef OSM_VENDOR_INTF_OPENIB
 /****s* OpenSM: MAD Wrapper/osm_arbitrary_context_t
 * NAME
@@ -352,6 +382,7 @@ typedef struct osm_arbitrary_context {
 typedef union _osm_madw_context {
 	osm_ni_context_t ni_context;
 	osm_pi_context_t pi_context;
+	osm_gi_context_t gi_context;
 	osm_nd_context_t nd_context;
 	osm_si_context_t si_context;
 	osm_lft_context_t lft_context;
@@ -361,6 +392,7 @@ typedef union _osm_madw_context {
 	osm_pkey_context_t pkey_context;
 	osm_vla_context_t vla_context;
 	osm_perfmgr_context_t perfmgr_context;
+	osm_cc_context_t cc_context;
 #ifndef OSM_VENDOR_INTF_OPENIB
 	osm_arbitrary_context_t arb_context;
 #endif
@@ -594,6 +626,32 @@ static inline ib_perfmgt_mad_t *osm_madw_get_perfmgt_mad_ptr(IN const osm_madw_t
 *	MAD Wrapper object
 *********/
 
+/****f* OpenSM: MAD Wrapper/osm_madw_get_cc_mad_ptr
+* DESCRIPTION
+*	Gets a pointer to the Congestion Control MAD in this MAD wrapper.
+*
+* SYNOPSIS
+*/
+static inline ib_cc_mad_t *osm_madw_get_cc_mad_ptr(IN const osm_madw_t
+						   * p_madw)
+{
+	return ((ib_cc_mad_t *) p_madw->p_mad);
+}
+
+/*
+* PARAMETERS
+*	p_madw
+*		[in] Pointer to an osm_madw_t object.
+*
+* RETURN VALUES
+*	Pointer to the start of the Congestion Control MAD.
+*
+* NOTES
+*
+* SEE ALSO
+*	MAD Wrapper object
+*********/
+
 /****f* OpenSM: MAD Wrapper/osm_madw_get_ni_context_ptr
 * NAME
 *	osm_madw_get_ni_context_ptr
@@ -635,6 +693,34 @@ static inline osm_pi_context_t *osm_madw_get_pi_context_ptr(IN const osm_madw_t
 							    * p_madw)
 {
 	return ((osm_pi_context_t *) & p_madw->context);
+}
+
+/*
+* PARAMETERS
+*	p_madw
+*		[in] Pointer to an osm_madw_t object.
+*
+* RETURN VALUES
+*	Pointer to the start of the context structure.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* OpenSM: MAD Wrapper/osm_madw_get_gi_context_ptr
+* NAME
+*	osm_madw_get_gi_context_ptr
+*
+* DESCRIPTION
+*	Gets a pointer to the GUIDInfo context in this MAD.
+*
+* SYNOPSIS
+*/
+static inline osm_gi_context_t *osm_madw_get_gi_context_ptr(IN const osm_madw_t
+							    * p_madw)
+{
+	return ((osm_gi_context_t *) & p_madw->context);
 }
 
 /*
@@ -942,9 +1028,9 @@ static inline osm_vend_wrap_t *osm_madw_get_vend_ptr(IN const osm_madw_t *
 * SEE ALSO
 *********/
 
-/****f* OpenSM: MAD Wrapper/osm_madw_get_vend_ptr
+/****f* OpenSM: MAD Wrapper/osm_madw_get_bind_handle
 * NAME
-*	osm_madw_get_vend_ptr
+*	osm_madw_get_bind_handle
 *
 * DESCRIPTION
 *	Returns the bind handle associated with this MAD.

@@ -1,5 +1,5 @@
 Name: opensm
-Version: 3.3.13
+Version: 3.3.15
 Release: 1%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 Group: System Environment/Daemons
@@ -11,7 +11,7 @@ Source2: opensm.initd
 Source3: opensm.sysconfig
 Patch0: opensm-3.3.13-prefix.patch
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.8, libtool, bison, flex, byacc
+BuildRequires: libibmad-devel = 1.3.9, libtool, bison, flex, byacc
 Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
 ExcludeArch: s390 s390x
 
@@ -113,6 +113,11 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Mon Oct 15 2012 Doug Ledford <dledford@redhat.com> - 3.3.15-1
+- Update to latest upstream source (adds more SRIOV support)
+- Fix init script when no config files are present
+- Related: bz756396
+
 * Tue Feb 28 2012 Doug Ledford <dledford@redhat.com> - 3.3.13-1
 - Update to latest upstream release
 - Add patch to support specifying subnet_prefix on command lien

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2006-2008 Voltaire, Inc. All rights reserved.
+ * Copyright (c) 2012 Mellanox Technologies LTD. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -47,11 +48,19 @@
 #include <ctype.h>
 
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PRTN_CONFIG_C
 #include <opensm/osm_base.h>
 #include <opensm/osm_partition.h>
 #include <opensm/osm_subnet.h>
 #include <opensm/osm_log.h>
 #include <arpa/inet.h>
+
+typedef enum {
+	LIMITED,
+	FULL,
+	BOTH
+} membership_t;
 
 const ib_gid_t osm_ipoib_broadcast_mgid = {
 	{
@@ -81,8 +90,8 @@ struct part_conf {
 	osm_subn_t *p_subn;
 	osm_prtn_t *p_prtn;
 	unsigned is_ipoib;
-	boolean_t full;
 	struct group_flags flags;
+	membership_t membership;
 };
 
 extern osm_prtn_t *osm_prtn_make_new(osm_log_t * p_log, osm_subn_t * p_subn,
@@ -120,8 +129,10 @@ static inline boolean_t ip_mgroup_pkey_ok(struct part_conf *conf,
 	char gid_str[INET6_ADDRSTRLEN];
 
 	if (mgid_is_broadcast(&group->mgid)
-	    || mpkey == 0x0000 /* user requested "wild card" of pkey */
-	    || mpkey == conf->p_prtn->pkey) /* user was smart enough to match */
+	    /* user requested "wild card" of pkey */
+	    || mpkey == 0x0000
+	    /* user was smart enough to match */
+	    || mpkey == (conf->p_prtn->pkey | cl_hton16(0x8000)))
 		return (TRUE);
 
 	OSM_LOG(conf->p_log, OSM_LOG_ERROR,
@@ -342,13 +353,20 @@ static int partition_add_flag(unsigned lineno, struct part_conf *conf,
 		conf->is_ipoib = 1;
 	} else if (!strncmp(flag, "defmember", len)) {
 		if (!val || (strncmp(val, "limited", strlen(val))
+			     && strncmp(val, "both", strlen(val))
 			     && strncmp(val, "full", strlen(val))))
 			OSM_LOG(conf->p_log, OSM_LOG_VERBOSE,
 				"PARSE WARN: line %d: "
-				"flag \'defmember\' requires valid value (limited or full)"
+				"flag \'defmember\' requires valid value (limited or full or both)"
 				" - skipped\n", lineno);
-		else
-			conf->full = strncmp(val, "full", strlen(val)) == 0;
+		else {
+			if (!strncmp(val, "full", strlen(val)))
+				conf->membership = FULL;
+			else if (!strncmp(val, "both", strlen(val)))
+				conf->membership = BOTH;
+			else
+				conf->membership = LIMITED;
+		}
 	} else {
 		OSM_LOG(conf->p_log, OSM_LOG_VERBOSE,
 			"PARSE WARN: line %d: "
@@ -358,22 +376,37 @@ static int partition_add_flag(unsigned lineno, struct part_conf *conf,
 	return 0;
 }
 
+static int partition_add_all(struct part_conf *conf, osm_prtn_t * p,
+			     unsigned type, membership_t membership)
+{
+	if (membership != LIMITED &&
+	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, TRUE) != IB_SUCCESS)
+		return -1;
+	if ((membership == LIMITED ||
+	     (membership == BOTH && conf->p_subn->opt.allow_both_pkeys)) &&
+	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, FALSE) != IB_SUCCESS)
+		return -1;
+	return 0;
+}
+
 static int partition_add_port(unsigned lineno, struct part_conf *conf,
 			      char *name, char *flag)
 {
 	osm_prtn_t *p = conf->p_prtn;
 	ib_net64_t guid;
-	boolean_t full = conf->full;
+	membership_t membership = conf->membership;
 
 	if (!name || !*name || !strncmp(name, "NONE", strlen(name)))
 		return 0;
 
 	if (flag) {
 		/* reset default membership to limited */
-		full = FALSE;
+		membership = LIMITED;
 		if (!strncmp(flag, "full", strlen(flag)))
-			full = TRUE;
-		else if (strncmp(flag, "limited", strlen(flag))) {
+			membership = FULL;
+		else if (!strncmp(flag, "both", strlen(flag)))
+			membership = BOTH;
+		else if (!strncmp(flag, "limited", strlen(flag))) {
 			OSM_LOG(conf->p_log, OSM_LOG_VERBOSE,
 				"PARSE WARN: line %d: "
 				"unrecognized port flag \'%s\'."
@@ -381,19 +414,17 @@ static int partition_add_port(unsigned lineno, struct part_conf *conf,
 		}
 	}
 
-	if (!strncmp(name, "ALL", strlen(name))) {
-		return osm_prtn_add_all(conf->p_log, conf->p_subn, p,
-					0, full) == IB_SUCCESS ? 0 : -1;
-	} else if (!strncmp(name, "ALL_CAS", strlen(name))) {
-		return osm_prtn_add_all(conf->p_log, conf->p_subn, p,
-					IB_NODE_TYPE_CA, full) == IB_SUCCESS ? 0 : -1;
-	} else if (!strncmp(name, "ALL_SWITCHES", strlen(name))) {
-		return osm_prtn_add_all(conf->p_log, conf->p_subn, p,
-					IB_NODE_TYPE_SWITCH, full) == IB_SUCCESS ? 0 : -1;
-	} else if (!strncmp(name, "ALL_ROUTERS", strlen(name))) {
-		return osm_prtn_add_all(conf->p_log, conf->p_subn, p,
-					IB_NODE_TYPE_ROUTER, full) == IB_SUCCESS ? 0 : -1;
-	} else if (!strncmp(name, "SELF", strlen(name))) {
+	if (!strncmp(name, "ALL", strlen(name)))
+		return partition_add_all(conf, p, 0, membership);
+	else if (!strncmp(name, "ALL_CAS", strlen(name)))
+		return partition_add_all(conf, p, IB_NODE_TYPE_CA, membership);
+	else if (!strncmp(name, "ALL_SWITCHES", strlen(name)))
+		return partition_add_all(conf, p, IB_NODE_TYPE_SWITCH,
+					 membership);
+	else if (!strncmp(name, "ALL_ROUTERS", strlen(name)))
+		return partition_add_all(conf, p, IB_NODE_TYPE_ROUTER,
+					 membership);
+	else if (!strncmp(name, "SELF", strlen(name))) {
 		guid = cl_ntoh64(conf->p_subn->sm_port_guid);
 	} else {
 		char *end;
@@ -402,10 +433,15 @@ static int partition_add_port(unsigned lineno, struct part_conf *conf,
 			return -1;
 	}
 
-	if (osm_prtn_add_port(conf->p_log, conf->p_subn, p,
-			      cl_hton64(guid), full) != IB_SUCCESS)
+	if (membership != LIMITED &&
+	    osm_prtn_add_port(conf->p_log, conf->p_subn, p,
+			      cl_hton64(guid), TRUE) != IB_SUCCESS)
 		return -1;
-
+	if ((membership == LIMITED ||
+	    (membership == BOTH && conf->p_subn->opt.allow_both_pkeys)) &&
+	    osm_prtn_add_port(conf->p_log, conf->p_subn, p,
+			      cl_hton64(guid), FALSE) != IB_SUCCESS)
+		return -1;
 	return 0;
 }
 
@@ -553,7 +589,7 @@ static struct part_conf *new_part_conf(osm_log_t * p_log, osm_subn_t * p_subn)
 	conf->flags.sl = OSM_DEFAULT_SL;
 	conf->flags.rate = OSM_DEFAULT_MGRP_RATE;
 	conf->flags.mtu = OSM_DEFAULT_MGRP_MTU;
-	conf->full = FALSE;
+	conf->membership = LIMITED;
 	return conf;
 }
 
@@ -636,6 +672,7 @@ skip_header:
 		if (q)
 			*q++ = '\0';
 		ret = parse_name_token(p, &name, &flag);
+		len += ret;
 
 		if (strcmp(name, "mgid") == 0) {
 			/* parse an mgid line if specified. */
@@ -651,7 +688,6 @@ skip_header:
 			return -1;
 		}
 		p += ret;
-		len += ret;
 	} while (q);
 
 done:
@@ -695,7 +731,7 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 				break;
 
 			if (!conf && !(conf = new_part_conf(p_log, p_subn))) {
-				OSM_LOG(conf->p_log, OSM_LOG_ERROR,
+				OSM_LOG(p_log, OSM_LOG_ERROR,
 					"PARSE ERROR: line %d: "
 					"internal: cannot create config\n",
 					lineno);

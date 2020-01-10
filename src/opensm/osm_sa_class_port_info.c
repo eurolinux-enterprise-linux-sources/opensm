@@ -50,6 +50,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qlist.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_CLASS_PORT_INFO_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_helper.h>
 #include <opensm/osm_sa.h>
@@ -158,7 +160,10 @@ static void cpi_rcv_respond(IN osm_sa_t * sa, IN const osm_madw_t * p_madw)
 	    OSM_CAP_IS_PORT_INFO_CAPMASK_MATCH_SUPPORTED;
 #endif
 	cap_mask2 = OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED |
-		    OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED;
+		    OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED |
+		    OSM_CAP2_IS_ALIAS_GUIDS_SUPPORTED |
+		    OSM_CAP2_IS_MULTICAST_SERVICE_RECS_SUPPORTED |
+		    OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED;
 	if (sa->p_subn->opt.use_mfttop)
 		cap_mask2 |= OSM_CAP2_IS_MCAST_TOP_SUPPORTED;
 	if (sa->p_subn->opt.qos)
@@ -169,8 +174,8 @@ static void cpi_rcv_respond(IN osm_sa_t * sa, IN const osm_madw_t * p_madw)
 		p_resp_cpi->cap_mask |= OSM_CAP_IS_UD_MCAST_SUP;
 	p_resp_cpi->cap_mask = cl_hton16(p_resp_cpi->cap_mask);
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_FRAMES))
-		osm_dump_sa_mad(sa->p_log, p_resp_sa_mad, OSM_LOG_FRAMES);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_FRAMES))
+		osm_dump_sa_mad_v2(sa->p_log, p_resp_sa_mad, FILE_ID, OSM_LOG_FRAMES);
 
 	osm_sa_send(sa, p_resp_madw, FALSE);
 

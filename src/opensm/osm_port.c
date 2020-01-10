@@ -48,10 +48,14 @@
 #include <string.h>
 #include <complib/cl_debug.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PORT_C
 #include <opensm/osm_port.h>
 #include <opensm/osm_node.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_switch.h>
+#include <opensm/osm_db_pack.h>
+#include <opensm/osm_sm.h>
 
 void osm_physp_construct(IN osm_physp_t * p_physp)
 {
@@ -101,7 +105,7 @@ void osm_physp_init(IN osm_physp_t * p_physp, IN ib_net64_t port_guid,
 	p_physp->need_update = 2;
 	p_physp->p_node = (struct osm_node *)p_node;
 
-	osm_dr_path_init(&p_physp->dr_path, h_bind, hop_count, p_initial_path);
+	osm_dr_path_init(&p_physp->dr_path, hop_count, p_initial_path);
 
 	/* allocate enough SL2VL tables */
 	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH)
@@ -174,7 +178,8 @@ void osm_port_get_lid_range_ho(IN const osm_port_t * p_port,
 }
 
 uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
-				IN const osm_physp_t * p_physp)
+				IN const osm_physp_t * p_physp,
+				IN uint8_t current_mtu)
 {
 	const osm_physp_t *p_remote_physp;
 	uint8_t mtu;
@@ -200,17 +205,17 @@ uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
 		if (mtu != remote_mtu) {
 			if (mtu > remote_mtu)
 				mtu = remote_mtu;
-
-			OSM_LOG(p_log, OSM_LOG_VERBOSE,
-				"MTU mismatch between ports."
-				"\n\t\t\t\tPort 0x%016" PRIx64 ", port %u"
-				" and port 0x%016" PRIx64 ", port %u."
-				"\n\t\t\t\tUsing lower MTU of %u\n",
-				cl_ntoh64(osm_physp_get_port_guid(p_physp)),
-				osm_physp_get_port_num(p_physp),
-				cl_ntoh64(osm_physp_get_port_guid
-					  (p_remote_physp)),
-				osm_physp_get_port_num(p_remote_physp), mtu);
+			if (mtu != current_mtu)
+				OSM_LOG(p_log, OSM_LOG_VERBOSE,
+					"MTU mismatch between ports."
+					"\n\t\t\t\tPort 0x%016" PRIx64 ", port %u"
+					" and port 0x%016" PRIx64 ", port %u."
+					"\n\t\t\t\tUsing lower MTU of %u\n",
+					cl_ntoh64(osm_physp_get_port_guid(p_physp)),
+					osm_physp_get_port_num(p_physp),
+					cl_ntoh64(osm_physp_get_port_guid
+						  (p_remote_physp)),
+					osm_physp_get_port_num(p_remote_physp), mtu);
 		}
 	} else
 		mtu = ib_port_info_get_neighbor_mtu(&p_physp->port_info);
@@ -227,7 +232,8 @@ uint8_t osm_physp_calc_link_mtu(IN osm_log_t * p_log,
 
 uint8_t osm_physp_calc_link_op_vls(IN osm_log_t * p_log,
 				   IN const osm_subn_t * p_subn,
-				   IN const osm_physp_t * p_physp)
+				   IN const osm_physp_t * p_physp,
+				   IN uint8_t current_op_vls)
 {
 	const osm_physp_t *p_remote_physp;
 	uint8_t op_vls;
@@ -253,17 +259,17 @@ uint8_t osm_physp_calc_link_op_vls(IN osm_log_t * p_log,
 		if (op_vls != remote_op_vls) {
 			if (op_vls > remote_op_vls)
 				op_vls = remote_op_vls;
-
-			OSM_LOG(p_log, OSM_LOG_VERBOSE,
-				"OP_VLS mismatch between ports."
-				"\n\t\t\t\tPort 0x%016" PRIx64 ", port 0x%X"
-				" and port 0x%016" PRIx64 ", port 0x%X."
-				"\n\t\t\t\tUsing lower OP_VLS of %u\n",
-				cl_ntoh64(osm_physp_get_port_guid(p_physp)),
-				osm_physp_get_port_num(p_physp),
-				cl_ntoh64(osm_physp_get_port_guid
-					  (p_remote_physp)),
-				osm_physp_get_port_num(p_remote_physp), op_vls);
+			if (op_vls != current_op_vls)
+				OSM_LOG(p_log, OSM_LOG_VERBOSE,
+					"OP_VLS mismatch between ports."
+					"\n\t\t\t\tPort 0x%016" PRIx64 ", port 0x%X"
+					" and port 0x%016" PRIx64 ", port 0x%X."
+					"\n\t\t\t\tUsing lower OP_VLS of %u\n",
+					cl_ntoh64(osm_physp_get_port_guid(p_physp)),
+					osm_physp_get_port_num(p_physp),
+					cl_ntoh64(osm_physp_get_port_guid
+						  (p_remote_physp)),
+					osm_physp_get_port_num(p_remote_physp), op_vls);
 		}
 	} else
 		op_vls = ib_port_info_get_op_vls(&p_physp->port_info);
@@ -414,7 +420,7 @@ static void physp_update_new_dr_path(IN osm_physp_t const *p_dest_physp,
 	}
 	if (p_src_physp) {
 		p_dr_path = osm_physp_get_dr_path_ptr(p_src_physp);
-		osm_dr_path_init(p_dr_path, h_bind, i, path_array);
+		osm_dr_path_init(p_dr_path, i, path_array);
 	}
 
 	cl_list_destroy(&tmpPortsList);
@@ -633,7 +639,8 @@ void osm_physp_set_pkey_tbl(IN osm_log_t * p_log, IN const osm_subn_t * p_subn,
 		return;
 	}
 
-	osm_pkey_tbl_set(&p_physp->pkeys, block_num, p_pkey_tbl);
+	osm_pkey_tbl_set(&p_physp->pkeys, block_num, p_pkey_tbl,
+			 p_subn->opt.allow_both_pkeys);
 }
 
 osm_alias_guid_t *osm_alias_guid_new(IN const ib_net64_t alias_guid,
@@ -653,4 +660,34 @@ void osm_alias_guid_delete(IN OUT osm_alias_guid_t ** pp_alias_guid)
 {
 	free(*pp_alias_guid);
 	*pp_alias_guid = NULL;
+}
+
+void osm_physp_set_port_info(IN osm_physp_t * p_physp,
+					   IN const ib_port_info_t * p_pi,
+					   IN const struct osm_sm * p_sm)
+{
+	CL_ASSERT(p_pi);
+	CL_ASSERT(osm_physp_is_valid(p_physp));
+
+	if (ib_port_info_get_port_state(p_pi) == IB_LINK_DOWN) {
+		/* If PortState is down, only copy PortState */
+		/* and PortPhysicalState per C14-24-2.1 */
+		ib_port_info_set_port_state(&p_physp->port_info, IB_LINK_DOWN);
+		ib_port_info_set_port_phys_state
+		    (ib_port_info_get_port_phys_state(p_pi),
+		     &p_physp->port_info);
+	} else {
+		p_physp->port_info = *p_pi;
+
+		/* The MKey in p_pi can only be considered valid if it's
+		 * for a HCA/router or switch port 0, and it's either
+		 * non-zero or the MKeyProtect bits are also zero.
+		 */
+		if ((osm_node_get_type(p_physp->p_node) !=
+		     IB_NODE_TYPE_SWITCH || p_physp->port_num == 0) &&
+		    (p_pi->m_key != 0 || ib_port_info_get_mpb(p_pi) == 0))
+			osm_db_guid2mkey_set(p_sm->p_subn->p_g2m,
+					     cl_ntoh64(p_physp->port_guid),
+					     cl_ntoh64(p_pi->m_key));
+	}
 }

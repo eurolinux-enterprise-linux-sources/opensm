@@ -54,6 +54,7 @@
 #include <complib/cl_list.h>
 #include <opensm/osm_base.h>
 #include <opensm/osm_prefix_route.h>
+#include <opensm/osm_db.h>
 #include <stdio.h>
 
 #ifdef __cplusplus
@@ -68,6 +69,23 @@ BEGIN_C_DECLS
 #define OSM_SUBNET_VECTOR_MIN_SIZE			0
 #define OSM_SUBNET_VECTOR_GROW_SIZE			1
 #define OSM_SUBNET_VECTOR_CAPACITY			256
+
+#define OSM_PARTITION_ENFORCE_BOTH			"both"
+#define OSM_PARTITION_ENFORCE_IN			"in"
+#define OSM_PARTITION_ENFORCE_OUT			"out"
+#define OSM_PARTITION_ENFORCE_OFF			"off"
+
+typedef enum _osm_partition_enforce_type_enum {
+	OSM_PARTITION_ENFORCE_TYPE_BOTH,
+	OSM_PARTITION_ENFORCE_TYPE_IN,
+	OSM_PARTITION_ENFORCE_TYPE_OUT,
+	OSM_PARTITION_ENFORCE_TYPE_OFF
+} osm_partition_enforce_type_enum;
+
+/* XXX: not actual max, max we're currently going to support */
+#define OSM_CCT_ENTRY_MAX        128
+#define OSM_CCT_ENTRY_MAD_BLOCKS (OSM_CCT_ENTRY_MAX/64)
+
 struct osm_opensm;
 struct osm_qos_policy;
 
@@ -129,6 +147,91 @@ typedef struct osm_qos_options {
 *
 *********/
 
+/****s* OpenSM: Subnet/osm_cct_entry_t
+* NAME
+*	osm_cct_entry_t
+*
+* DESCRIPTION
+*	Subnet Congestion Control Table entry.  See A10.2.2.1.1 for format details.
+*
+* SYNOPSIS
+*/
+typedef struct osm_cct_entry {
+	uint8_t shift; //Alex: shift 2 bits
+	uint16_t multiplier; //Alex multiplier 14 bits
+} osm_cct_entry_t;
+/*
+* FIELDS
+*
+*	shift
+*		shift field in CCT entry.  See A10.2.2.1.1.
+*
+*	multiplier
+*		multiplier field in CCT entry.  See A10.2.2.1.1.
+*
+*********/
+
+/****s* OpenSM: Subnet/osm_cacongestion_entry_t
+* NAME
+*	osm_cacongestion_entry_t
+*
+* DESCRIPTION
+*	Subnet CA Congestion entry.  See A10.4.3.8.4 for format details.
+*
+* SYNOPSIS
+*/
+typedef struct osm_cacongestion_entry {
+	ib_net16_t ccti_timer; //Alex: ccti_timer and ccti_increase should be replaced
+	uint8_t ccti_increase;
+	uint8_t trigger_threshold;
+	uint8_t ccti_min;
+} osm_cacongestion_entry_t;
+/*
+* FIELDS
+*
+*	ccti_timer
+*		CCTI Timer
+*
+*	ccti_increase
+*		CCTI Increase
+*
+*	trigger_threshold
+*		CCTI trigger for log message
+*
+*	ccti_min
+*		CCTI Minimum
+*
+*********/
+
+/****s* OpenSM: Subnet/osm_cct_t
+* NAME
+*	osm_cct_t
+*
+* DESCRIPTION
+*	Subnet CongestionControlTable.  See A10.4.3.9 for format details.
+*
+* SYNOPSIS
+*/
+typedef struct osm_cct {
+	osm_cct_entry_t entries[OSM_CCT_ENTRY_MAX];
+	unsigned int entries_len;
+	char *input_str;
+} osm_cct_t;
+/*
+* FIELDS
+*
+*	entries
+*		Entries in CCT
+*
+*	entries_len
+*		Length of entries
+*
+*	input_str
+*		Original str input
+*
+*********/
+
+
 /****s* OpenSM: Subnet/osm_subn_opt_t
 * NAME
 *	osm_subn_opt_t
@@ -147,6 +250,7 @@ typedef struct osm_subn_opt {
 	ib_net64_t sa_key;
 	ib_net64_t subnet_prefix;
 	ib_net16_t m_key_lease_period;
+	uint8_t m_key_protect_bits;
 	uint32_t sweep_interval;
 	uint32_t max_wire_smps;
 	uint32_t max_wire_smps2;
@@ -184,6 +288,10 @@ typedef struct osm_subn_opt {
 	unsigned long log_max_size;
 	char *partition_config_file;
 	boolean_t no_partition_enforcement;
+	char *part_enforce;
+	osm_partition_enforce_type_enum part_enforce_enum;
+	boolean_t allow_both_pkeys;
+	uint8_t sm_assigned_guid;
 	boolean_t qos;
 	char *qos_policy_file;
 	boolean_t accum_log_file;
@@ -222,6 +330,21 @@ typedef struct osm_subn_opt {
 	osm_qos_options_t qos_sw0_options;
 	osm_qos_options_t qos_swe_options;
 	osm_qos_options_t qos_rtr_options;
+	boolean_t congestion_control;
+	ib_net64_t cc_key;
+	uint32_t cc_max_outstanding_mads;
+	ib_net32_t cc_sw_cong_setting_control_map;
+	uint8_t cc_sw_cong_setting_victim_mask[IB_CC_PORT_MASK_DATA_SIZE];
+	uint8_t cc_sw_cong_setting_credit_mask[IB_CC_PORT_MASK_DATA_SIZE];
+	uint8_t cc_sw_cong_setting_threshold;
+	uint8_t cc_sw_cong_setting_packet_size;
+	uint8_t cc_sw_cong_setting_credit_starvation_threshold;
+	osm_cct_entry_t cc_sw_cong_setting_credit_starvation_return_delay;
+	ib_net16_t cc_sw_cong_setting_marking_rate;
+	ib_net16_t cc_ca_cong_setting_port_control;
+	ib_net16_t cc_ca_cong_setting_control_map;
+	osm_cacongestion_entry_t cc_ca_cong_entries[IB_CA_CONG_ENTRY_DATA_SIZE];
+	osm_cct_t cc_cct;
 	boolean_t enable_quirks;
 	boolean_t no_clients_rereg;
 #ifdef ENABLE_OSM_PERF_MGR
@@ -229,7 +352,10 @@ typedef struct osm_subn_opt {
 	boolean_t perfmgr_redir;
 	uint16_t perfmgr_sweep_time_s;
 	uint32_t perfmgr_max_outstanding_queries;
+	boolean_t perfmgr_ignore_cas;
 	char *event_db_dump_file;
+	int perfmgr_rm_nodes;
+	boolean_t perfmgr_log_errors;
 #endif				/* ENABLE_OSM_PERF_MGR */
 	char *event_plugin_name;
 	char *event_plugin_options;
@@ -240,6 +366,7 @@ typedef struct osm_subn_opt {
 	struct osm_subn_opt *file_opts; /* used for update */
 	uint8_t lash_start_vl;			/* starting vl to use in lash */
 	uint8_t sm_sl;			/* which SL to use for SM/SA communication */
+	char *per_module_logging_file;
 } osm_subn_opt_t;
 /*
 * FIELDS
@@ -503,6 +630,60 @@ typedef struct osm_subn_opt {
 *	qos_rtr_options
 *		QoS options for router ports
 *
+*	congestion_control
+*		Boolean that specifies whether OpenSM congestion control configuration
+*		should be off or no.
+*
+*	cc_key
+*		CCkey to use when configuring congestion control.
+*
+*	cc_max_outstanding_mads
+*		Max number of outstanding CC mads that can be on the wire.
+*
+*	cc_sw_cong_setting_control_map
+*		Congestion Control Switch Congestion Setting Control Map
+*		configuration setting.
+*
+*	cc_sw_cong_setting_victim_mask
+*		Congestion Control Switch Congestion Setting Victim Mask
+*		configuration setting.
+*
+*	cc_sw_cong_setting_credit_mask
+*		Congestion Control Switch Congestion Setting Credit Mask
+*		configuration setting.
+*
+*	cc_sw_cong_setting_threshold
+*		Congestion Control Switch Congestion Setting Threshold
+*		configuration setting.
+*
+*	cc_sw_cong_setting_packet_size
+*		Congestion Control Switch Congestion Setting Packet Size
+*		configuration setting.
+*
+*	cc_sw_cong_setting_credit_starvation_threshold
+*		Congestion Control Switch Congestion Setting Credit Staraction Threshold
+*		configuration setting.
+*
+*	cc_sw_cong_setting_credit_starvation_return_delay
+*		Congestion Control Switch Congestion Setting Credit Starvation Return Delay
+*		configuration setting.
+*
+*	cc_sw_cong_setting_marking_rate
+*		Congestion Control Switch Congestion Setting Marking Rate
+*		configuration setting.
+*
+*	cc_ca_cong_setting_port_control
+*		Congestion Control CA Congestion Setting Port Control
+*
+*	cc_ca_cong_setting_control_map
+*		Congestion Control CA Congestion Setting Control Map
+
+*	cc_ca_cong_entries
+*		Congestion Control CA Congestion Setting Entries
+*
+*	cc_cct
+*		Congestion Control Table array of entries
+*
 *	enable_quirks
 *		Enable high risk new features and not fully qualified
 *		hardware specific work arounds
@@ -513,6 +694,9 @@ typedef struct osm_subn_opt {
 *	scatter_ports
 *		When not zero, randomize best possible ports chosen
 *		for a route. The value is used as a random key seed.
+*
+*	per_module_logging_file
+*		File name of per module logging configuration.
 *
 * SEE ALSO
 *	Subnet object
@@ -537,12 +721,14 @@ typedef struct osm_subn {
 	cl_qmap_t node_guid_tbl;
 	cl_qmap_t port_guid_tbl;
 	cl_qmap_t alias_port_guid_tbl;
+	cl_qmap_t assigned_guids_tbl;
 	cl_qmap_t rtr_guid_tbl;
 	cl_qlist_t prefix_routes_list;
 	cl_qmap_t prtn_pkey_tbl;
 	cl_qmap_t sm_guid_tbl;
 	cl_qlist_t sa_sr_list;
 	cl_qlist_t sa_infr_list;
+	cl_qlist_t alias_guid_list;
 	cl_ptr_vector_t port_lid_tbl;
 	ib_net16_t master_sm_base_lid;
 	ib_net16_t sm_base_lid;
@@ -562,28 +748,31 @@ typedef struct osm_subn {
 	boolean_t force_reroute;
 	boolean_t in_sweep_hop_0;
 	boolean_t first_time_master_sweep;
+	boolean_t set_client_rereg_on_sweep;
 	boolean_t coming_out_of_standby;
 	boolean_t sweeping_enabled;
 	unsigned need_update;
 	cl_fmap_t mgrp_mgid_tbl;
+	osm_db_domain_t *p_g2m;
+	osm_db_domain_t *p_neighbor;
 	void *mboxes[IB_LID_MCAST_END_HO - IB_LID_MCAST_START_HO + 1];
 } osm_subn_t;
 /*
 * FIELDS
 *	sw_guid_tbl
-*		Container of pointers to all Switch objects in the subent.
+*		Container of pointers to all Switch objects in the subnet.
 *		Indexed by node GUID.
 *
 *	node_guid_tbl
-*		Container of pointers to all Node objects in the subent.
+*		Container of pointers to all Node objects in the subnet.
 *		Indexed by node GUID.
 *
 *	port_guid_tbl
-*		Container of pointers to all Port objects in the subent.
+*		Container of pointers to all Port objects in the subnet.
 *		Indexed by port GUID - network order!
 *
 *	rtr_guid_tbl
-*		Container of pointers to all Router objects in the subent.
+*		Container of pointers to all Router objects in the subnet.
 *		Indexed by node GUID.
 *
 *	prtn_pkey_tbl
@@ -595,7 +784,7 @@ typedef struct osm_subn {
 *		on the subnet.
 *
 *	port_lid_tbl
-*		Container of pointers to all Port objects in the subent.
+*		Container of pointers to all Port objects in the subnet.
 *		Indexed by port LID.
 *
 *	master_sm_base_lid
@@ -668,13 +857,20 @@ typedef struct osm_subn {
 *		the sweeping.
 *
 *	first_time_master_sweep
-*		This flag is used for the PortInfo setting. On the first
-*		sweep as master (meaning after moving from Standby|Discovering
-*		state), the SM must send a PortInfoSet to all ports. After
-*		that - we want to minimize the number of PortInfoSet requests
-*		sent, and to send only requests that change the value from
-*		what is updated in the port (or send a first request if this
-*		is a new port). We will set this flag to TRUE when entering
+*		This flag is to indicate the first sweep as master (meaning
+*		after moving from Standby|Discovering state).  The flag is
+*		used to notify some alternate actions that must be done on
+*		the first master sweep.  It may perform some actions indicated
+*		by flags below, such as set_client_rereg_on_sweep.
+*
+*	set_client_rereg_on_sweep
+*		This flag is used for the PortInfo setting client rereg.
+*		When configuring the subnet for the first time, and several
+*		other circumstances, SM must send a PortInfoSet to all ports.
+*		After that - we want to minimize the number of PortInfoSet
+*		requests sent, and to send only requests that change the value
+*		from what is updated in the port (or send a first request if
+*		this is a new port). We will set this flag to TRUE when entering
 *		the master state, and set it back to FALSE at the end of the
 *		drop manager. This is done since at the end of the drop manager
 *		we have updated all the ports that are reachable, and from now
@@ -703,6 +899,35 @@ typedef struct osm_subn {
 *	mboxes
 *		Array of pointers to all Multicast MLID box objects in the
 *		subnet. Indexed by MLID offset from base MLID.
+*
+* SEE ALSO
+*	Subnet object
+*********/
+
+/****s* OpenSM: Subnet/osm_assigned_guids_t
+* NAME
+*	osm_assigned_guids_t
+*
+* DESCRIPTION
+*	SA assigned GUIDs structure.
+*
+* SYNOPSIS
+*/
+typedef struct osm_assigned_guids {
+	cl_map_item_t map_item;
+	ib_net64_t port_guid;
+	ib_net64_t assigned_guid[1];
+} osm_assigned_guids_t;
+/*
+* FIELDS
+*	map_item
+*		Linkage structure for cl_qmap.  MUST BE FIRST MEMBER!
+*
+*	port_guid
+*		Base port GUID.
+*
+*	assigned_guids
+*		Table of persistent SA assigned GUIDs.
 *
 * SEE ALSO
 *	Subnet object
@@ -1024,6 +1249,36 @@ struct osm_port *osm_get_port_by_lid_ho(const osm_subn_t * subn, uint16_t lid);
 *       Subnet object, osm_port_t
 *********/
 
+/****f* OpenSM: Subnet/osm_get_alias_guid_by_guid
+* NAME
+*	osm_get_alias_guid_by_guid
+*
+* DESCRIPTION
+*	This looks for the given port guid in the subnet table of ports by
+*	alias guid.
+*  NOTE: this code is not thread safe. Need to grab the lock before
+*  calling it.
+*
+* SYNOPSIS
+*/
+struct osm_alias_guid *osm_get_alias_guid_by_guid(IN osm_subn_t const *p_subn,
+						  IN ib_net64_t guid);
+/*
+* PARAMETERS
+*	p_subn
+*		[in] Pointer to an osm_subn_t object
+*
+*	guid
+*		[in] The alias port guid in network order
+*
+* RETURN VALUES
+*	The alias guid structure pointer if found. NULL otherwise.
+*
+* SEE ALSO
+*	Subnet object, osm_subn_construct, osm_subn_destroy,
+*	osm_alias_guid_t
+*********/
+
 /****f* OpenSM: Subnet/osm_get_port_by_alias_guid
 * NAME
 *	osm_get_port_by_alias_guid
@@ -1052,6 +1307,84 @@ struct osm_port *osm_get_port_by_alias_guid(IN osm_subn_t const *p_subn,
 * SEE ALSO
 *	Subnet object, osm_subn_construct, osm_subn_destroy,
 *	osm_port_t
+*********/
+
+/****f* OpenSM: Port/osm_assigned_guids_new
+* NAME
+*	osm_assigned_guids_new
+*
+* DESCRIPTION
+*	This function allocates and initializes an assigned guids object.
+*
+* SYNOPSIS
+*/
+osm_assigned_guids_t *osm_assigned_guids_new(IN const ib_net64_t port_guid,
+					     IN const uint32_t num_guids);
+/*
+* PARAMETERS
+*       port_guid
+*               [in] Base port GUID in network order
+*
+* RETURN VALUE
+*       Pointer to the initialized assigned alias guid object.
+*
+* SEE ALSO
+*	Subnet object, osm_assigned_guids_t, osm_assigned_guids_delete,
+*	osm_get_assigned_guids_by_guid
+*********/
+
+/****f* OpenSM: Port/osm_assigned_guids_delete
+* NAME
+*	osm_assigned_guids_delete
+*
+* DESCRIPTION
+*	This function destroys and deallocates an assigned guids object.
+*
+* SYNOPSIS
+*/
+void osm_assigned_guids_delete(IN OUT osm_assigned_guids_t ** pp_assigned_guids);
+/*
+* PARAMETERS
+*       pp_assigned_guids
+*		[in][out] Pointer to a pointer to an assigned guids object to delete.
+*		On return, this pointer is NULL.
+*
+* RETURN VALUE
+*	This function does not return a value.
+*
+* NOTES
+*	Performs any necessary cleanup of the specified assigned guids object.
+*
+* SEE ALSO
+*	Subnet object, osm_assigned_guids_new, osm_get_assigned_guids_by_guid
+*********/
+
+/****f* OpenSM: Subnet/osm_get_assigned_guids_by_guid
+* NAME
+*	osm_get_assigned_guids_by_guid
+*
+* DESCRIPTION
+*	This looks for the given port guid and returns a pointer
+*	to the guid table of SA assigned alias guids for that port.
+*
+* SYNOPSIS
+*/
+osm_assigned_guids_t *osm_get_assigned_guids_by_guid(IN osm_subn_t const *p_subn,
+						     IN ib_net64_t port_guid);
+/*
+* PARAMETERS
+*	p_subn
+*		[in] Pointer to an osm_subn_t object
+*
+*	port_guid
+*		[in] The base port guid in network order
+*
+* RETURN VALUES
+*	The osm_assigned_guids structure pointer if found. NULL otherwise.
+*
+* SEE ALSO
+*	Subnet object, osm_assigned_guids_new, osm_assigned_guids_delete,
+*	osm_assigned_guids_t
 *********/
 
 /****f* OpenSM: Port/osm_get_port_by_lid

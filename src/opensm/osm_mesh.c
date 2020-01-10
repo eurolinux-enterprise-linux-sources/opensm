@@ -43,6 +43,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_MESH_C
 #include <opensm/osm_switch.h>
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_log.h>
@@ -872,7 +874,7 @@ static void seed_axes(lash_t *p_lash, int sw)
 		}
 	}
 
-	if (osm_log_is_active(p_log, OSM_LOG_DEBUG)) {
+	if (OSM_LOG_IS_ACTIVE_V2(p_log, OSM_LOG_DEBUG)) {
 		char buf[256], *p;
 
 		for (i = 0; i < n; i++) {
@@ -1659,7 +1661,7 @@ int osm_do_mesh_analysis(lash_t *p_lash)
 	 * find dominant switch class
 	 */
 	OSM_LOG(p_log, OSM_LOG_INFO, "found %d node class%s\n",
-		mesh->num_class, (mesh->num_class == 1)? "" : "es");
+		mesh->num_class, (mesh->num_class == 1) ? "" : "es");
 	for (i = 0; i < mesh->num_class; i++) {
 		OSM_LOG(p_log, OSM_LOG_INFO,
 			"class[%d] has %d members with type = %d\n",
@@ -1719,7 +1721,7 @@ int osm_do_mesh_analysis(lash_t *p_lash)
 		OSM_LOG(p_log, OSM_LOG_INFO, "%s", buf);
 	}
 
-	if (osm_log_is_active(p_log, OSM_LOG_DEBUG))
+	if (OSM_LOG_IS_ACTIVE_V2(p_log, OSM_LOG_DEBUG))
 		dump_mesh(p_lash);
 
 done:

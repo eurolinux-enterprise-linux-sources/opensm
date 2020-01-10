@@ -138,10 +138,12 @@ typedef struct osm_perfmgr {
 	atomic32_t outstanding_queries;	/* this along with sig_query */
 	cl_event_t sig_query;	/* will throttle our queries */
 	uint32_t max_outstanding_queries;
+	boolean_t ignore_cas;
 	cl_qmap_t monitored_map;	/* map the nodes being tracked */
 	monitored_node_t *remove_list;
 	ib_net64_t port_guid;
 	int16_t local_port;
+	int rm_nodes;
 } osm_perfmgr_t;
 /*
 * FIELDS
@@ -177,6 +179,16 @@ inline static void osm_perfmgr_set_state(osm_perfmgr_t * p_perfmgr,
 inline static osm_perfmgr_state_t osm_perfmgr_get_state(osm_perfmgr_t * perfmgr)
 {
 	return perfmgr->state;
+}
+
+inline static void osm_perfmgr_set_rm_nodes(osm_perfmgr_t *perfmgr,
+					    int rm_nodes)
+{
+	perfmgr->rm_nodes = rm_nodes;
+}
+inline static int osm_perfmgr_get_rm_nodes(osm_perfmgr_t *perfmgr)
+{
+	return perfmgr->rm_nodes;
 }
 
 inline static const char *osm_perfmgr_get_state_str(osm_perfmgr_t * p_perfmgr)
@@ -223,10 +235,18 @@ inline static uint16_t osm_perfmgr_get_sweep_time_s(osm_perfmgr_t * p_perfmgr)
 	return p_perfmgr->sweep_time_s;
 }
 
+inline static unsigned osm_perfmgr_delete_inactive(osm_perfmgr_t * pm)
+{
+	unsigned rc;
+	perfmgr_db_delete_inactive(pm->db, &rc);
+	return (rc);
+}
+
 void osm_perfmgr_clear_counters(osm_perfmgr_t * p_perfmgr);
 void osm_perfmgr_dump_counters(osm_perfmgr_t * p_perfmgr,
 			       perfmgr_db_dump_t dump_type);
-void osm_perfmgr_print_counters(osm_perfmgr_t *pm, char *nodename, FILE *fp);
+void osm_perfmgr_print_counters(osm_perfmgr_t *pm, char *nodename, FILE *fp,
+				char *port, int err_only);
 
 ib_api_status_t osm_perfmgr_bind(osm_perfmgr_t * p_perfmgr,
 				 ib_net64_t port_guid);

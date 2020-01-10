@@ -52,6 +52,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qmap.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_STATE_MGR_C
 #include <opensm/osm_sm.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_switch.h>
@@ -64,12 +66,15 @@
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_inform.h>
 #include <opensm/osm_opensm.h>
+#include <opensm/osm_congestion_control.h>
+#include <opensm/osm_db.h>
 
 extern void osm_drop_mgr_process(IN osm_sm_t * sm);
 extern int osm_qos_setup(IN osm_opensm_t * p_osm);
 extern int osm_pkey_mgr_process(IN osm_opensm_t * p_osm);
 extern int osm_mcast_mgr_process(IN osm_sm_t * sm, boolean_t config_all);
 extern int osm_link_mgr_process(IN osm_sm_t * sm, IN uint8_t state);
+extern void osm_guid_mgr_process(IN osm_sm_t * sm);
 
 static void state_mgr_up_msg(IN const osm_sm_t * sm)
 {
@@ -78,8 +83,8 @@ static void state_mgr_up_msg(IN const osm_sm_t * sm)
 	 * SM moves to Master state and the subnet is up for
 	 * the first time.
 	 */
-	osm_log(sm->p_log, sm->p_subn->first_time_master_sweep ?
-		OSM_LOG_SYS : OSM_LOG_INFO, "SUBNET UP\n");
+	osm_log_v2(sm->p_log, sm->p_subn->first_time_master_sweep ?
+		   OSM_LOG_SYS : OSM_LOG_INFO, FILE_ID, "SUBNET UP\n");
 
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 			sm->p_subn->opt.sweep_interval ?
@@ -107,7 +112,8 @@ static void state_mgr_reset_switch_count(IN cl_map_item_t * p_map_item,
 {
 	osm_switch_t *p_sw = (osm_switch_t *) p_map_item;
 
-	p_sw->need_update = 1;
+	if (p_sw->max_lid_ho != 0)
+		p_sw->need_update = 1;
 }
 
 static void state_mgr_get_sw_info(IN cl_map_item_t * p_object, IN void *context)
@@ -234,9 +240,11 @@ static ib_api_status_t state_mgr_sweep_hop_0(IN osm_sm_t * sm)
 
 		CL_PLOCK_RELEASE(sm->p_lock);
 
-		osm_dr_path_init(&dr_path, h_bind, 0, path_array);
+		osm_dr_path_init(&dr_path, 0, path_array);
+		CL_PLOCK_ACQUIRE(sm->p_lock);
 		status = osm_req_get(sm, &dr_path, IB_MAD_ATTR_NODE_INFO, 0,
 				     CL_DISP_MSGID_NONE, NULL);
+		CL_PLOCK_RELEASE(sm->p_lock);
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3305: "
 				"Request for NodeInfo failed (%s)\n",
@@ -372,12 +380,9 @@ Exit:
 static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 {
 	ib_api_status_t status = IB_SUCCESS;
-	osm_bind_handle_t h_bind;
 	osm_madw_context_t context;
 	osm_node_t *p_node;
 	osm_port_t *p_port;
-	osm_physp_t *p_physp;
-	osm_dr_path_t *p_dr_path;
 	osm_dr_path_t hop_1_path;
 	ib_net64_t port_guid;
 	uint8_t port_num;
@@ -418,15 +423,6 @@ static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 	OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 		"Probing hop 1 on local port %u\n", port_num);
 
-	p_physp = osm_node_get_physp_ptr(p_node, port_num);
-
-	CL_ASSERT(p_physp);
-
-	p_dr_path = osm_physp_get_dr_path_ptr(p_physp);
-	h_bind = osm_dr_path_get_bind_handle(p_dr_path);
-
-	CL_ASSERT(h_bind != OSM_BIND_INVALID_HANDLE);
-
 	memset(path_array, 0, sizeof(path_array));
 	/* the hop_1 operations depend on the type of our node.
 	 * Currently - legal nodes that can host SM are SW and CA */
@@ -439,9 +435,11 @@ static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 
 		path_array[1] = port_num;
 
-		osm_dr_path_init(&hop_1_path, h_bind, 1, path_array);
+		osm_dr_path_init(&hop_1_path, 1, path_array);
+		CL_PLOCK_ACQUIRE(sm->p_lock);
 		status = osm_req_get(sm, &hop_1_path, IB_MAD_ATTR_NODE_INFO, 0,
 				     CL_DISP_MSGID_NONE, &context);
+		CL_PLOCK_RELEASE(sm->p_lock);
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3311: "
 				"Request for NodeInfo failed (%s)\n",
@@ -468,12 +466,13 @@ static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 				context.ni_context.port_num = port_num;
 
 				path_array[1] = port_num;
-				osm_dr_path_init(&hop_1_path, h_bind, 1,
-						 path_array);
+				osm_dr_path_init(&hop_1_path, 1, path_array);
+				CL_PLOCK_ACQUIRE(sm->p_lock);
 				status = osm_req_get(sm, &hop_1_path,
 						     IB_MAD_ATTR_NODE_INFO, 0,
 						     CL_DISP_MSGID_NONE,
 						     &context);
+				CL_PLOCK_RELEASE(sm->p_lock);
 				if (status != IB_SUCCESS)
 					OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 						"ERR 3312: "
@@ -500,12 +499,20 @@ static void query_sm_info(cl_map_item_t * item, void *cxt)
 	osm_remote_sm_t *r_sm = cl_item_obj(item, r_sm, map_item);
 	osm_sm_t *sm = cxt;
 	ib_api_status_t ret;
+	osm_port_t *p_port;
 
-	context.smi_context.port_guid = r_sm->p_port->guid;
+	p_port= osm_get_port_by_guid(sm->p_subn, r_sm->smi.guid);
+	if (p_port == NULL) {
+		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3340: "
+			"No port object on given sm object\n");
+		return;
+        }
+
+	context.smi_context.port_guid = r_sm->smi.guid;
 	context.smi_context.set_method = FALSE;
 	context.smi_context.light_sweep = TRUE;
 
-	ret = osm_req_get(sm, osm_physp_get_dr_path_ptr(r_sm->p_port->p_physp),
+	ret = osm_req_get(sm, osm_physp_get_dr_path_ptr(p_port->p_physp),
 			  IB_MAD_ATTR_SM_INFO, 0, CL_DISP_MSGID_NONE, &context);
 	if (ret != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3314: "
@@ -653,9 +660,9 @@ static ib_api_status_t state_mgr_light_sweep_start(IN osm_sm_t * sm)
 						  (p_node)),
 					p_node->print_desc, port_num);
 
-				osm_dump_dr_path(sm->p_log,
-						 osm_physp_get_dr_path_ptr
-						 (p_physp), OSM_LOG_ERROR);
+				osm_dump_dr_path_v2(sm->p_log,
+						    osm_physp_get_dr_path_ptr
+						    (p_physp), FILE_ID, OSM_LOG_ERROR);
 
 				state_mgr_get_remote_port_info(sm, p_physp);
 			}
@@ -682,6 +689,7 @@ static osm_remote_sm_t *state_mgr_exists_other_master_sm(IN osm_sm_t * sm)
 	cl_qmap_t *p_sm_tbl;
 	osm_remote_sm_t *p_sm;
 	osm_remote_sm_t *p_sm_res = NULL;
+	osm_node_t *p_node;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -692,12 +700,12 @@ static osm_remote_sm_t *state_mgr_exists_other_master_sm(IN osm_sm_t * sm)
 	     p_sm != (osm_remote_sm_t *) cl_qmap_end(p_sm_tbl);
 	     p_sm = (osm_remote_sm_t *) cl_qmap_next(&p_sm->map_item)) {
 		/* If the sm is in MASTER state - return a pointer to it */
+		p_node = osm_get_node_by_guid(sm->p_subn, p_sm->smi.guid);
 		if (ib_sminfo_get_state(&p_sm->smi) == IB_SMINFO_STATE_MASTER) {
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 				"Found remote master SM with guid:0x%016" PRIx64
 				" (node %s)\n", cl_ntoh64(p_sm->smi.guid),
-				p_sm->p_port->p_node ? p_sm->p_port->p_node->
-				print_desc : "UNKNOWN");
+				p_node ? p_node->print_desc : "UNKNOWN");
 			p_sm_res = p_sm;
 			goto Exit;
 		}
@@ -721,6 +729,7 @@ static osm_remote_sm_t *state_mgr_get_highest_sm(IN osm_sm_t * sm)
 	osm_remote_sm_t *p_highest_sm;
 	uint8_t highest_sm_priority;
 	ib_net64_t highest_sm_guid;
+	osm_node_t *p_node;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -753,13 +762,13 @@ static osm_remote_sm_t *state_mgr_get_highest_sm(IN osm_sm_t * sm)
 		}
 	}
 
-	if (p_highest_sm != NULL)
+	if (p_highest_sm != NULL) {
+		p_node = osm_get_node_by_guid(sm->p_subn, p_highest_sm->smi.guid);
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 			"Found higher SM with guid: %016" PRIx64 " (node %s)\n",
 			cl_ntoh64(p_highest_sm->smi.guid),
-			p_highest_sm->p_port->p_node ?
-			p_highest_sm->p_port->p_node->print_desc : "UNKNOWN");
-
+			p_node ? p_node->print_desc : "UNKNOWN");
+	}
 	OSM_LOG_EXIT(sm->p_log);
 	return p_highest_sm;
 }
@@ -783,7 +792,7 @@ static void state_mgr_send_handover(IN osm_sm_t * sm, IN osm_remote_sm_t * p_sm)
 	 */
 
 	memset(&context, 0, sizeof(context));
-	p_port = p_sm->p_port;
+	p_port = osm_get_port_by_guid(sm->p_subn, p_sm->smi.guid);
 	if (p_port == NULL) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3316: "
 			"No port object on given remote_sm object\n");
@@ -820,10 +829,12 @@ static void state_mgr_send_handover(IN osm_sm_t * sm, IN osm_remote_sm_t * p_sm)
 		p_smi->sm_key = 0;
 	}
 
+	CL_PLOCK_ACQUIRE(sm->p_lock);
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_port->p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_SM_INFO,
 			     IB_SMINFO_ATTR_MOD_HANDOVER, CL_DISP_MSGID_NONE,
 			     &context);
+	CL_PLOCK_RELEASE(sm->p_lock);
 
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3317: "
@@ -1033,10 +1044,10 @@ static void cleanup_switch(cl_map_item_t * item, void *log)
 		return;
 
 	if (memcmp(sw->lft, sw->new_lft, sw->max_lid_ho + 1))
-		osm_log(log, OSM_LOG_ERROR, "ERR 331D: "
-			"LFT of switch 0x%016" PRIx64 " (%s) is not up to date\n",
-			cl_ntoh64(sw->p_node->node_info.node_guid),
-			sw->p_node->print_desc);
+		osm_log_v2(log, OSM_LOG_ERROR, FILE_ID, "ERR 331D: "
+			   "LFT of switch 0x%016" PRIx64 " (%s) is not up to date\n",
+			   cl_ntoh64(sw->p_node->node_info.node_guid),
+			   sw->p_node->print_desc);
 	else {
 		free(sw->new_lft);
 		sw->new_lft = NULL;
@@ -1079,13 +1090,20 @@ static void do_sweep(osm_sm_t * sm)
 	    sm->p_subn->sm_state != IB_SMINFO_STATE_DISCOVERING)
 		return;
 
-	if (sm->p_subn->coming_out_of_standby)
+	if (sm->p_subn->coming_out_of_standby) {
 		/*
 		 * Need to force re-write of sm_base_lid to all ports
 		 * to do that we want all the ports to be considered
 		 * foreign
 		 */
 		state_mgr_clean_known_lids(sm);
+
+		/*
+		 * Need to reconfigure LFTs, PKEYs, and QoS on all switches
+		 * when coming out of STANDBY
+		 */
+		sm->p_subn->need_update = 1;
+	}
 
 	sm->master_sm_found = 0;
 
@@ -1113,7 +1131,8 @@ static void do_sweep(osm_sm_t * sm)
 			if (sm->p_subn->opt.sa_db_dump &&
 			    !osm_sa_db_file_dump(sm->p_subn->p_osm))
 				osm_opensm_report_event(sm->p_subn->p_osm,
-					OSM_EVENT_ID_SA_DB_DUMPED, NULL);
+							OSM_EVENT_ID_SA_DB_DUMPED,
+							NULL);
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"LIGHT SWEEP COMPLETE");
 			return;
@@ -1158,11 +1177,17 @@ static void do_sweep(osm_sm_t * sm)
 		if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
 			return;
 
+		osm_congestion_control_setup(sm->p_subn->p_osm);
+
+		if (osm_congestion_control_wait_pending_transactions (sm->p_subn->p_osm))
+			return;
+
 		if (!sm->p_subn->subnet_initialization_error) {
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"REROUTE COMPLETE");
 			osm_opensm_report_event(sm->p_subn->p_osm,
-				OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
+						OSM_EVENT_ID_UCAST_ROUTING_DONE,
+						NULL);
 			return;
 		}
 	}
@@ -1200,7 +1225,7 @@ repeat_discovery:
 	if (state_mgr_is_sm_port_down(sm) == TRUE) {
 		if (sm->p_subn->last_sm_port_state) {
 			sm->p_subn->last_sm_port_state = 0;
-			osm_log(sm->p_log, OSM_LOG_SYS, "SM port is down\n");
+			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID, "SM port is down\n");
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"SM PORT DOWN");
 		}
@@ -1209,15 +1234,15 @@ repeat_discovery:
 		osm_drop_mgr_process(sm);
 
 		/* Move to DISCOVERING state */
-		 if (sm->p_subn->sm_state != IB_SMINFO_STATE_DISCOVERING)
+		if (sm->p_subn->sm_state != IB_SMINFO_STATE_DISCOVERING)
 			osm_sm_state_mgr_process(sm, OSM_SM_SIGNAL_DISCOVER);
 		osm_opensm_report_event(sm->p_subn->p_osm,
-				OSM_EVENT_ID_STATE_CHANGE, NULL);
+					OSM_EVENT_ID_STATE_CHANGE, NULL);
 		return;
 	} else {
 		if (!sm->p_subn->last_sm_port_state) {
 			sm->p_subn->last_sm_port_state = 1;
-			osm_log(sm->p_log, OSM_LOG_SYS, "SM port is up\n");
+			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID, "SM port is up\n");
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"SM PORT UP");
 		}
@@ -1241,18 +1266,22 @@ repeat_discovery:
 		/* notify master SM about us */
 		osm_send_trap144(sm, 0);
 		osm_opensm_report_event(sm->p_subn->p_osm,
-				OSM_EVENT_ID_STATE_CHANGE, NULL);
+					OSM_EVENT_ID_STATE_CHANGE, NULL);
 		return;
 	}
 
 	/* if new sweep requested - don't bother with the rest */
-	if (sm->p_subn->force_heavy_sweep)
+	if (sm->p_subn->force_heavy_sweep) {
+		config_parsed = 0;
 		goto repeat_discovery;
+	}
 
 	osm_opensm_report_event(sm->p_subn->p_osm,
 				OSM_EVENT_ID_HEAVY_SWEEP_DONE, NULL);
 
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, "HEAVY SWEEP COMPLETE");
+
+	osm_drop_mgr_process(sm);
 
 	/* If we are MASTER - get the highest remote_sm, and
 	 * see if it is higher than our local sm.
@@ -1286,9 +1315,6 @@ repeat_discovery:
 		}
 	}
 
-	/* Need to continue with lid assignment */
-	osm_drop_mgr_process(sm);
-
 	/*
 	 * If we are not MASTER already - this means that we are
 	 * in discovery state. call osm_sm_state_mgr with signal
@@ -1308,7 +1334,7 @@ repeat_discovery:
 		return;
 
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
-			"PKEY and QOS setup completed - STARTING SM LID CONFIG");
+			"PKEY setup completed - STARTING SM LID CONFIG");
 
 	osm_lid_mgr_process_sm(&sm->lid_mgr);
 	if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
@@ -1357,7 +1383,7 @@ repeat_discovery:
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 			"SWITCHES CONFIGURED FOR UNICAST");
 	osm_opensm_report_event(sm->p_subn->p_osm,
-			OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
+				OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
 
 	if (!sm->p_subn->opt.disable_multicast) {
 		osm_mcast_mgr_process(sm, TRUE);
@@ -1366,6 +1392,11 @@ repeat_discovery:
 		OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 				"SWITCHES CONFIGURED FOR MULTICAST");
 	}
+
+	osm_guid_mgr_process(sm);
+	if (wait_for_pending_transactions(&sm->p_subn->p_osm->stats))
+		return;
+	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, "ALIAS GUIDS CONFIGURED");
 
 	/*
 	 * The LINK_PORTS state is required since we cannot count on
@@ -1397,6 +1428,13 @@ repeat_discovery:
 	 * The sweep completed!
 	 */
 
+	/* Now do GSI configuration */
+
+	osm_congestion_control_setup(sm->p_subn->p_osm);
+
+	if (osm_congestion_control_wait_pending_transactions (sm->p_subn->p_osm))
+		return;
+
 	/*
 	 * Send trap 64 on newly discovered endports
 	 */
@@ -1407,8 +1445,8 @@ repeat_discovery:
 
 	/* If there were errors - then the subnet is not really up */
 	if (sm->p_subn->subnet_initialization_error == TRUE) {
-		osm_log(sm->p_log, OSM_LOG_SYS,
-			"Errors during initialization\n");
+		osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID,
+			   "Errors during initialization\n");
 		OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_ERROR,
 				"ERRORS DURING INITIALIZATION");
 	} else {
@@ -1416,8 +1454,9 @@ repeat_discovery:
 		osm_dump_all(sm->p_subn->p_osm);
 		state_mgr_up_msg(sm);
 		sm->p_subn->first_time_master_sweep = FALSE;
+		sm->p_subn->set_client_rereg_on_sweep = FALSE;
 
-		if (osm_log_is_active(sm->p_log, OSM_LOG_VERBOSE) ||
+		if (OSM_LOG_IS_ACTIVE_V2(sm->p_log, OSM_LOG_VERBOSE) ||
 		    sm->p_subn->opt.sa_db_dump)
 			osm_sa_db_file_dump(sm->p_subn->p_osm);
 	}
@@ -1435,6 +1474,10 @@ repeat_discovery:
 	if (sm->p_subn->force_heavy_sweep
 	    || sm->p_subn->subnet_initialization_error)
 		osm_sm_signal(sm, OSM_SIGNAL_SWEEP);
+
+	/* Write a new copy of our persistent guid2mkey database */
+	osm_db_store(sm->p_subn->p_g2m);
+	osm_db_store(sm->p_subn->p_neighbor);
 }
 
 static void do_process_mgrp_queue(osm_sm_t * sm)
@@ -1445,6 +1488,12 @@ static void do_process_mgrp_queue(osm_sm_t * sm)
 		osm_mcast_mgr_process(sm, FALSE);
 		wait_for_pending_transactions(&sm->p_subn->p_osm->stats);
 	}
+}
+
+static void do_process_guid_queue(osm_sm_t *sm)
+{
+	osm_guid_mgr_process(sm);
+	wait_for_pending_transactions(&sm->p_subn->p_osm->stats);
 }
 
 void osm_state_mgr_process(IN osm_sm_t * sm, IN osm_signal_t signal)
@@ -1469,6 +1518,9 @@ void osm_state_mgr_process(IN osm_sm_t * sm, IN osm_signal_t signal)
 		break;
 	case OSM_SIGNAL_IDLE_TIME_PROCESS_REQUEST:
 		do_process_mgrp_queue(sm);
+		break;
+	case OSM_SIGNAL_GUID_PROCESS_REQUEST:
+		do_process_guid_queue(sm);
 		break;
 	default:
 		CL_ASSERT(FALSE);

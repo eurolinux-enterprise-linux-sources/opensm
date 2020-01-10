@@ -6,6 +6,7 @@
  * Copyright (c) 2007      Silicon Graphics Inc. All rights reserved.
  * Copyright (c) 2008,2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009      HNR Consulting. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -51,6 +52,8 @@
 #include <errno.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_qmap.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_UCAST_LASH_C
 #include <opensm/osm_switch.h>
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_log.h>
@@ -1276,17 +1279,26 @@ static void lash_delete(void *context)
 }
 
 static uint8_t get_lash_sl(void *context, uint8_t path_sl_hint,
-			   const osm_port_t *p_src_port,
-			   const osm_port_t *p_dst_port)
+			   const ib_net16_t slid, const ib_net16_t dlid)
 {
 	unsigned dst_id;
 	unsigned src_id;
+	osm_port_t *p_src_port, *p_dst_port;
 	osm_switch_t *p_sw;
 	lash_t *p_lash = context;
 	osm_opensm_t *p_osm = p_lash->p_osm;
 
+
 	if (!(p_osm->routing_engine_used &&
 	      p_osm->routing_engine_used->type == OSM_ROUTING_ENGINE_TYPE_LASH))
+		return OSM_DEFAULT_SL;
+
+	p_src_port = osm_get_port_by_lid(&p_osm->subn, slid);
+	if (!p_src_port)
+		return OSM_DEFAULT_SL;
+
+	p_dst_port = osm_get_port_by_lid(&p_osm->subn, dlid);
+	if (!p_dst_port)
 		return OSM_DEFAULT_SL;
 
 	p_sw = get_osm_switch_from_port(p_dst_port);

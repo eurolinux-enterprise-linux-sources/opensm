@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2006,2008 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -47,6 +47,8 @@
 #include <string.h>
 #include <complib/cl_debug.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PKEY_C
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_port.h>
@@ -56,6 +58,7 @@
 
 void osm_pkey_tbl_construct(IN osm_pkey_tbl_t * p_pkey_tbl)
 {
+	cl_ptr_vector_construct(&p_pkey_tbl->accum_pkeys);
 	cl_ptr_vector_construct(&p_pkey_tbl->blocks);
 	cl_ptr_vector_construct(&p_pkey_tbl->new_blocks);
 	cl_map_construct(&p_pkey_tbl->keys);
@@ -79,16 +82,20 @@ void osm_pkey_tbl_destroy(IN osm_pkey_tbl_t * p_pkey_tbl)
 			free(p_block);
 	cl_ptr_vector_destroy(&p_pkey_tbl->new_blocks);
 
+	cl_ptr_vector_destroy(&p_pkey_tbl->accum_pkeys);
+
 	cl_map_remove_all(&p_pkey_tbl->keys);
 	cl_map_destroy(&p_pkey_tbl->keys);
 }
 
 ib_api_status_t osm_pkey_tbl_init(IN osm_pkey_tbl_t * p_pkey_tbl)
 {
+	cl_ptr_vector_init(&p_pkey_tbl->accum_pkeys, 0, 1);
 	cl_ptr_vector_init(&p_pkey_tbl->blocks, 0, 1);
 	cl_ptr_vector_init(&p_pkey_tbl->new_blocks, 0, 1);
 	cl_map_init(&p_pkey_tbl->keys, 1);
 	cl_qlist_init(&p_pkey_tbl->pending);
+	p_pkey_tbl->last_pkey_idx = 0;
 	p_pkey_tbl->used_blocks = 0;
 	p_pkey_tbl->max_blocks = 0;
 	return IB_SUCCESS;
@@ -105,12 +112,13 @@ void osm_pkey_tbl_init_new_blocks(IN const osm_pkey_tbl_t * p_pkey_tbl)
 }
 
 ib_api_status_t osm_pkey_tbl_set(IN osm_pkey_tbl_t * p_pkey_tbl,
-				 IN uint16_t block, IN ib_pkey_table_t * p_tbl)
+				 IN uint16_t block, IN ib_pkey_table_t * p_tbl,
+				 IN boolean_t allow_both_pkeys)
 {
 	uint16_t b, i;
 	ib_pkey_table_t *p_pkey_block;
 	uint16_t *p_prev_pkey;
-	ib_net16_t pkey;
+	ib_net16_t pkey, pkey_base;
 
 	/* make sure the block is allocated */
 	if (cl_ptr_vector_get_size(&p_pkey_tbl->blocks) > block)
@@ -152,24 +160,78 @@ ib_api_status_t osm_pkey_tbl_set(IN osm_pkey_tbl_t * p_pkey_tbl,
 			if (ib_pkey_is_invalid(pkey))
 				continue;
 
+			if (allow_both_pkeys)
+				pkey_base = pkey;
+			else
+				pkey_base = ib_pkey_get_base(pkey);
+
 			/*
+			   If allow_both_pkeys is FALSE,
 			   ignore the PKey Full Member bit in the key but store
 			   the pointer to the table element as the map value
 			 */
-			p_prev_pkey =
-			    cl_map_get(&p_pkey_tbl->keys,
-				       ib_pkey_get_base(pkey));
+			p_prev_pkey = cl_map_get(&p_pkey_tbl->keys, pkey_base);
 
-			/* we only insert if no previous or it is not full member */
+			/* we only insert if no previous or it is not full member and allow_both_pkeys is FALSE */
 			if ((p_prev_pkey == NULL) ||
-			    (cl_ntoh16(*p_prev_pkey) < cl_ntoh16(pkey)))
-				cl_map_insert(&p_pkey_tbl->keys,
-					      ib_pkey_get_base(pkey),
+			    (allow_both_pkeys == FALSE &&
+			     cl_ntoh16(*p_prev_pkey) < cl_ntoh16(pkey)))
+				cl_map_insert(&p_pkey_tbl->keys, pkey_base,
 					      &(p_pkey_block->pkey_entry[i])
 				    );
 		}
 	}
 	return IB_SUCCESS;
+}
+
+/*
+  Store the given pkey (along with it's overall index) in the accum_pkeys array.
+*/
+cl_status_t osm_pkey_tbl_set_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
+					 IN uint16_t pkey,
+					 IN uint16_t pkey_idx)
+{
+	uintptr_t ptr = pkey_idx + 1; /* 0 means not found so bias by 1 */
+
+	if (pkey_idx >= p_pkey_tbl->last_pkey_idx)
+		p_pkey_tbl->last_pkey_idx = pkey_idx + 1;
+
+	return cl_ptr_vector_set(&p_pkey_tbl->accum_pkeys, pkey, (void *)ptr);
+}
+
+/*
+  Clears the given pkey (along with it's overall index) in the accum_pkeys array.
+*/
+void osm_pkey_tbl_clear_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
+				    IN uint16_t pkey)
+{
+	void *ptr;
+	uintptr_t pkey_idx_ptr;
+	uint16_t pkey_idx, last_pkey_idx;
+	uint32_t i;
+
+	ptr = cl_ptr_vector_get(&p_pkey_tbl->accum_pkeys, pkey);
+	if (ptr == NULL)
+		return;
+
+	cl_ptr_vector_set(&p_pkey_tbl->accum_pkeys, pkey, NULL);
+
+	pkey_idx_ptr = (uintptr_t) ptr;
+	pkey_idx = pkey_idx_ptr;
+
+	if (p_pkey_tbl->last_pkey_idx == pkey_idx) {
+		last_pkey_idx = 0;
+		for (i = 1; i < cl_ptr_vector_get_size(&p_pkey_tbl->accum_pkeys); i++) {
+			ptr = cl_ptr_vector_get(&p_pkey_tbl->accum_pkeys, i);
+			if (ptr != NULL) {
+				pkey_idx_ptr = (uintptr_t) ptr;
+				pkey_idx = pkey_idx_ptr;
+				if (pkey_idx > last_pkey_idx)
+					last_pkey_idx = pkey_idx;
+			}
+		}
+		p_pkey_tbl->last_pkey_idx = last_pkey_idx;
+	}
 }
 
 /*
@@ -271,27 +333,51 @@ static boolean_t match_pkey(IN const ib_net16_t * pkey1,
 
 boolean_t osm_physp_share_this_pkey(IN const osm_physp_t * p_physp1,
 				    IN const osm_physp_t * p_physp2,
-				    IN ib_net16_t pkey)
+				    IN ib_net16_t pkey,
+				    IN boolean_t allow_both_pkeys)
 {
 	ib_net16_t *pkey1, *pkey2;
+	ib_net16_t full_pkey, limited_pkey;
 
-	pkey1 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp1))->keys,
-			   ib_pkey_get_base(pkey));
-	pkey2 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp2))->keys,
-			   ib_pkey_get_base(pkey));
+	if (allow_both_pkeys) {
+		full_pkey = pkey | IB_PKEY_TYPE_MASK;
+		limited_pkey = pkey & ~IB_PKEY_TYPE_MASK;
+		pkey1 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp1))->keys,
+				   full_pkey);
+		if (!pkey1)
+			pkey1 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp1))->keys,
+					   limited_pkey);
+		pkey2 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp2))->keys,
+				   full_pkey);
+		if (!pkey2)
+			pkey2 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp2))->keys,
+					   limited_pkey);
+	} else {
+		pkey1 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp1))->keys,
+				   ib_pkey_get_base(pkey));
+		pkey2 = cl_map_get(&(osm_physp_get_pkey_tbl(p_physp2))->keys,
+				   ib_pkey_get_base(pkey));
+	}
 	return (pkey1 && pkey2 && match_pkey(pkey1, pkey2));
 }
 
 ib_net16_t osm_physp_find_common_pkey(IN const osm_physp_t * p_physp1,
-				      IN const osm_physp_t * p_physp2)
+				      IN const osm_physp_t * p_physp2,
+				      IN boolean_t allow_both_pkeys)
 {
 	ib_net16_t *pkey1, *pkey2;
 	uint64_t pkey1_base, pkey2_base;
 	const osm_pkey_tbl_t *pkey_tbl1, *pkey_tbl2;
 	cl_map_iterator_t map_iter1, map_iter2;
+	ib_net16_t key;
+	const osm_pkey_tbl_t *pkey_tbl;
+	cl_map_iterator_t map_iter, map_end;
 
 	pkey_tbl1 = osm_physp_get_pkey_tbl(p_physp1);
 	pkey_tbl2 = osm_physp_get_pkey_tbl(p_physp2);
+
+	if (allow_both_pkeys)
+		goto SearchByKeys;
 
 	map_iter1 = cl_map_head(&pkey_tbl1->keys);
 	map_iter2 = cl_map_head(&pkey_tbl2->keys);
@@ -318,11 +404,42 @@ ib_net16_t osm_physp_find_common_pkey(IN const osm_physp_t * p_physp1,
 	}
 
 	return 0;
+
+SearchByKeys:
+
+	/* Select to iterate over the table with the least elements */
+	if (cl_map_count(&pkey_tbl1->keys) < cl_map_count(&pkey_tbl2->keys)) {
+		map_iter = cl_map_head(&pkey_tbl1->keys);
+		map_end = cl_map_end(&pkey_tbl1->keys);
+		pkey_tbl = pkey_tbl2;
+	} else {
+		map_iter = cl_map_head(&pkey_tbl2->keys);
+		map_end = cl_map_end(&pkey_tbl2->keys);
+		pkey_tbl =  pkey_tbl1;
+	}
+
+	while (map_iter != map_end) {
+		pkey1 = (ib_net16_t *) cl_map_obj(map_iter);
+		key = cl_map_key(map_iter);
+
+		pkey2 = cl_map_get(&pkey_tbl->keys, key | IB_PKEY_TYPE_MASK);
+		if (!pkey2)
+			pkey2 = cl_map_get(&pkey_tbl->keys,
+					key & ~IB_PKEY_TYPE_MASK);
+
+		if (pkey2 && match_pkey(pkey1, pkey2))
+			return (pkey_tbl == pkey_tbl2 ? *pkey1 : *pkey2);
+
+		map_iter = cl_map_next(map_iter);
+	}
+
+	return 0;
 }
 
 boolean_t osm_physp_share_pkey(IN osm_log_t * p_log,
 			       IN const osm_physp_t * p_physp_1,
-			       IN const osm_physp_t * p_physp_2)
+			       IN const osm_physp_t * p_physp_2,
+			       IN boolean_t allow_both_pkeys)
 {
 	const osm_pkey_tbl_t *pkey_tbl1, *pkey_tbl2;
 
@@ -344,12 +461,13 @@ boolean_t osm_physp_share_pkey(IN osm_log_t * p_log,
 
 	return
 	    !ib_pkey_is_invalid(osm_physp_find_common_pkey
-				(p_physp_1, p_physp_2));
+				(p_physp_1, p_physp_2, allow_both_pkeys));
 }
 
 boolean_t osm_port_share_pkey(IN osm_log_t * p_log,
 			      IN const osm_port_t * p_port_1,
-			      IN const osm_port_t * p_port_2)
+			      IN const osm_port_t * p_port_2,
+			      IN boolean_t allow_both_pkeys)
 {
 
 	osm_physp_t *p_physp1, *p_physp2;
@@ -370,7 +488,7 @@ boolean_t osm_port_share_pkey(IN osm_log_t * p_log,
 		goto Exit;
 	}
 
-	ret = osm_physp_share_pkey(p_log, p_physp1, p_physp2);
+	ret = osm_physp_share_pkey(p_log, p_physp1, p_physp2, allow_both_pkeys);
 
 Exit:
 	OSM_LOG_EXIT(p_log);

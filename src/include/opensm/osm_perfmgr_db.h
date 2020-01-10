@@ -126,6 +126,7 @@ typedef struct db_port {
 	perfmgr_db_data_cnt_reading_t dc_total;
 	perfmgr_db_data_cnt_reading_t dc_previous;
 	time_t last_reset;
+	boolean_t valid;
 } db_port_t;
 
 /** =========================================================================
@@ -135,6 +136,7 @@ typedef struct db_port {
 typedef struct db_node {
 	cl_map_item_t map_item;	/* must be first */
 	uint64_t node_guid;
+	boolean_t active;       /* activly being monitored */
 	boolean_t esp0;
 	db_port_t *ports;
 	uint8_t num_ports;
@@ -159,6 +161,8 @@ void perfmgr_db_destroy(perfmgr_db_t * db);
 perfmgr_db_err_t perfmgr_db_create_entry(perfmgr_db_t * db, uint64_t guid,
 					 boolean_t esp0, uint8_t num_ports,
 					 char *node_name);
+perfmgr_db_err_t perfmgr_db_delete_entry(perfmgr_db_t * db, uint64_t guid);
+perfmgr_db_err_t perfmgr_db_delete_inactive(perfmgr_db_t * db, unsigned *cnt);
 
 perfmgr_db_err_t perfmgr_db_add_err_reading(perfmgr_db_t * db, uint64_t guid,
 					    uint8_t port,
@@ -180,11 +184,17 @@ perfmgr_db_err_t perfmgr_db_get_prev_dc(perfmgr_db_t * db, uint64_t guid,
 perfmgr_db_err_t perfmgr_db_clear_prev_dc(perfmgr_db_t * db, uint64_t guid,
 					  uint8_t port);
 
+perfmgr_db_err_t perfmgr_db_mark_active(perfmgr_db_t *db, uint64_t guid,
+					boolean_t active);
+
 void perfmgr_db_clear_counters(perfmgr_db_t * db);
 perfmgr_db_err_t perfmgr_db_dump(perfmgr_db_t * db, char *file,
 				 perfmgr_db_dump_t dump_type);
-void perfmgr_db_print_by_name(perfmgr_db_t * db, char *nodename, FILE *fp);
-void perfmgr_db_print_by_guid(perfmgr_db_t * db, uint64_t guid, FILE *fp);
+void perfmgr_db_print_all(perfmgr_db_t * db, FILE *fp, int err_only);
+void perfmgr_db_print_by_name(perfmgr_db_t * db, char *nodename, FILE *fp,
+			      char *port, int err_only);
+void perfmgr_db_print_by_guid(perfmgr_db_t * db, uint64_t guid, FILE *fp,
+			      char *port, int err_only);
 
 /** =========================================================================
  * helper functions to fill in the various db objects from wire objects

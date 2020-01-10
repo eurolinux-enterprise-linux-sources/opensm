@@ -47,6 +47,8 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_INFORM_C
 #include <opensm/osm_helper.h>
 #include <opensm/osm_inform.h>
 #include <vendor/osm_vendor_api.h>
@@ -81,14 +83,14 @@ static void dump_all_informs(IN const osm_subn_t * p_subn, IN osm_log_t * p_log)
 {
 	cl_list_item_t *p_list_item;
 
-	if (!osm_log_is_active(p_log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(p_log, OSM_LOG_DEBUG))
 		return;
 
 	p_list_item = cl_qlist_head(&p_subn->sa_infr_list);
 	while (p_list_item != cl_qlist_end(&p_subn->sa_infr_list)) {
-		osm_dump_inform_info(p_log,
-				     &((osm_infr_t *) p_list_item)->
-				     inform_record.inform_info, OSM_LOG_DEBUG);
+		osm_dump_inform_info_v2(p_log,
+				        &((osm_infr_t *) p_list_item)->
+				        inform_record.inform_info, FILE_ID, OSM_LOG_DEBUG);
 		p_list_item = cl_qlist_next(p_list_item);
 	}
 }
@@ -215,8 +217,8 @@ osm_infr_t *osm_infr_get_by_rec(IN osm_subn_t const *p_subn,
 	dump_all_informs(p_subn, p_log);
 
 	OSM_LOG(p_log, OSM_LOG_DEBUG, "Looking for Inform Record\n");
-	osm_dump_inform_info(p_log, &(p_infr_rec->inform_record.inform_info),
-			     OSM_LOG_DEBUG);
+	osm_dump_inform_info_v2(p_log, &(p_infr_rec->inform_record.inform_info),
+			        FILE_ID, OSM_LOG_DEBUG);
 	OSM_LOG(p_log, OSM_LOG_DEBUG, "InformInfo list size %d\n",
 		cl_qlist_count(&p_subn->sa_infr_list));
 
@@ -242,9 +244,9 @@ void osm_infr_insert_to_db(IN osm_subn_t * p_subn, IN osm_log_t * p_log,
 	dump_all_informs(p_subn, p_log);
 
 #if 0
-	osm_dump_inform_info(p_log,
-			     &(p_infr->inform_record.inform_info),
-			     OSM_LOG_DEBUG);
+	osm_dump_inform_info_v2(p_log,
+			        &(p_infr->inform_record.inform_info),
+			        FILE_ID, OSM_LOG_DEBUG);
 #endif
 
 	cl_qlist_insert_head(&p_subn->sa_infr_list, &p_infr->list_item);
@@ -268,8 +270,8 @@ void osm_infr_remove_from_db(IN osm_subn_t * p_subn, IN osm_log_t * p_log,
 			  gid_str, sizeof gid_str),
 		p_infr->inform_record.subscriber_enum);
 
-	osm_dump_inform_info(p_log, &(p_infr->inform_record.inform_info),
-			     OSM_LOG_DEBUG);
+	osm_dump_inform_info_v2(p_log, &(p_infr->inform_record.inform_info),
+			        FILE_ID, OSM_LOG_DEBUG);
 
 	cl_qlist_remove_item(&p_subn->sa_infr_list, &p_infr->list_item);
 	p_subn->p_osm->sa.dirty = TRUE;
@@ -295,6 +297,7 @@ static ib_api_status_t send_report(IN osm_infr_t * p_infr_rec,	/* the informinfo
 	static atomic32_t trap_fwd_trans_id = 0x02DAB000;
 	ib_api_status_t status = IB_SUCCESS;
 	osm_log_t *p_log = p_infr_rec->sa->p_log;
+	ib_net64_t tid;
 
 	OSM_LOG_ENTER(p_log);
 
@@ -312,7 +315,7 @@ static ib_api_status_t send_report(IN osm_infr_t * p_infr_rec,	/* the informinfo
 					 &(p_infr_rec->report_addr));
 
 	if (!p_report_madw) {
-		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0203"
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0203: "
 			"osm_mad_pool_get failed\n");
 		status = IB_ERROR;
 		goto Exit;
@@ -321,10 +324,14 @@ static ib_api_status_t send_report(IN osm_infr_t * p_infr_rec,	/* the informinfo
 	p_report_madw->resp_expected = TRUE;
 
 	/* advance trap trans id (cant simply ++ on some systems inside ntoh) */
+	tid = cl_hton64((uint64_t) cl_atomic_inc(&trap_fwd_trans_id) &
+			(uint64_t) (0xFFFFFFFF));
+	if (trap_fwd_trans_id == 0)
+		tid = cl_hton64((uint64_t) cl_atomic_inc(&trap_fwd_trans_id) &
+				(uint64_t) (0xFFFFFFFF));
 	p_mad = osm_madw_get_mad_ptr(p_report_madw);
 	ib_mad_init_new(p_mad, IB_MCLASS_SUBN_ADM, 2, IB_MAD_METHOD_REPORT,
-			cl_hton64((uint64_t) cl_atomic_inc(&trap_fwd_trans_id)),
-			IB_MAD_ATTR_NOTICE, 0);
+			tid, IB_MAD_ATTR_NOTICE, 0);
 
 	p_sa_mad = osm_madw_get_sa_mad_ptr(p_report_madw);
 
@@ -415,7 +422,8 @@ static int is_access_permitted(osm_infr_t *p_infr_rec,
 			}
 
 
-			if (osm_port_share_pkey(p_log, p_src_port, p_dest_port) == FALSE) {
+			if (osm_port_share_pkey(p_log, p_src_port, p_dest_port,
+						p_subn->opt.allow_both_pkeys) == FALSE) {
 				OSM_LOG(p_log, OSM_LOG_DEBUG, "Mismatch by Pkey\n");
 				/* According to o13-17.1.2 - If this informInfo
 				   does not have lid_range_begin of 0xFFFF,
@@ -627,7 +635,7 @@ ib_api_status_t osm_report_notice(IN osm_log_t * p_log, IN osm_subn_t * p_subn,
 		return IB_ERROR;
 	}
 
-	if (osm_log_is_active(p_log, OSM_LOG_INFO))
+	if (OSM_LOG_IS_ACTIVE_V2(p_log, OSM_LOG_INFO))
 		log_notice(p_log, OSM_LOG_INFO, p_ntc);
 
 	/* Create a list that will hold all the infr records that should

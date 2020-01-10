@@ -48,6 +48,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_MLNX_EXT_PORT_INFO_RCV_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
@@ -87,8 +89,8 @@ void osm_mlnx_epi_rcv_process(IN void *context, IN void *data)
 	port_guid = p_context->port_guid;
 	node_guid = p_context->node_guid;
 
-	osm_dump_mlnx_ext_port_info(sm->p_log, node_guid, port_guid, port_num,
-				    p_pi, OSM_LOG_DEBUG);
+	osm_dump_mlnx_ext_port_info_v2(sm->p_log, node_guid, port_guid, port_num,
+				       p_pi, FILE_ID, OSM_LOG_DEBUG);
 
 	CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
 	p_port = osm_get_port_by_guid(sm->p_subn, port_guid);

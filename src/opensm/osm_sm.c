@@ -52,6 +52,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_thread.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SM_C
 #include <opensm/osm_sm.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
@@ -68,6 +70,7 @@ extern void osm_nd_rcv_process(IN void *context, IN void *data);
 extern void osm_ni_rcv_process(IN void *context, IN void *data);
 extern void osm_pkey_rcv_process(IN void *context, IN void *data);
 extern void osm_pi_rcv_process(IN void *context, IN void *data);
+extern void osm_gi_rcv_process(IN void *context, IN void *data);
 extern void osm_slvl_rcv_process(IN void *context, IN void *p_data);
 extern void osm_sminfo_rcv_process(IN void *context, IN void *data);
 extern void osm_si_rcv_process(IN void *context, IN void *data);
@@ -200,6 +203,7 @@ void osm_sm_shutdown(IN osm_sm_t * p_sm)
 	osm_sm_mad_ctrl_destroy(&p_sm->mad_ctrl);
 	cl_disp_unregister(p_sm->ni_disp_h);
 	cl_disp_unregister(p_sm->pi_disp_h);
+	cl_disp_unregister(p_sm->gi_disp_h);
 	cl_disp_unregister(p_sm->si_disp_h);
 	cl_disp_unregister(p_sm->nd_disp_h);
 	cl_disp_unregister(p_sm->lft_disp_h);
@@ -229,7 +233,7 @@ void osm_sm_destroy(IN osm_sm_t * p_sm)
 	cl_spinlock_destroy(&p_sm->state_lock);
 	free(p_sm->mlids_req);
 
-	osm_log(p_sm->p_log, OSM_LOG_SYS, "Exiting SM\n");	/* Format Waived */
+	osm_log_v2(p_sm->p_log, OSM_LOG_SYS, FILE_ID, "Exiting SM\n");	/* Format Waived */
 	OSM_LOG_EXIT(p_sm->p_log);
 }
 
@@ -321,6 +325,11 @@ ib_api_status_t osm_sm_init(IN osm_sm_t * p_sm, IN osm_subn_t * p_subn,
 	p_sm->pi_disp_h = cl_disp_register(p_disp, OSM_MSG_MAD_PORT_INFO,
 					   osm_pi_rcv_process, p_sm);
 	if (p_sm->pi_disp_h == CL_DISP_INVALID_HANDLE)
+		goto Exit;
+
+	p_sm->gi_disp_h = cl_disp_register(p_disp, OSM_MSG_MAD_GUID_INFO,
+					   osm_gi_rcv_process, p_sm);
+	if (p_sm->gi_disp_h == CL_DISP_INVALID_HANDLE)
 		goto Exit;
 
 	p_sm->si_disp_h = cl_disp_register(p_disp, OSM_MSG_MAD_SWITCH_INFO,

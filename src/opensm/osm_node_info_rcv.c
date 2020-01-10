@@ -51,6 +51,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_NODE_INFO_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -61,6 +63,7 @@
 #include <opensm/osm_msgdef.h>
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_ucast_mgr.h>
+#include <opensm/osm_db_pack.h>
 
 static void report_duplicated_guid(IN osm_sm_t * sm, osm_physp_t * p_physp,
 				   osm_node_t * p_neighbor_node,
@@ -82,15 +85,15 @@ static void report_duplicated_guid(IN osm_sm_t * sm, osm_physp_t * p_physp,
 		cl_ntoh64(p_old->p_node->node_info.node_guid), p_old->port_num,
 		cl_ntoh64(p_new->p_node->node_info.node_guid), p_new->port_num);
 
-	osm_dump_dr_path(sm->p_log, osm_physp_get_dr_path_ptr(p_physp),
-			 OSM_LOG_ERROR);
+	osm_dump_dr_path_v2(sm->p_log, osm_physp_get_dr_path_ptr(p_physp),
+			    FILE_ID, OSM_LOG_ERROR);
 
 	path = *osm_physp_get_dr_path_ptr(p_new);
 	if (osm_dr_path_extend(&path, port_num))
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D05: "
 			"DR path with hop count %d couldn't be extended\n",
 			path.hop_count);
-	osm_dump_dr_path(sm->p_log, &path, OSM_LOG_ERROR);
+	osm_dump_dr_path_v2(sm->p_log, &path, FILE_ID, OSM_LOG_ERROR);
 }
 
 static void requery_dup_node_info(IN osm_sm_t * sm, osm_physp_t * p_physp,
@@ -132,7 +135,7 @@ static void ni_rcv_set_links(IN osm_sm_t * sm, osm_node_t * p_node,
 			     const osm_ni_context_t * p_ni_context)
 {
 	osm_node_t *p_neighbor_node;
-	osm_physp_t *p_physp;
+	osm_physp_t *p_physp, *p_remote_physp;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -216,14 +219,14 @@ static void ni_rcv_set_links(IN osm_sm_t * sm, osm_node_t * p_node,
 			"node 0x%" PRIx64 ", port number %u\n",
 			cl_ntoh64(osm_node_get_node_guid(p_node)), port_num);
 		p_physp = osm_node_get_physp_ptr(p_node, port_num);
-		osm_dump_dr_path(sm->p_log, osm_physp_get_dr_path_ptr(p_physp),
-				 OSM_LOG_VERBOSE);
+		osm_dump_dr_path_v2(sm->p_log, osm_physp_get_dr_path_ptr(p_physp),
+				    FILE_ID, OSM_LOG_VERBOSE);
 
 		if (sm->p_subn->opt.exit_on_fatal == TRUE) {
-			osm_log(sm->p_log, OSM_LOG_SYS,
-				"Errors on subnet. Duplicate GUID found "
-				"by link from a port to itself. "
-				"See verbose opensm.log for more details\n");
+			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID,
+				   "Errors on subnet. Duplicate GUID found "
+				   "by link from a port to itself. "
+				   "See verbose opensm.log for more details\n");
 			exit(1);
 		}
 	}
@@ -242,6 +245,20 @@ static void ni_rcv_set_links(IN osm_sm_t * sm, osm_node_t * p_node,
 
 	osm_node_link(p_node, port_num, p_neighbor_node,
 		      p_ni_context->port_num);
+
+	p_physp = osm_node_get_physp_ptr(p_node, port_num);
+	p_remote_physp = osm_node_get_physp_ptr(p_neighbor_node,
+						p_ni_context->port_num);
+	osm_db_neighbor_set(sm->p_subn->p_neighbor,
+			    cl_ntoh64(osm_physp_get_port_guid(p_physp)),
+			    port_num,
+			    cl_ntoh64(osm_physp_get_port_guid(p_remote_physp)),
+			    p_ni_context->port_num);
+	osm_db_neighbor_set(sm->p_subn->p_neighbor,
+			    cl_ntoh64(osm_physp_get_port_guid(p_remote_physp)),
+			    p_ni_context->port_num,
+			    cl_ntoh64(osm_physp_get_port_guid(p_physp)),
+			    port_num);
 
 _exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -392,14 +409,12 @@ static void ni_rcv_process_existing_ca_or_router(IN osm_sm_t * sm,
 	uint8_t port_num;
 	osm_dr_path_t *p_dr_path;
 	osm_alias_guid_t *p_alias_guid, *p_alias_guid_check;
-	osm_bind_handle_t h_bind;
 
 	OSM_LOG_ENTER(sm->p_log);
 
 	p_smp = osm_madw_get_smp_ptr(p_madw);
 	p_ni = ib_smp_get_payload_ptr(p_smp);
 	port_num = ib_node_info_get_local_port_num(p_ni);
-	h_bind = osm_madw_get_bind_handle(p_madw);
 
 	/*
 	   Determine if we have encountered this node through a
@@ -479,13 +494,23 @@ alias_done:
 
 	} else {
 		osm_physp_t *p_physp = osm_node_get_physp_ptr(p_node, port_num);
+
+		if (p_physp == NULL) {
+			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D1C: "
+				"No physical port found for node GUID 0x%"
+				PRIx64 " port %u. Might be duplicate port GUID\n",
+				cl_ntoh64(p_node->node_info.node_guid),
+				port_num);
+			goto Exit;
+		}
+
 		/*
 		   Update the DR Path to the port,
 		   in case the old one is no longer available.
 		 */
 		p_dr_path = osm_physp_get_dr_path_ptr(p_physp);
 
-		osm_dr_path_init(p_dr_path, h_bind, p_smp->hop_count,
+		osm_dr_path_init(p_dr_path, p_smp->hop_count,
 				 p_smp->initial_path);
 	}
 
@@ -509,8 +534,7 @@ static void ni_rcv_process_switch(IN osm_sm_t * sm, IN osm_node_t * p_node,
 
 	/* update DR path of already initialized switch port 0 */
 	path = osm_physp_get_dr_path_ptr(osm_node_get_physp_ptr(p_node, 0));
-	osm_dr_path_init(path, osm_madw_get_bind_handle(p_madw),
-			 p_smp->hop_count, p_smp->initial_path);
+	osm_dr_path_init(path, p_smp->hop_count, p_smp->initial_path);
 
 	context.si_context.node_guid = osm_node_get_node_guid(p_node);
 	context.si_context.set_method = FALSE;
@@ -607,13 +631,24 @@ static void ni_rcv_process_new(IN osm_sm_t * sm, IN const osm_madw_t * p_madw)
 	p_ni_context = osm_madw_get_ni_context_ptr(p_madw);
 	port_num = ib_node_info_get_local_port_num(p_ni);
 
-	osm_dump_smp_dr_path(sm->p_log, p_smp, OSM_LOG_VERBOSE);
+	osm_dump_smp_dr_path_v2(sm->p_log, p_smp, FILE_ID, OSM_LOG_VERBOSE);
 
 	OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 		"Discovered new %s node,"
 		"\n\t\t\t\tGUID 0x%" PRIx64 ", TID 0x%" PRIx64 "\n",
 		ib_get_node_type_str(p_ni->node_type),
 		cl_ntoh64(p_ni->node_guid), cl_ntoh64(p_smp->trans_id));
+
+	if (port_num > p_ni->num_ports) {
+		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D0A: "
+			"New %s node GUID 0x%" PRIx64 "is non-compliant and "
+			"is being ignored since the "
+			"local port num %u > num ports %u\n",
+			ib_get_node_type_str(p_ni->node_type),
+			cl_ntoh64(p_ni->node_guid), port_num,
+			p_ni->num_ports);
+		goto Exit;
+	}
 
 	p_node = osm_node_new(p_madw);
 	if (p_node == NULL) {
@@ -649,13 +684,13 @@ static void ni_rcv_process_new(IN osm_sm_t * sm, IN const osm_madw_t * p_madw)
 			"Duplicate Port GUID 0x%" PRIx64
 			"! Found by the two directed routes:\n",
 			cl_ntoh64(p_ni->port_guid));
-		osm_dump_dr_path(sm->p_log,
-				 osm_physp_get_dr_path_ptr(p_port->p_physp),
-				 OSM_LOG_ERROR);
-		osm_dump_dr_path(sm->p_log,
-				 osm_physp_get_dr_path_ptr(p_port_check->
+		osm_dump_dr_path_v2(sm->p_log,
+				    osm_physp_get_dr_path_ptr(p_port->p_physp),
+				    FILE_ID, OSM_LOG_ERROR);
+		osm_dump_dr_path_v2(sm->p_log,
+				    osm_physp_get_dr_path_ptr(p_port_check->
 							   p_physp),
-				 OSM_LOG_ERROR);
+				    FILE_ID, OSM_LOG_ERROR);
 		osm_port_delete(&p_port);
 		osm_node_delete(&p_node);
 		goto Exit;
@@ -782,6 +817,17 @@ static void ni_rcv_process_existing(IN osm_sm_t * sm, IN osm_node_t * p_node,
 		cl_ntoh64(p_ni->node_guid),
 		cl_ntoh64(p_smp->trans_id), p_node->discovery_count);
 
+	if (port_num > p_ni->num_ports) {
+		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D0C: "
+			"Existing %s node GUID 0x%" PRIx64 "is non-compliant "
+			"and is being ignored since the "
+			"local port num %u > num ports %u\n",
+			ib_get_node_type_str(p_ni->node_type),
+			cl_ntoh64(p_ni->node_guid), port_num,
+			p_ni->num_ports);
+		goto Exit;
+	}
+
 	/*
 	   If we haven't already encountered this existing node
 	   on this particular sweep, then process further.
@@ -807,6 +853,7 @@ static void ni_rcv_process_existing(IN osm_sm_t * sm, IN osm_node_t * p_node,
 
 	ni_rcv_set_links(sm, p_node, port_num, p_ni_context);
 
+Exit:
 	OSM_LOG_EXIT(sm->p_log);
 }
 
@@ -832,14 +879,14 @@ void osm_ni_rcv_process(IN void *context, IN void *data)
 	if (p_ni->node_guid == 0) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D16: "
 			"Got Zero Node GUID! Found on the directed route:\n");
-		osm_dump_smp_dr_path(sm->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_smp_dr_path_v2(sm->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		goto Exit;
 	}
 
 	if (p_ni->port_guid == 0) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0D17: "
 			"Got Zero Port GUID! Found on the directed route:\n");
-		osm_dump_smp_dr_path(sm->p_log, p_smp, OSM_LOG_ERROR);
+		osm_dump_smp_dr_path_v2(sm->p_log, p_smp, FILE_ID, OSM_LOG_ERROR);
 		goto Exit;
 	}
 
@@ -852,7 +899,7 @@ void osm_ni_rcv_process(IN void *context, IN void *data)
 	CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
 	p_node = osm_get_node_by_guid(sm->p_subn, p_ni->node_guid);
 
-	osm_dump_node_info(sm->p_log, p_ni, OSM_LOG_DEBUG);
+	osm_dump_node_info_v2(sm->p_log, p_ni, FILE_ID, OSM_LOG_DEBUG);
 
 	if (!p_node)
 		ni_rcv_process_new(sm, p_madw);

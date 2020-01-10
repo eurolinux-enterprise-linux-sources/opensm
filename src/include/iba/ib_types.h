@@ -7656,6 +7656,7 @@ typedef struct _ib_mad_notice_attr	// Total Size calc  Accumulated
 			uint8_t    local_changes;   // 7b reserved 1b local changes
 			ib_net32_t new_cap_mask;    // new capability mask
 			ib_net16_t change_flgs;     // 10b reserved 6b change flags
+			ib_net16_t cap_mask2;
 		} PACK_SUFFIX ntc_144;
 		struct _ntc_145 {
 			ib_net16_t pad1;
@@ -11201,7 +11202,7 @@ ib_cc_mad_get_cc_key(IN const ib_cc_mad_t * const p_cc_mad)
 
 /****f* IBA Base: Types/ib_cc_mad_get_log_data_ptr
 * NAME
-*	ib_cc_mad_get_mgt_data_ptr
+*	ib_cc_mad_get_log_data_ptr
 *
 * DESCRIPTION
 *	Gets a pointer to the CC MAD's log data area.
@@ -11470,11 +11471,12 @@ typedef struct _ib_cong_log {
 *
 * SYNOPSIS
 */
+#define IB_CC_PORT_MASK_DATA_SIZE 32
 #include <complib/cl_packon.h>
 typedef struct _ib_sw_cong_setting {
 	ib_net32_t control_map;
-	uint8_t victim_mask[32];
-	uint8_t credit_mask[32];
+	uint8_t victim_mask[IB_CC_PORT_MASK_DATA_SIZE];
+	uint8_t credit_mask[IB_CC_PORT_MASK_DATA_SIZE];
 	uint8_t threshold_resv;
 	uint8_t packet_size;
 	ib_net16_t cs_threshold_resv;
@@ -11504,16 +11506,16 @@ typedef struct _ib_sw_cong_setting {
 *		  bits [254..1]: ports [254..1]
 *		  bit 255: reserved
 *
-*	threshold
-*		bits [15..12] Indicates how agressive cong. marking should be
-*		bits [11..0] Reserved
+*	threshold_resv
+*		bits [7..4] Indicates how aggressive cong. marking should be
+*		bits [3..0] Reserved
 *
 *	packet_size
 *		Any packet less than this size won't be marked with FECN
 *
-*	cs_threshold
-*		bits [7..4] How agressive Credit Starvation should be
-*		bits [3..0] Reserved
+*	cs_threshold_resv
+*		bits [15..12] How aggressive Credit Starvation should be
+*		bits [11..0] Reserved
 *
 *	cs_return_delay
 *		Value that controls credit return rate.
@@ -11584,7 +11586,8 @@ typedef struct _ib_sw_port_cong_setting_element {
 *
 * SOURCE
 */
-typedef ib_sw_port_cong_setting_element_t ib_sw_port_cong_setting_block_t[32];
+#define IB_CC_SW_PORT_SETTING_ELEMENTS 32
+typedef ib_sw_port_cong_setting_element_t ib_sw_port_cong_setting_block_t[IB_CC_SW_PORT_SETTING_ELEMENTS];
 /**********/
 
 /****s* IBA Base: Types/ib_sw_port_cong_setting_t
@@ -11662,11 +11665,12 @@ typedef struct _ib_ca_cong_entry {
 *
 * SYNOPSIS
 */
+#define IB_CA_CONG_ENTRY_DATA_SIZE 16
 #include <complib/cl_packon.h>
 typedef struct _ib_ca_cong_setting {
 	ib_net16_t port_control;
 	ib_net16_t control_map;
-	ib_ca_cong_entry_t entry_list[16];
+	ib_ca_cong_entry_t entry_list[IB_CA_CONG_ENTRY_DATA_SIZE];
 } PACK_SUFFIX ib_ca_cong_setting_t;
 #include <complib/cl_packoff.h>
 /*
@@ -11725,11 +11729,12 @@ typedef struct _ib_cc_tbl_entry {
 *
 * SYNOPSIS
 */
+#define IB_CC_TBL_ENTRY_LIST_MAX 64
 #include <complib/cl_packon.h>
 typedef struct _ib_cc_tbl {
 	ib_net16_t ccti_limit;
 	ib_net16_t resv;
-	ib_cc_tbl_entry_t entry_list[64];
+	ib_cc_tbl_entry_t entry_list[IB_CC_TBL_ENTRY_LIST_MAX];
 } PACK_SUFFIX ib_cc_tbl_t;
 #include <complib/cl_packoff.h>
 /*

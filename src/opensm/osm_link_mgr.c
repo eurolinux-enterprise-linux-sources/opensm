@@ -3,6 +3,7 @@
  * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -47,19 +48,22 @@
 #include <string.h>
 #include <iba/ib_types.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_LINK_MGR_C
 #include <opensm/osm_sm.h>
 #include <opensm/osm_node.h>
 #include <opensm/osm_switch.h>
 #include <opensm/osm_helper.h>
 #include <opensm/osm_msgdef.h>
 #include <opensm/osm_opensm.h>
+#include <opensm/osm_db_pack.h>
 
 static uint8_t link_mgr_get_smsl(IN osm_sm_t * sm, IN osm_physp_t * p_physp)
 {
 	osm_opensm_t *p_osm = sm->p_subn->p_osm;
 	struct osm_routing_engine *re = p_osm->routing_engine_used;
-	const osm_port_t *p_sm_port, *p_src_port;
 	ib_net16_t slid;
+	ib_net16_t smlid;
 	uint8_t sl;
 
 	OSM_LOG_ENTER(sm->p_log);
@@ -74,15 +78,11 @@ static uint8_t link_mgr_get_smsl(IN osm_sm_t * sm, IN osm_physp_t * p_physp)
 		return sm->p_subn->opt.sm_sl;
 	}
 
-	/* Find osm_port of the SM itself = dest_port */
-	p_sm_port = osm_get_port_by_lid(sm->p_subn, sm->p_subn->sm_base_lid);
-
-	/* Find osm_port of the source = p_physp */
-	p_src_port = osm_get_port_by_lid(sm->p_subn, slid);
+	smlid = sm->p_subn->sm_base_lid;
 
 	/* Call into routing engine to find proper SL */
 	sl = re->path_sl(re->context, sm->p_subn->opt.sm_sl,
-			 p_src_port, p_sm_port);
+			 slid, smlid);
 
 	OSM_LOG_EXIT(sm->p_log);
 	return sl;
@@ -105,6 +105,7 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	int qdr_change = 0, fdr10_change = 0;
 	int ret = 0;
 	ib_net32_t attr_mod, cap_mask;
+	boolean_t update_mkey = FALSE;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -195,8 +196,10 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 		    port_num == 0) {
 			p_pi->m_key = sm->p_subn->opt.m_key;
 			if (memcmp(&p_pi->m_key, &p_old_pi->m_key,
-				   sizeof(p_pi->m_key)))
+				   sizeof(p_pi->m_key))) {
+				update_mkey = TRUE;
 				send_set = TRUE;
+			}
 
 			p_pi->subnet_prefix = sm->p_subn->opt.subnet_prefix;
 			if (memcmp(&p_pi->subnet_prefix,
@@ -237,8 +240,8 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 				   sizeof(p_pi->m_key_lease_period)))
 				send_set = TRUE;
 
-			/* M_KeyProtectBits are currently always zero */
 			p_pi->mkey_lmc = 0;
+			ib_port_info_set_mpb(p_pi, sm->p_subn->opt.m_key_protect_bits);
 			if (esp0 == FALSE || sm->p_subn->opt.lmc_esp0)
 				ib_port_info_set_lmc(p_pi, sm->p_subn->opt.lmc);
 			if (ib_port_info_get_lmc(p_old_pi) !=
@@ -393,7 +396,7 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 				if (sm->p_subn->opt.force_link_speed_ext &&
 				    (sm->p_subn->opt.force_link_speed_ext != IB_LINK_SPEED_EXT_SET_LSES ||
 				     p_pi->link_speed_ext_enabled !=
-				     ib_port_info_get_link_speed_sup(p_pi))) {
+				     ib_port_info_get_link_speed_ext_sup(p_pi))) {
 					p_pi->link_speed_ext_enabled = sm->p_subn->opt.force_link_speed_ext;
 					if (memcmp(&p_pi->link_speed_ext_enabled,
 						   &p_old_pi->link_speed_ext_enabled,
@@ -405,8 +408,10 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 
 		/* calc new op_vls and mtu */
 		op_vls =
-		    osm_physp_calc_link_op_vls(sm->p_log, sm->p_subn, p_physp);
-		mtu = osm_physp_calc_link_mtu(sm->p_log, p_physp);
+		    osm_physp_calc_link_op_vls(sm->p_log, sm->p_subn, p_physp,
+					       ib_port_info_get_op_vls(p_old_pi));
+		mtu = osm_physp_calc_link_mtu(sm->p_log, p_physp,
+					      ib_port_info_get_neighbor_mtu(p_old_pi));
 
 		ib_port_info_set_neighbor_mtu(p_pi, mtu);
 		if (ib_port_info_get_neighbor_mtu(p_pi) !=
@@ -465,6 +470,14 @@ Send:
 	if (status)
 		ret = -1;
 
+	/* If we sent a new mkey above, update our guid2mkey map
+	   now, on the assumption that the SubnSet succeeds
+	 */
+	if (update_mkey)
+		osm_db_guid2mkey_set(sm->p_subn->p_g2m,
+				     cl_ntoh64(p_physp->port_guid),
+				     cl_ntoh64(p_pi->m_key));
+
 	if (send_set2) {
 		status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 				     payload2, sizeof(payload2),
@@ -483,7 +496,7 @@ Exit:
 static int link_mgr_process_node(osm_sm_t * sm, IN osm_node_t * p_node,
 				 IN const uint8_t link_state)
 {
-	osm_physp_t *p_physp;
+	osm_physp_t *p_physp, *p_physp_remote;
 	uint32_t i, num_physp;
 	int ret = 0;
 	uint8_t current_state;
@@ -514,6 +527,19 @@ static int link_mgr_process_node(osm_sm_t * sm, IN osm_node_t * p_node,
 		current_state = osm_physp_get_port_state(p_physp);
 		if (current_state == IB_LINK_DOWN)
 			continue;
+
+		/*
+		    Set PortState to DOWN in case Remote Physical Port is
+		    unreachable. We have to check this for all ports, except
+		    port zero.
+		 */
+		p_physp_remote = osm_physp_get_remote(p_physp);
+		if ((i != 0) && (!p_physp_remote ||
+		    !osm_physp_is_valid(p_physp_remote))) {
+			if (current_state != IB_LINK_INIT)
+				link_mgr_set_physp_pi(sm, p_physp, IB_LINK_DOWN);
+			continue;
+		}
 
 		/*
 		   Normally we only send state update if state is lower

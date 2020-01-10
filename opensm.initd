@@ -23,6 +23,8 @@ PID_FILE=/var/run/opensm.pid
 
 [ -n "$PRIORITY" ] && prio="-p $PRIORITY"
 
+shopt -s nullglob
+
 ACTION=$1
 
 start()

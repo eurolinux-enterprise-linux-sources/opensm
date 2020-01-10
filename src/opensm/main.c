@@ -1,9 +1,10 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -54,6 +55,8 @@
 #include <fcntl.h>
 #include <complib/cl_types.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_MAIN_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_version.h>
 #include <opensm/osm_opensm.h>
@@ -177,7 +180,7 @@ static void show_usage(void)
 	       "          If all configured routing engines fail, OpenSM will always\n"
 	       "          attempt to route with Min Hop unless 'no_fallback' is\n"
 	       "          included in the list of routing engines.\n"
-	       "          Supported engines: updn, dnup, file, ftree, lash, dor, torus-2QoS\n\n");
+	       "          Supported engines: updn, dnup, file, ftree, lash, dor, torus-2QoS, dfsssp, sssp\n\n");
 	printf("--do_mesh_analysis\n"
 	       "          This option enables additional analysis for the lash\n"
 	       "          routing engine to precondition switch port assignments\n"
@@ -321,13 +324,27 @@ static void show_usage(void)
 	       "          This option defines the optional partition configuration file.\n"
 	       "          The default name is \'"
 	       OSM_DEFAULT_PARTITION_CONFIG_FILE "\'.\n\n");
-	printf("--no_part_enforce, -N\n"
+	printf("--no_part_enforce, -N (DEPRECATED)\n"
+	       "          Use --part_enforce instead.\n"
 	       "          This option disables partition enforcement on switch external ports.\n\n");
+	printf("--part_enforce, -Z [both, in, out, off]\n"
+	       "          This option indicates the partition enforcement type (for switches)\n"
+	       "          Enforcement type can be outbound only (out), inbound only (in), both or\n"
+	       "          disabled (off). Default is both.\n\n");
+	printf("--allow_both_pkeys, -W\n"
+	       "          This option indicates whether both full and limited membership\n"
+	       "          on the same partition can be configured in the PKeyTable.\n"
+	       "          Default is not to allow both pkeys.\n\n");
 	printf("--qos, -Q\n" "          This option enables QoS setup.\n\n");
 	printf("--qos_policy_file, -Y <QoS-policy-file>\n"
 	       "          This option defines the optional QoS policy file.\n"
 	       "          The default name is \'" OSM_DEFAULT_QOS_POLICY_FILE
 	       "\'.\n\n");
+	printf("--congestion_control\n"
+	       "          (EXPERIMENTAL) This option enables congestion control configuration.\n\n");
+	printf("--cc_key <key>\n"
+	       "          (EXPERIMENTAL) This option configures the CCkey to use when configuring\n"
+	       "          congestion control.\n\n");
 	printf("--stay_on_fatal, -y\n"
 	       "          This option will cause SM not to exit on fatal initialization\n"
 	       "          issues: if SM discovers duplicated guids or 12x link with\n"
@@ -569,7 +586,7 @@ int main(int argc, char *argv[])
 	char *conf_template = NULL, *config_file = NULL;
 	uint32_t val;
 	const char *const short_option =
-	    "F:c:i:w:O:f:ed:D:g:l:L:s:t:a:u:m:X:R:zM:U:S:P:Y:ANBIQvVhoryxp:n:q:k:C:G:H:";
+	    "F:c:i:w:O:f:ed:D:g:l:L:s:t:a:u:m:X:R:zM:U:S:P:Y:ANZ:WBIQvVhoryxp:n:q:k:C:G:H:";
 
 	/*
 	   In the array below, the 2nd parameter specifies the number
@@ -598,8 +615,12 @@ int main(int argc, char *argv[])
 		{"erase_log_file", 0, NULL, 'e'},
 		{"Pconfig", 1, NULL, 'P'},
 		{"no_part_enforce", 0, NULL, 'N'},
+		{"part_enforce", 1, NULL, 'Z'},
+		{"allow_both_pkeys", 0, NULL, 'W'},
 		{"qos", 0, NULL, 'Q'},
 		{"qos_policy_file", 1, NULL, 'Y'},
+		{"congestion_control", 0, NULL, 128},
+		{"cc_key", 1, NULL, 129},
 		{"maxsmps", 1, NULL, 'n'},
 		{"console", 1, NULL, 'q'},
 		{"V", 0, NULL, 'V'},
@@ -874,6 +895,29 @@ int main(int argc, char *argv[])
 			opt.no_partition_enforcement = TRUE;
 			break;
 
+		case 'Z':
+			if (strcmp(optarg, OSM_PARTITION_ENFORCE_BOTH) == 0
+			    || strcmp(optarg, OSM_PARTITION_ENFORCE_IN) == 0
+			    || strcmp(optarg, OSM_PARTITION_ENFORCE_OUT) == 0
+			    || strcmp(optarg, OSM_PARTITION_ENFORCE_OFF) == 0) {
+				SET_STR_OPT(opt.part_enforce, optarg);
+				if (strcmp(optarg, OSM_PARTITION_ENFORCE_BOTH) == 0)
+					opt.part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_BOTH;
+				else if (strcmp(optarg, OSM_PARTITION_ENFORCE_IN) == 0)
+					opt.part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_IN;
+				else if (strcmp(optarg, OSM_PARTITION_ENFORCE_OUT) == 0)
+					opt.part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_OUT;
+				else
+					opt.part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_OFF;
+			} else
+				printf("-part_enforce %s option not understood\n",
+				       optarg);
+			break;
+
+		case 'W':
+			opt.allow_both_pkeys = TRUE;
+			break;
+
 		case 'Q':
 			opt.qos = TRUE;
 			break;
@@ -881,6 +925,15 @@ int main(int argc, char *argv[])
 		case 'Y':
 			SET_STR_OPT(opt.qos_policy_file, optarg);
 			printf(" QoS policy file \'%s\'\n", optarg);
+			break;
+
+		case 128:
+			opt.congestion_control = TRUE;
+			break;
+
+		case 129:
+			opt.cc_key = strtoull(optarg, NULL, 0);
+			printf(" CC Key 0x%" PRIx64 "\n", opt.cc_key);
 			break;
 
 		case 'y':
@@ -1083,8 +1136,14 @@ int main(int argc, char *argv[])
 
 	block_signals();
 
-	if (opt.daemon)
+	if (opt.daemon) {
+		if (INVALID_GUID == opt.guid) {
+			fprintf(stderr,
+				"ERROR: Invalid GUID specified; exiting because of daemon mode\n");
+			return -1;
+		}
 		daemonize(&osm);
+	}
 
 	complib_init();
 

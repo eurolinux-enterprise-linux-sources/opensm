@@ -45,6 +45,8 @@
  *    Yevgeny Kliteynik, Mellanox
  */
 
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_QOS_PARSER_L_L
 #include <opensm/osm_qos_policy.h>
 #include "osm_qos_parser_y.h"
 

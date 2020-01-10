@@ -49,6 +49,8 @@
 #include <string.h>
 #include <complib/cl_math.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SWITCH_C
 #include <opensm/osm_switch.h>
 
 struct switch_port_path {
@@ -63,6 +65,8 @@ cl_status_t osm_switch_set_hops(IN osm_switch_t * p_sw, IN uint16_t lid_ho,
 				IN uint8_t port_num, IN uint8_t num_hops)
 {
 	if (!lid_ho || lid_ho > p_sw->max_lid_ho)
+		return -1;
+	if (port_num >= p_sw->num_ports)
 		return -1;
 	if (!p_sw->hops[lid_ho]) {
 		p_sw->hops[lid_ho] = malloc(p_sw->num_ports);

@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -49,6 +50,8 @@
 #include <string.h>
 #include <complib/cl_dispatcher.h>
 #include <complib/cl_passivelock.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_OPENSM_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_version.h>
 #include <opensm/osm_base.h>
@@ -58,6 +61,7 @@
 #include <opensm/osm_sm.h>
 #include <opensm/osm_vl15intf.h>
 #include <opensm/osm_event_plugin.h>
+#include <opensm/osm_congestion_control.h>
 
 struct routing_engine_module {
 	const char *name;
@@ -72,6 +76,8 @@ extern int osm_ucast_ftree_setup(struct osm_routing_engine *, osm_opensm_t *);
 extern int osm_ucast_lash_setup(struct osm_routing_engine *, osm_opensm_t *);
 extern int osm_ucast_dor_setup(struct osm_routing_engine *, osm_opensm_t *);
 extern int osm_ucast_torus2QoS_setup(struct osm_routing_engine *, osm_opensm_t *);
+extern int osm_ucast_sssp_setup(struct osm_routing_engine *, osm_opensm_t *);
+extern int osm_ucast_dfsssp_setup(struct osm_routing_engine *, osm_opensm_t *);
 
 const static struct routing_engine_module routing_modules[] = {
 	{"minhop", osm_ucast_minhop_setup},
@@ -82,6 +88,8 @@ const static struct routing_engine_module routing_modules[] = {
 	{"lash", osm_ucast_lash_setup},
 	{"dor", osm_ucast_dor_setup},
 	{"torus-2QoS", osm_ucast_torus2QoS_setup},
+	{"dfsssp", osm_ucast_dfsssp_setup},
+	{"sssp", osm_ucast_sssp_setup},
 	{NULL, NULL}
 };
 
@@ -106,6 +114,10 @@ const char *osm_routing_engine_type_str(IN osm_routing_engine_type_t type)
 		return "dor";
 	case OSM_ROUTING_ENGINE_TYPE_TORUS_2QOS:
 		return "torus-2QoS";
+	case OSM_ROUTING_ENGINE_TYPE_DFSSSP:
+		return "dfsssp";
+	case OSM_ROUTING_ENGINE_TYPE_SSSP:
+		return "sssp";
 	default:
 		break;
 	}
@@ -136,6 +148,10 @@ osm_routing_engine_type_t osm_routing_engine_type(IN const char *str)
 		return OSM_ROUTING_ENGINE_TYPE_DOR;
 	else if (!strcasecmp(str, "torus-2QoS"))
 		return OSM_ROUTING_ENGINE_TYPE_TORUS_2QOS;
+	else if (!strcasecmp(str, "sssp"))
+		return OSM_ROUTING_ENGINE_TYPE_SSSP;
+	else if (!strcasecmp(str, "dfsssp"))
+		return OSM_ROUTING_ENGINE_TYPE_DFSSSP;
 	else
 		return OSM_ROUTING_ENGINE_TYPE_UNKNOWN;
 }
@@ -276,6 +292,8 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 	osm_perfmgr_shutdown(&p_osm->perfmgr);
 #endif				/* ENABLE_OSM_PERF_MGR */
 
+	osm_congestion_control_shutdown(&p_osm->cc);
+
 	/* shut down the SA
 	 * - unbind from QP1 messages
 	 */
@@ -305,6 +323,7 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 #ifdef ENABLE_OSM_PERF_MGR
 	osm_perfmgr_destroy(&p_osm->perfmgr);
 #endif				/* ENABLE_OSM_PERF_MGR */
+	osm_congestion_control_destroy(&p_osm->cc);
 	osm_db_destroy(&p_osm->db);
 	osm_vl15_destroy(&p_osm->vl15, &p_osm->mad_pool);
 	osm_mad_pool_destroy(&p_osm->mad_pool);
@@ -334,8 +353,8 @@ static void load_plugins(osm_opensm_t *osm, const char *plugin_names)
 	while (name && *name) {
 		epi = osm_epi_construct(osm, name);
 		if (!epi)
-			osm_log(&osm->log, OSM_LOG_ERROR,
-				"cannot load plugin \'%s\'\n", name);
+			osm_log_v2(&osm->log, OSM_LOG_ERROR, FILE_ID,
+				   "cannot load plugin \'%s\'\n", name);
 		else
 			cl_qlist_insert_tail(&osm->plugin_list, &epi->list);
 		name = strtok_r(NULL, " \t\n", &p);
@@ -362,11 +381,11 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 	p_osm->log.log_prefix = p_opt->log_prefix;
 
 	/* If there is a log level defined - add the OSM_VERSION to it */
-	osm_log(&p_osm->log,
-		osm_log_get_level(&p_osm->log) & (OSM_LOG_SYS ^ 0xFF), "%s\n",
-		p_osm->osm_version);
+	osm_log_v2(&p_osm->log,
+		   osm_log_get_level(&p_osm->log) & (OSM_LOG_SYS ^ 0xFF),
+		   FILE_ID, "%s\n", p_osm->osm_version);
 	/* Write the OSM_VERSION to the SYS_LOG */
-	osm_log(&p_osm->log, OSM_LOG_SYS, "%s\n", p_osm->osm_version);	/* Format Waived */
+	osm_log_v2(&p_osm->log, OSM_LOG_SYS, FILE_ID, "%s\n", p_osm->osm_version);	/* Format Waived */
 
 	OSM_LOG(&p_osm->log, OSM_LOG_FUNCS, "[\n");	/* Format Waived */
 
@@ -397,6 +416,11 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 	if (status != IB_SUCCESS)
 		goto Exit;
 
+	/* the DB is in use by subn so init before */
+	status = osm_db_init(&p_osm->db, &p_osm->log);
+	if (status != IB_SUCCESS)
+		goto Exit;
+
 	status = osm_subn_init(&p_osm->subn, p_osm, p_opt);
 	if (status != IB_SUCCESS)
 		goto Exit;
@@ -416,11 +440,6 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 			       &p_osm->log, &p_osm->stats,
 			       p_opt->max_wire_smps, p_opt->max_wire_smps2,
 			       p_opt->max_smps_timeout);
-	if (status != IB_SUCCESS)
-		goto Exit;
-
-	/* the DB is in use by the SM and SA so init before */
-	status = osm_db_init(&p_osm->db, &p_osm->log);
 	if (status != IB_SUCCESS)
 		goto Exit;
 
@@ -447,6 +466,11 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 	if (status != IB_SUCCESS)
 		goto Exit;
 #endif				/* ENABLE_OSM_PERF_MGR */
+
+	status = osm_congestion_control_init(&p_osm->cc,
+					     p_osm, p_opt);
+	if (status != IB_SUCCESS)
+		goto Exit;
 
 	p_osm->no_fallback_routing_engine = FALSE;
 
@@ -480,6 +504,10 @@ ib_api_status_t osm_opensm_bind(IN osm_opensm_t * p_osm, IN ib_net64_t guid)
 	if (status != IB_SUCCESS)
 		goto Exit;
 #endif				/* ENABLE_OSM_PERF_MGR */
+
+	status = osm_congestion_control_bind(&p_osm->cc, guid);
+	if (status != IB_SUCCESS)
+		goto Exit;
 
 	/* setting IS_SM in capability mask */
 	OSM_LOG(&p_osm->log, OSM_LOG_INFO, "Setting IS_SM on port 0x%016" PRIx64 "\n",

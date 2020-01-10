@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2010 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  *
@@ -52,10 +52,13 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <complib/cl_ptr_vector.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_DROP_MGR_C
 #include <opensm/osm_sm.h>
 #include <opensm/osm_router.h>
 #include <opensm/osm_switch.h>
 #include <opensm/osm_node.h>
+#include <opensm/osm_guid.h>
 #include <opensm/osm_helper.h>
 #include <opensm/osm_multicast.h>
 #include <opensm/osm_remote_sm.h>
@@ -162,6 +165,8 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 	osm_node_t *p_node;
 	osm_remote_sm_t *p_sm;
 	osm_alias_guid_t *p_alias_guid, *p_alias_guid_check;
+	osm_guidinfo_work_obj_t *wobj;
+	cl_list_item_t *item, *next_item;
 	ib_gid_t port_gid;
 	ib_mad_notice_attr_t notice;
 	ib_api_status_t status;
@@ -173,8 +178,7 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 		"Unreachable port 0x%016" PRIx64 "\n", cl_ntoh64(port_guid));
 
 	p_port_check =
-	    (osm_port_t *) cl_qmap_remove(&sm->p_subn->port_guid_tbl,
-					  port_guid);
+	    (osm_port_t *) cl_qmap_get(&sm->p_subn->port_guid_tbl, port_guid);
 	if (p_port_check != p_port) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0101: "
 			"Port 0x%016" PRIx64 " not in guid table\n",
@@ -209,6 +213,25 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 			ib_get_err_str(status));
 	}
 
+	next_item = cl_qlist_head(&sm->p_subn->alias_guid_list);
+	while (next_item != cl_qlist_end(&sm->p_subn->alias_guid_list)) {
+		item = next_item;
+		next_item = cl_qlist_next(item);
+		wobj = cl_item_obj(item, wobj, list_item);
+		if (wobj->p_port == p_port) {
+			cl_qlist_remove_item(&sm->p_subn->alias_guid_list,
+					     &wobj->list_item);
+			osm_guid_work_obj_delete(wobj);
+		}
+	}
+
+	while (!cl_is_qlist_empty(&p_port->mcm_list)) {
+		mcm_port = cl_item_obj(cl_qlist_head(&p_port->mcm_list),
+				       mcm_port, list_item);
+		osm_mgrp_delete_port(sm->p_subn, sm->p_log, mcm_port->mgrp,
+				     p_port);
+	}
+
 	p_alias_guid_tbl = &sm->p_subn->alias_port_guid_tbl;
 	p_alias_guid_check = (osm_alias_guid_t *) cl_qmap_head(p_alias_guid_tbl);
 	while (p_alias_guid_check != (osm_alias_guid_t *) cl_qmap_end(p_alias_guid_tbl)) {
@@ -224,6 +247,8 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 		}
 	}
 
+	cl_qmap_remove(&sm->p_subn->port_guid_tbl, port_guid);
+
 	p_sm_guid_tbl = &sm->p_subn->sm_guid_tbl;
 	p_sm = (osm_remote_sm_t *) cl_qmap_remove(p_sm_guid_tbl, port_guid);
 	if (p_sm != (osm_remote_sm_t *) cl_qmap_end(p_sm_guid_tbl)) {
@@ -231,7 +256,9 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 			"Cleaned SM for port guid 0x%016" PRIx64 "\n",
 			cl_ntoh64(port_guid));
-
+		/* clean up the polling_sm pointer */
+		if (sm->p_polling_sm == p_sm)
+			sm->p_polling_sm = NULL;
 		free(p_sm);
 	}
 
@@ -248,13 +275,6 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 		cl_ptr_vector_set(p_port_lid_tbl, lid_ho, NULL);
 
 	drop_mgr_clean_physp(sm, p_port->p_physp);
-
-	while (!cl_is_qlist_empty(&p_port->mcm_list)) {
-		mcm_port = cl_item_obj(cl_qlist_head(&p_port->mcm_list),
-				       mcm_port, list_item);
-		osm_mgrp_delete_port(sm->p_subn, sm->p_log, mcm_port->mgrp,
-				     p_port->guid);
-	}
 
 	/* initialize the p_node - may need to get node_desc later */
 	p_node = p_port->p_node;

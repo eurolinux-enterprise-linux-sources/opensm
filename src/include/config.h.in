@@ -27,6 +27,9 @@
 /* Define a Partition config file */
 #undef HAVE_DEFAULT_PARTITION_CONFIG_FILE
 
+/* Define a Per Module Logging config file */
+#undef HAVE_DEFAULT_PER_MOD_LOGGING_FILE
+
 /* Define a Prefix Routes config file */
 #undef HAVE_DEFAULT_PREFIX_ROUTES_FILE
 

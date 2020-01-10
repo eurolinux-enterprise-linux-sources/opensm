@@ -53,6 +53,8 @@
 #include <complib/cl_qmap.h>
 #include <complib/cl_pool.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_UCAST_CACHE_C
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_ucast_mgr.h>
 #include <opensm/osm_ucast_cache.h>
@@ -323,6 +325,8 @@ cache_restore_ucast_info(osm_ucast_mgr_t * p_mgr,
 		free(p_sw->hops);
 	p_sw->hops = p_cache_sw->hops;
 	p_cache_sw->hops = NULL;
+
+	p_sw->need_update = 2;
 }
 
 static void ucast_cache_dump(osm_ucast_mgr_t * p_mgr)
@@ -332,7 +336,7 @@ static void ucast_cache_dump(osm_ucast_mgr_t * p_mgr)
 
 	OSM_LOG_ENTER(p_mgr->p_log);
 
-	if (!osm_log_is_active(p_mgr->p_log, OSM_LOG_DEBUG))
+	if (!OSM_LOG_IS_ACTIVE_V2(p_mgr->p_log, OSM_LOG_DEBUG))
 		goto Exit;
 
 	OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
@@ -897,6 +901,14 @@ void osm_ucast_cache_add_node(osm_ucast_mgr_t * p_mgr, osm_node_t * p_node)
 
 		lid_ho = cl_ntoh16(osm_node_get_base_lid(p_node, 0));
 
+		if (!lid_ho) {
+			OSM_LOG(p_mgr->p_log, OSM_LOG_VERBOSE,
+				"Skip caching. Switch dropped before "
+				"it gets a valid lid.\n");
+			osm_ucast_cache_invalidate(p_mgr);
+			goto Exit;
+		}
+
 		OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
 			"Caching dropped switch lid %u\n", lid_ho);
 
@@ -930,9 +942,9 @@ void osm_ucast_cache_add_node(osm_ucast_mgr_t * p_mgr, osm_node_t * p_node)
 		 */
 
 		p_cache_sw = cache_get_sw(p_mgr, lid_ho);
-		CL_ASSERT(p_cache_sw);
 
-		if (!cache_sw_is_leaf(p_cache_sw)) {
+		/* p_cache_sw could be NULL if it has no remote phys ports */
+		if (!p_cache_sw || !cache_sw_is_leaf(p_cache_sw)) {
 			OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
 				"Dropped non-leaf switch (lid %u)\n", lid_ho);
 			osm_ucast_cache_invalidate(p_mgr);
@@ -966,6 +978,7 @@ void osm_ucast_cache_add_node(osm_ucast_mgr_t * p_mgr, osm_node_t * p_node)
 			/* no LFT buffer, so we use the switch's LFT */
 			p_cache_sw->lft = p_node->sw->lft;
 			p_node->sw->lft = NULL;
+			p_node->sw->lft_size = 0;
 		}
 		p_cache_sw->max_lid_ho = p_node->sw->max_lid_ho;
 	} else {
@@ -995,6 +1008,7 @@ int osm_ucast_cache_process(osm_ucast_mgr_t * p_mgr)
 	cl_qmap_t *tbl = &p_mgr->p_subn->sw_guid_tbl;
 	cl_map_item_t *item;
 	osm_switch_t *p_sw;
+	uint16_t lft_size;
 
 	if (!p_mgr->p_subn->opt.use_ucast_cache)
 		return 1;
@@ -1010,13 +1024,18 @@ int osm_ucast_cache_process(osm_ucast_mgr_t * p_mgr)
 	     item = cl_qmap_next(item)) {
 		p_sw = (osm_switch_t *) item;
 
-		if (p_sw->need_update && !p_sw->new_lft) {
-			/* no new routing was recently calculated for this
-			   switch, but the LFT needs to be updated anyway */
-			p_sw->new_lft = p_sw->lft;
-			p_sw->lft = malloc(p_sw->lft_size);
+		if (p_sw->need_update) {
+			if (!p_sw->new_lft)
+				/* no new routing was recently calculated for this
+				   switch, but the LFT needs to be updated anyway */
+				p_sw->new_lft = p_sw->lft;
+
+			lft_size = (p_sw->max_lid_ho / IB_SMP_DATA_SIZE + 1)
+				   * IB_SMP_DATA_SIZE;
+			p_sw->lft = malloc(lft_size);
 			if (!p_sw->lft)
 				return IB_INSUFFICIENT_MEMORY;
+			p_sw->lft_size = lft_size;
 			memset(p_sw->lft, OSM_NO_PATH, p_sw->lft_size);
 		}
 

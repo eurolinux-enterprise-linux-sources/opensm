@@ -319,6 +319,24 @@ BEGIN_C_DECLS
 #endif
 /***********/
 
+/****d* OpenSM: Base/OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE
+* NAME
+*	OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE
+*
+* DESCRIPTION
+*	Specifies the default file name for per module logging configuration
+*
+* SYNOPSIS
+*/
+#ifdef __WIN__
+#define OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE strcat(GetOsmCachePath(), "per-module-logging.conf")
+#elif defined(OPENSM_CONFIG_DIR)
+#define OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE OPENSM_CONFIG_DIR "/per-module-logging.conf"
+#else
+#define OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE "/etc/opensm/per-module-logging.conf"
+#endif /* __WIN__ */
+/***********/
+
 /****d* OpenSM: Base/OSM_DEFAULT_SWEEP_INTERVAL_SECS
 * NAME
 *	OSM_DEFAULT_SWEEP_INTERVAL_SECS
@@ -832,6 +850,17 @@ typedef enum _osm_thread_state {
 #define OSM_CAP2_IS_HIERARCHY_SUPPORTED (1 << 4)
 /***********/
 
+/****d* OpenSM: Base/OSM_CAP2_IS_ALIAS_GUIDS_SUPPORTED
+* Name
+*
+* DESCRIPTION
+*	Alias GUIDs supported
+*
+* SYNOPSIS
+*/
+#define OSM_CAP2_IS_ALIAS_GUIDS_SUPPORTED (1 << 5)
+/***********/
+
 /****d* OpenSM: Base/OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED
 * Name
 *	OSM_CAP2_IS_FULL_PORTINFO_REC_SUPPORTED
@@ -856,6 +885,28 @@ typedef enum _osm_thread_state {
 #define OSM_CAP2_IS_EXTENDED_SPEEDS_SUPPORTED (1 << 7)
 /***********/
 
+/****d* OpenSM: Base/OSM_CAP2_IS_MULTICAST_SERVICE_RECS_SUPPORTED
+ * Name
+ *	OSM_CAP2_IS_MULTICAST_SERVICE_RECS_SUPPORTED
+ *
+ * DESCRIPTION
+ *	Multicast Service Records supported
+ *
+ * SYNOPSIS
+ */
+#define OSM_CAP2_IS_MULTICAST_SERVICE_RECS_SUPPORTED (1 << 8)
+
+/****d* OpenSM: Base/OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED
+ * Name
+ *	OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED
+ *
+ * DESCRIPTION
+ *	CapMask2 matching for PortInfoRecord supported
+ *
+ * SYNOPSIS
+ */
+#define OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED (1 << 9)
+
 /****d* OpenSM: Base/osm_signal_t
 * NAME
 *	osm_signal_t
@@ -872,7 +923,8 @@ typedef enum _osm_thread_state {
 #define OSM_SIGNAL_SWEEP			1
 #define OSM_SIGNAL_IDLE_TIME_PROCESS_REQUEST	2
 #define OSM_SIGNAL_PERFMGR_SWEEP		3
-#define OSM_SIGNAL_MAX				4
+#define OSM_SIGNAL_GUID_PROCESS_REQUEST		4
+#define OSM_SIGNAL_MAX				5
 
 typedef unsigned int osm_signal_t;
 /***********/
@@ -954,6 +1006,7 @@ typedef enum _osm_sm_signal {
 #define OSM_VENDOR_ID_HP3           0x0019BB
 #define OSM_VENDOR_ID_HP4           0x00237D
 #define OSM_VENDOR_ID_OPENIB        0x001405
+#define OSM_VENDOR_ID_IBM2	    0x5CF3FC
 
 /* IPoIB Broadcast Defaults */
 #define OSM_IPOIB_BROADCAST_MGRP_QKEY 0x0b1b

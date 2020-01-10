@@ -49,6 +49,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_qmap.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_TRAP_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -211,6 +213,7 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
 	uint8_t payload[IB_SMP_DATA_SIZE];
 	osm_madw_context_t context;
 	ib_port_info_t *pi = (ib_port_info_t *)payload;
+	ib_api_status_t status;
 
 	/* select the nearest port to master opensm */
 	if (p->p_remote_physp &&
@@ -233,16 +236,19 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
 	context.pi_context.light_sweep = FALSE;
 	context.pi_context.active_transition = FALSE;
 
-	return osm_req_set(sm, osm_physp_get_dr_path_ptr(p),
+	CL_PLOCK_ACQUIRE(sm->p_lock);
+	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p),
 			   payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
 			   cl_hton32(osm_physp_get_port_num(p)),
 			   CL_DISP_MSGID_NONE, &context);
+	CL_PLOCK_RELEASE(sm->p_lock);
+	return status;
 }
 
 static void log_trap_info(osm_log_t *p_log, ib_mad_notice_attr_t *p_ntci,
 			  ib_net16_t source_lid, ib_net64_t trans_id)
 {
-	if (!osm_log_is_active(p_log, OSM_LOG_ERROR))
+	if (!OSM_LOG_IS_ACTIVE_V2(p_log, OSM_LOG_ERROR))
 		return;
 
 	if (ib_notice_is_generic(p_ntci)) {
@@ -266,6 +272,20 @@ static void log_trap_info(osm_log_t *p_log, ib_mad_notice_attr_t *p_ntci,
 			cl_ntoh32(ib_notice_get_prod_type(p_ntci)),
 			ib_get_producer_type_str(ib_notice_get_prod_type(p_ntci)),
 			cl_hton16(source_lid), str, cl_ntoh64(trans_id));
+		if ((p_ntci->g_or_v.generic.trap_num == CL_HTON16(257)) ||
+		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(258))) {
+			OSM_LOG(p_log, OSM_LOG_ERROR,
+				"Bad %s_Key:0x%x on SL:%d from "
+				"LID1:%u QP1:0x%x to "
+				"LID2:%u QP2:0x%x\n",
+				(p_ntci->g_or_v.generic.trap_num == CL_HTON16(257)) ? "P" : "Q",
+				cl_ntoh32(p_ntci->data_details.ntc_257_258.key),
+				cl_ntoh32(p_ntci->data_details.ntc_257_258.qp1) >> 28,
+				cl_ntoh16(p_ntci->data_details.ntc_257_258.lid1),
+				cl_ntoh32(p_ntci->data_details.ntc_257_258.qp1) & 0xfff,
+				cl_ntoh16(p_ntci->data_details.ntc_257_258.lid2),
+				cl_ntoh32(p_ntci->data_details.ntc_257_258.qp2));
+		}
 	} else
 		OSM_LOG(p_log, OSM_LOG_ERROR,
 			"Received Vendor Notice type:%u vend:0x%06X "
@@ -400,7 +420,7 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 		log_trap_info(sm->p_log, p_ntci, source_lid, p_smp->trans_id);
 	}
 
-	osm_dump_notice(sm->p_log, p_ntci, OSM_LOG_VERBOSE);
+	osm_dump_notice_v2(sm->p_log, p_ntci, FILE_ID, OSM_LOG_VERBOSE);
 
 	p_physp = osm_get_physp_by_mad_addr(sm->p_log, sm->p_subn,
 					    &tmp_madw.mad_addr);
@@ -551,7 +571,6 @@ check_sweep:
 		goto Exit;
 
 check_report:
-	/* Add a call to osm_report_notice */
 	/* We are going to report the notice - so need to fix the IssuerGID
 	   accordingly. See IBA 1.2 p.739 or IBA 1.1 p.653 for details. */
 	if (is_gsi) {

@@ -41,6 +41,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_PKEY_RCV_C
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
 #include <opensm/osm_node.h>
@@ -128,8 +130,8 @@ void osm_pkey_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	osm_dump_pkey_block(sm->p_log, port_guid, block_num, port_num,
-			    p_pkey_tbl, OSM_LOG_DEBUG);
+	osm_dump_pkey_block_v2(sm->p_log, port_guid, block_num, port_num,
+			       p_pkey_tbl, FILE_ID, OSM_LOG_DEBUG);
 
 	osm_physp_set_pkey_tbl(sm->p_log, sm->p_subn,
 			       p_physp, p_pkey_tbl, block_num);

@@ -48,6 +48,8 @@
 #include <iba/ib_types.h>
 #include <complib/cl_qmap.h>
 #include <complib/cl_debug.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_LINK_RECORD_C
 #include <vendor/osm_vendor_api.h>
 #include <opensm/osm_node.h>
 #include <opensm/osm_switch.h>
@@ -137,17 +139,20 @@ static void lr_rcv_get_physp_link(IN osm_sa_t * sa,
 
 	/* Check that the p_src_physp, p_dest_physp and p_req_physp
 	   all share a pkey (doesn't have to be the same p_key). */
-	if (!osm_physp_share_pkey(sa->p_log, p_src_physp, p_dest_physp)) {
+	if (!osm_physp_share_pkey(sa->p_log, p_src_physp, p_dest_physp,
+				  sa->p_subn->opt.allow_both_pkeys)) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"Source and Dest PhysPorts do not share PKey\n");
 		goto Exit;
 	}
-	if (!osm_physp_share_pkey(sa->p_log, p_src_physp, p_req_physp)) {
+	if (!osm_physp_share_pkey(sa->p_log, p_src_physp, p_req_physp,
+				  sa->p_subn->opt.allow_both_pkeys)) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"Source and Requester PhysPorts do not share PKey\n");
 		goto Exit;
 	}
-	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_dest_physp)) {
+	if (!osm_physp_share_pkey(sa->p_log, p_req_physp, p_dest_physp,
+				  sa->p_subn->opt.allow_both_pkeys)) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"Requester and Dest PhysPorts do not share PKey\n");
 		goto Exit;
@@ -440,7 +445,7 @@ void osm_lr_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	/* update the requester physical port. */
+	/* update the requester physical port */
 	p_req_physp = osm_get_physp_by_mad_addr(sa->p_log, sa->p_subn,
 						osm_madw_get_mad_addr_ptr
 						(p_madw));
@@ -450,8 +455,12 @@ void osm_lr_rcv_process(IN void *context, IN void *data)
 		goto Exit;
 	}
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_DEBUG))
-		osm_dump_link_record(sa->p_log, p_lr, OSM_LOG_DEBUG);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Requester port GUID 0x%" PRIx64 "\n",
+			cl_ntoh64(osm_physp_get_port_guid(p_req_physp)));
+		osm_dump_link_record_v2(sa->p_log, p_lr, FILE_ID, OSM_LOG_DEBUG);
+	}
 
 	cl_qlist_init(&lr_list);
 

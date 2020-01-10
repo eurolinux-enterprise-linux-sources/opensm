@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2006 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -60,6 +61,7 @@
 #include <opensm/osm_subnet.h>
 #include <opensm/osm_mad_pool.h>
 #include <opensm/osm_vl15intf.h>
+#include <opensm/osm_congestion_control.h>
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -107,6 +109,8 @@ typedef enum _osm_routing_engine_type {
 	OSM_ROUTING_ENGINE_TYPE_LASH,
 	OSM_ROUTING_ENGINE_TYPE_DOR,
 	OSM_ROUTING_ENGINE_TYPE_TORUS_2QOS,
+	OSM_ROUTING_ENGINE_TYPE_SSSP,
+	OSM_ROUTING_ENGINE_TYPE_DFSSSP,
 	OSM_ROUTING_ENGINE_TYPE_UNKNOWN
 } osm_routing_engine_type_t;
 /***********/
@@ -132,8 +136,7 @@ struct osm_routing_engine {
 			     IN uint8_t in_port_num, IN uint8_t out_port_num,
 			     IN OUT ib_slvl_table_t *t);
 	uint8_t (*path_sl)(void *context, IN uint8_t path_sl_hint,
-			   IN const osm_port_t *src_port,
-			   IN const osm_port_t *dst_port);
+			   IN const ib_net16_t slid, IN const ib_net16_t dlid);
 	ib_api_status_t (*mcast_build_stree)(void *context,
 					     IN OUT osm_mgrp_box_t *mgb);
 	void (*destroy) (void *context);
@@ -173,8 +176,8 @@ struct osm_routing_engine {
 *		The callback for building the spanning tree for multicast
 *		forwarding, called per MLID.
 *
-*	delete
-*		The delete method, may be used for routing engine
+*	destroy
+*		The destroy method, may be used for routing engine
 *		internals cleanup.
 *
 *	next
@@ -201,6 +204,7 @@ typedef struct osm_opensm {
 #ifdef ENABLE_OSM_PERF_MGR
 	osm_perfmgr_t perfmgr;
 #endif				/* ENABLE_OSM_PERF_MGR */
+	osm_congestion_control_t cc;
 	cl_qlist_t plugin_list;
 	osm_db_t db;
 	osm_mad_pool_t mad_pool;

@@ -55,6 +55,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_CONSOLE_IO_C
 #include <opensm/osm_console_io.h>
 #include <stdlib.h>
 

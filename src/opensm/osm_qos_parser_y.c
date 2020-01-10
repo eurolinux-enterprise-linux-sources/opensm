@@ -122,6 +122,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_QOS_PARSER_Y_Y
 #include <opensm/osm_opensm.h>
 #include <opensm/osm_qos_policy.h>
 
@@ -255,7 +257,7 @@ static cl_list_t __ulp_match_rules;
 
 
 /* Line 268 of yacc.c  */
-#line 259 "osm_qos_parser_y.c"
+#line 261 "osm_qos_parser_y.c"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -455,7 +457,7 @@ typedef int YYSTYPE;
 
 
 /* Line 343 of yacc.c  */
-#line 459 "osm_qos_parser_y.c"
+#line 461 "osm_qos_parser_y.c"
 
 #ifdef short
 # undef short
@@ -832,31 +834,31 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   279,   279,   282,   283,   286,   287,   288,   289,   290,
-     316,   319,   320,   349,   352,   353,   356,   359,   364,   370,
-     371,   374,   375,   376,   377,   378,   379,   380,   407,   410,
-     411,   412,   417,   420,   421,   424,   427,   432,   438,   439,
-     454,   455,   456,   457,   458,   463,   466,   467,   470,   473,
-     478,   484,   485,   504,   505,   506,   507,   508,   509,   510,
-     534,   537,   538,   541,   544,   549,   555,   556,   559,   560,
-     561,   562,   563,   564,   565,   566,   588,   591,   592,   595,
-     598,   603,   609,   610,   613,   614,   615,   616,   617,   618,
-     619,   643,   661,   661,   682,   682,   703,   703,   738,   738,
-     773,   773,   811,   811,   824,   824,   858,   858,   871,   871,
-     905,   905,   918,   918,   952,   952,   988,   988,  1008,  1008,
-    1041,  1044,  1047,  1050,  1053,  1056,  1059,  1062,  1065,  1068,
-    1071,  1074,  1077,  1080,  1084,  1123,  1146,  1151,  1174,  1179,
-    1245,  1250,  1270,  1275,  1295,  1300,  1308,  1313,  1318,  1323,
-    1324,  1327,  1328,  1329,  1330,  1331,  1334,  1340,  1346,  1352,
-    1360,  1382,  1399,  1404,  1421,  1426,  1444,  1449,  1466,  1471,
-    1488,  1504,  1521,  1526,  1545,  1550,  1567,  1572,  1590,  1595,
-    1600,  1605,  1610,  1615,  1616,  1619,  1626,  1627,  1630,  1637,
-    1669,  1702,  1745,  1762,  1785,  1790,  1813,  1818,  1838,  1843,
-    1863,  1869,  1889,  1895,  1915,  1921,  1956,  1961,  1994,  2011,
-    2034,  2039,  2073,  2078,  2095,  2100,  2117,  2122,  2145,  2150,
-    2183,  2188,  2221,  2232,  2239,  2240,  2243,  2250,  2251,  2256,
-    2259,  2260,  2263,  2271,  2277,  2285,  2291,  2297,  2300,  2306,
-    2318,  2330,  2338,  2345,  2351
+       0,   281,   281,   284,   285,   288,   289,   290,   291,   292,
+     318,   321,   322,   351,   354,   355,   358,   361,   366,   372,
+     373,   376,   377,   378,   379,   380,   381,   382,   409,   412,
+     413,   414,   419,   422,   423,   426,   429,   434,   440,   441,
+     456,   457,   458,   459,   460,   465,   468,   469,   472,   475,
+     480,   486,   487,   506,   507,   508,   509,   510,   511,   512,
+     536,   539,   540,   543,   546,   551,   557,   558,   561,   562,
+     563,   564,   565,   566,   567,   568,   590,   593,   594,   597,
+     600,   605,   611,   612,   615,   616,   617,   618,   619,   620,
+     621,   645,   663,   663,   684,   684,   705,   705,   740,   740,
+     775,   775,   813,   813,   826,   826,   860,   860,   873,   873,
+     907,   907,   920,   920,   954,   954,   990,   990,  1010,  1010,
+    1043,  1046,  1049,  1052,  1055,  1058,  1061,  1064,  1067,  1070,
+    1073,  1076,  1079,  1082,  1086,  1125,  1148,  1153,  1176,  1181,
+    1247,  1252,  1272,  1277,  1297,  1302,  1310,  1315,  1320,  1325,
+    1326,  1329,  1330,  1331,  1332,  1333,  1336,  1342,  1348,  1354,
+    1362,  1384,  1401,  1406,  1423,  1428,  1446,  1451,  1468,  1473,
+    1490,  1506,  1523,  1528,  1547,  1552,  1569,  1574,  1592,  1597,
+    1602,  1607,  1612,  1617,  1618,  1621,  1628,  1629,  1632,  1639,
+    1671,  1704,  1747,  1764,  1787,  1792,  1815,  1820,  1840,  1845,
+    1865,  1871,  1891,  1897,  1917,  1923,  1958,  1963,  1996,  2013,
+    2036,  2041,  2075,  2080,  2097,  2102,  2119,  2124,  2147,  2152,
+    2185,  2190,  2223,  2234,  2241,  2242,  2245,  2252,  2253,  2258,
+    2261,  2262,  2265,  2273,  2279,  2287,  2293,  2299,  2302,  2308,
+    2320,  2332,  2340,  2347,  2353
 };
 #endif
 
@@ -2103,7 +2105,7 @@ yyreduce:
         case 17:
 
 /* Line 1806 of yacc.c  */
-#line 359 "osm_qos_parser_y.y"
+#line 361 "osm_qos_parser_y.y"
     {
                         __parser_port_group_start();
                     }
@@ -2112,7 +2114,7 @@ yyreduce:
   case 18:
 
 /* Line 1806 of yacc.c  */
-#line 364 "osm_qos_parser_y.y"
+#line 366 "osm_qos_parser_y.y"
     {
                         if ( __parser_port_group_end() )
                             return 1;
@@ -2122,7 +2124,7 @@ yyreduce:
   case 36:
 
 /* Line 1806 of yacc.c  */
-#line 427 "osm_qos_parser_y.y"
+#line 429 "osm_qos_parser_y.y"
     {
                         __parser_vlarb_scope_start();
                     }
@@ -2131,7 +2133,7 @@ yyreduce:
   case 37:
 
 /* Line 1806 of yacc.c  */
-#line 432 "osm_qos_parser_y.y"
+#line 434 "osm_qos_parser_y.y"
     {
                         if ( __parser_vlarb_scope_end() )
                             return 1;
@@ -2141,7 +2143,7 @@ yyreduce:
   case 49:
 
 /* Line 1806 of yacc.c  */
-#line 473 "osm_qos_parser_y.y"
+#line 475 "osm_qos_parser_y.y"
     {
                         __parser_sl2vl_scope_start();
                     }
@@ -2150,7 +2152,7 @@ yyreduce:
   case 50:
 
 /* Line 1806 of yacc.c  */
-#line 478 "osm_qos_parser_y.y"
+#line 480 "osm_qos_parser_y.y"
     {
                         if ( __parser_sl2vl_scope_end() )
                             return 1;
@@ -2160,7 +2162,7 @@ yyreduce:
   case 64:
 
 /* Line 1806 of yacc.c  */
-#line 544 "osm_qos_parser_y.y"
+#line 546 "osm_qos_parser_y.y"
     {
                         __parser_qos_level_start();
                     }
@@ -2169,7 +2171,7 @@ yyreduce:
   case 65:
 
 /* Line 1806 of yacc.c  */
-#line 549 "osm_qos_parser_y.y"
+#line 551 "osm_qos_parser_y.y"
     {
                         if ( __parser_qos_level_end() )
                             return 1;
@@ -2179,7 +2181,7 @@ yyreduce:
   case 80:
 
 /* Line 1806 of yacc.c  */
-#line 598 "osm_qos_parser_y.y"
+#line 600 "osm_qos_parser_y.y"
     {
                         __parser_match_rule_start();
                     }
@@ -2188,7 +2190,7 @@ yyreduce:
   case 81:
 
 /* Line 1806 of yacc.c  */
-#line 603 "osm_qos_parser_y.y"
+#line 605 "osm_qos_parser_y.y"
     {
                         if ( __parser_match_rule_end() )
                             return 1;
@@ -2198,7 +2200,7 @@ yyreduce:
   case 91:
 
 /* Line 1806 of yacc.c  */
-#line 643 "osm_qos_parser_y.y"
+#line 645 "osm_qos_parser_y.y"
     {
                         /* parsing default ulp rule: "default: num" */
                         cl_list_iterator_t    list_iterator;
@@ -2221,7 +2223,7 @@ yyreduce:
   case 92:
 
 /* Line 1806 of yacc.c  */
-#line 661 "osm_qos_parser_y.y"
+#line 663 "osm_qos_parser_y.y"
     {
                         /* "any, service-id ... : sl" - one instance of list of ranges */
                         uint64_t ** range_arr;
@@ -2247,7 +2249,7 @@ yyreduce:
   case 94:
 
 /* Line 1806 of yacc.c  */
-#line 682 "osm_qos_parser_y.y"
+#line 684 "osm_qos_parser_y.y"
     {
                         /* "any, pkey ... : sl" - one instance of list of ranges */
                         uint64_t ** range_arr;
@@ -2273,7 +2275,7 @@ yyreduce:
   case 96:
 
 /* Line 1806 of yacc.c  */
-#line 703 "osm_qos_parser_y.y"
+#line 705 "osm_qos_parser_y.y"
     {
                         /* any, target-port-guid ... : sl */
                         uint64_t ** range_arr;
@@ -2313,7 +2315,7 @@ yyreduce:
   case 98:
 
 /* Line 1806 of yacc.c  */
-#line 738 "osm_qos_parser_y.y"
+#line 740 "osm_qos_parser_y.y"
     {
 			/* any, source-port-guid ... : sl */
 			uint64_t ** range_arr;
@@ -2353,7 +2355,7 @@ yyreduce:
   case 100:
 
 /* Line 1806 of yacc.c  */
-#line 773 "osm_qos_parser_y.y"
+#line 775 "osm_qos_parser_y.y"
     {
 			/* any, source-target-port-guid ... : sl */
 			uint64_t ** range_arr;
@@ -2396,7 +2398,7 @@ yyreduce:
   case 102:
 
 /* Line 1806 of yacc.c  */
-#line 811 "osm_qos_parser_y.y"
+#line 813 "osm_qos_parser_y.y"
     {
                         /* "sdp : sl" - default SL for SDP */
                         uint64_t ** range_arr =
@@ -2414,7 +2416,7 @@ yyreduce:
   case 104:
 
 /* Line 1806 of yacc.c  */
-#line 824 "osm_qos_parser_y.y"
+#line 826 "osm_qos_parser_y.y"
     {
                         /* sdp with port numbers */
                         uint64_t ** range_arr;
@@ -2453,7 +2455,7 @@ yyreduce:
   case 106:
 
 /* Line 1806 of yacc.c  */
-#line 858 "osm_qos_parser_y.y"
+#line 860 "osm_qos_parser_y.y"
     {
                         /* "rds : sl" - default SL for RDS */
                         uint64_t ** range_arr =
@@ -2471,7 +2473,7 @@ yyreduce:
   case 108:
 
 /* Line 1806 of yacc.c  */
-#line 871 "osm_qos_parser_y.y"
+#line 873 "osm_qos_parser_y.y"
     {
                         /* rds with port numbers */
                         uint64_t ** range_arr;
@@ -2510,7 +2512,7 @@ yyreduce:
   case 110:
 
 /* Line 1806 of yacc.c  */
-#line 905 "osm_qos_parser_y.y"
+#line 907 "osm_qos_parser_y.y"
     {
                         /* "iSER : sl" - default SL for iSER */
                         uint64_t ** range_arr =
@@ -2528,7 +2530,7 @@ yyreduce:
   case 112:
 
 /* Line 1806 of yacc.c  */
-#line 918 "osm_qos_parser_y.y"
+#line 920 "osm_qos_parser_y.y"
     {
                         /* iser with port numbers */
                         uint64_t ** range_arr;
@@ -2567,7 +2569,7 @@ yyreduce:
   case 114:
 
 /* Line 1806 of yacc.c  */
-#line 952 "osm_qos_parser_y.y"
+#line 954 "osm_qos_parser_y.y"
     {
                         /* srp with target guids - this rule is similar
                            to writing 'any' ulp with target port guids */
@@ -2608,7 +2610,7 @@ yyreduce:
   case 116:
 
 /* Line 1806 of yacc.c  */
-#line 988 "osm_qos_parser_y.y"
+#line 990 "osm_qos_parser_y.y"
     {
                         /* ipoib w/o any pkeys (default pkey) */
                         uint64_t ** range_arr =
@@ -2633,7 +2635,7 @@ yyreduce:
   case 118:
 
 /* Line 1806 of yacc.c  */
-#line 1008 "osm_qos_parser_y.y"
+#line 1010 "osm_qos_parser_y.y"
     {
                         /* ipoib with pkeys */
                         uint64_t ** range_arr;
@@ -2670,105 +2672,105 @@ yyreduce:
   case 120:
 
 /* Line 1806 of yacc.c  */
-#line 1042 "osm_qos_parser_y.y"
+#line 1044 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 121:
 
 /* Line 1806 of yacc.c  */
-#line 1045 "osm_qos_parser_y.y"
+#line 1047 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 122:
 
 /* Line 1806 of yacc.c  */
-#line 1048 "osm_qos_parser_y.y"
+#line 1050 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 123:
 
 /* Line 1806 of yacc.c  */
-#line 1051 "osm_qos_parser_y.y"
+#line 1053 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 124:
 
 /* Line 1806 of yacc.c  */
-#line 1054 "osm_qos_parser_y.y"
+#line 1056 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 125:
 
 /* Line 1806 of yacc.c  */
-#line 1057 "osm_qos_parser_y.y"
+#line 1059 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 126:
 
 /* Line 1806 of yacc.c  */
-#line 1060 "osm_qos_parser_y.y"
+#line 1062 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 127:
 
 /* Line 1806 of yacc.c  */
-#line 1063 "osm_qos_parser_y.y"
+#line 1065 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 128:
 
 /* Line 1806 of yacc.c  */
-#line 1066 "osm_qos_parser_y.y"
+#line 1068 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 129:
 
 /* Line 1806 of yacc.c  */
-#line 1069 "osm_qos_parser_y.y"
+#line 1071 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 130:
 
 /* Line 1806 of yacc.c  */
-#line 1072 "osm_qos_parser_y.y"
+#line 1074 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 131:
 
 /* Line 1806 of yacc.c  */
-#line 1075 "osm_qos_parser_y.y"
+#line 1077 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 132:
 
 /* Line 1806 of yacc.c  */
-#line 1078 "osm_qos_parser_y.y"
+#line 1080 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 133:
 
 /* Line 1806 of yacc.c  */
-#line 1081 "osm_qos_parser_y.y"
+#line 1083 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 134:
 
 /* Line 1806 of yacc.c  */
-#line 1084 "osm_qos_parser_y.y"
+#line 1086 "osm_qos_parser_y.y"
     {
                         /* get the SL for ULP rules */
                         cl_list_iterator_t  list_iterator;
@@ -2800,7 +2802,7 @@ yyreduce:
   case 135:
 
 /* Line 1806 of yacc.c  */
-#line 1123 "osm_qos_parser_y.y"
+#line 1125 "osm_qos_parser_y.y"
     {
                             /* 'name' of 'port-group' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -2827,7 +2829,7 @@ yyreduce:
   case 136:
 
 /* Line 1806 of yacc.c  */
-#line 1146 "osm_qos_parser_y.y"
+#line 1148 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -2836,7 +2838,7 @@ yyreduce:
   case 137:
 
 /* Line 1806 of yacc.c  */
-#line 1151 "osm_qos_parser_y.y"
+#line 1153 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'port-group' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -2863,7 +2865,7 @@ yyreduce:
   case 138:
 
 /* Line 1806 of yacc.c  */
-#line 1174 "osm_qos_parser_y.y"
+#line 1176 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -2872,7 +2874,7 @@ yyreduce:
   case 139:
 
 /* Line 1806 of yacc.c  */
-#line 1179 "osm_qos_parser_y.y"
+#line 1181 "osm_qos_parser_y.y"
     {
                             /* 'port-name' in 'port-group' - any num of instances */
                             cl_list_iterator_t list_iterator;
@@ -2942,7 +2944,7 @@ yyreduce:
   case 140:
 
 /* Line 1806 of yacc.c  */
-#line 1245 "osm_qos_parser_y.y"
+#line 1247 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -2951,7 +2953,7 @@ yyreduce:
   case 141:
 
 /* Line 1806 of yacc.c  */
-#line 1250 "osm_qos_parser_y.y"
+#line 1252 "osm_qos_parser_y.y"
     {
                             /* 'port-guid' in 'port-group' - any num of instances */
                             /* list of guid ranges */
@@ -2975,7 +2977,7 @@ yyreduce:
   case 142:
 
 /* Line 1806 of yacc.c  */
-#line 1270 "osm_qos_parser_y.y"
+#line 1272 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -2984,7 +2986,7 @@ yyreduce:
   case 143:
 
 /* Line 1806 of yacc.c  */
-#line 1275 "osm_qos_parser_y.y"
+#line 1277 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'port-group' - any num of instances */
                             /* list of pkey ranges */
@@ -3008,7 +3010,7 @@ yyreduce:
   case 144:
 
 /* Line 1806 of yacc.c  */
-#line 1295 "osm_qos_parser_y.y"
+#line 1297 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3017,7 +3019,7 @@ yyreduce:
   case 145:
 
 /* Line 1806 of yacc.c  */
-#line 1300 "osm_qos_parser_y.y"
+#line 1302 "osm_qos_parser_y.y"
     {
                             /* 'partition' in 'port-group' - any num of instances */
                             __parser_add_partition_list_to_port_map(
@@ -3029,7 +3031,7 @@ yyreduce:
   case 146:
 
 /* Line 1806 of yacc.c  */
-#line 1308 "osm_qos_parser_y.y"
+#line 1310 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3038,7 +3040,7 @@ yyreduce:
   case 147:
 
 /* Line 1806 of yacc.c  */
-#line 1313 "osm_qos_parser_y.y"
+#line 1315 "osm_qos_parser_y.y"
     {
                             /* 'node-type' in 'port-group' - any num of instances */
                         }
@@ -3047,7 +3049,7 @@ yyreduce:
   case 148:
 
 /* Line 1806 of yacc.c  */
-#line 1318 "osm_qos_parser_y.y"
+#line 1320 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3056,7 +3058,7 @@ yyreduce:
   case 156:
 
 /* Line 1806 of yacc.c  */
-#line 1334 "osm_qos_parser_y.y"
+#line 1336 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
                                OSM_QOS_POLICY_NODE_TYPE_CA;
@@ -3066,7 +3068,7 @@ yyreduce:
   case 157:
 
 /* Line 1806 of yacc.c  */
-#line 1340 "osm_qos_parser_y.y"
+#line 1342 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
                                OSM_QOS_POLICY_NODE_TYPE_SWITCH;
@@ -3076,7 +3078,7 @@ yyreduce:
   case 158:
 
 /* Line 1806 of yacc.c  */
-#line 1346 "osm_qos_parser_y.y"
+#line 1348 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
                                OSM_QOS_POLICY_NODE_TYPE_ROUTER;
@@ -3086,7 +3088,7 @@ yyreduce:
   case 159:
 
 /* Line 1806 of yacc.c  */
-#line 1352 "osm_qos_parser_y.y"
+#line 1354 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
                                (OSM_QOS_POLICY_NODE_TYPE_CA |
@@ -3098,7 +3100,7 @@ yyreduce:
   case 160:
 
 /* Line 1806 of yacc.c  */
-#line 1360 "osm_qos_parser_y.y"
+#line 1362 "osm_qos_parser_y.y"
     {
                             osm_port_t * p_osm_port =
                                 osm_get_port_by_guid(p_qos_policy->p_subn,
@@ -3113,7 +3115,7 @@ yyreduce:
   case 161:
 
 /* Line 1806 of yacc.c  */
-#line 1382 "osm_qos_parser_y.y"
+#line 1384 "osm_qos_parser_y.y"
     {
                             /* 'group' in 'vlarb-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3134,7 +3136,7 @@ yyreduce:
   case 162:
 
 /* Line 1806 of yacc.c  */
-#line 1399 "osm_qos_parser_y.y"
+#line 1401 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3143,7 +3145,7 @@ yyreduce:
   case 163:
 
 /* Line 1806 of yacc.c  */
-#line 1404 "osm_qos_parser_y.y"
+#line 1406 "osm_qos_parser_y.y"
     {
                             /* 'across' in 'vlarb-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3164,7 +3166,7 @@ yyreduce:
   case 164:
 
 /* Line 1806 of yacc.c  */
-#line 1421 "osm_qos_parser_y.y"
+#line 1423 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3173,7 +3175,7 @@ yyreduce:
   case 165:
 
 /* Line 1806 of yacc.c  */
-#line 1426 "osm_qos_parser_y.y"
+#line 1428 "osm_qos_parser_y.y"
     {
                             /* 'vl-high-limit' in 'vlarb-scope' - one instance of one number */
                             cl_list_iterator_t    list_iterator;
@@ -3195,7 +3197,7 @@ yyreduce:
   case 166:
 
 /* Line 1806 of yacc.c  */
-#line 1444 "osm_qos_parser_y.y"
+#line 1446 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3204,7 +3206,7 @@ yyreduce:
   case 167:
 
 /* Line 1806 of yacc.c  */
-#line 1449 "osm_qos_parser_y.y"
+#line 1451 "osm_qos_parser_y.y"
     {
                             /* 'vlarb-high' in 'vlarb-scope' - list of pairs of numbers with ':' and ',' */
                             cl_list_iterator_t    list_iterator;
@@ -3225,7 +3227,7 @@ yyreduce:
   case 168:
 
 /* Line 1806 of yacc.c  */
-#line 1466 "osm_qos_parser_y.y"
+#line 1468 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3234,7 +3236,7 @@ yyreduce:
   case 169:
 
 /* Line 1806 of yacc.c  */
-#line 1471 "osm_qos_parser_y.y"
+#line 1473 "osm_qos_parser_y.y"
     {
                             /* 'vlarb-low' in 'vlarb-scope' - list of pairs of numbers with ':' and ',' */
                             cl_list_iterator_t    list_iterator;
@@ -3255,7 +3257,7 @@ yyreduce:
   case 170:
 
 /* Line 1806 of yacc.c  */
-#line 1488 "osm_qos_parser_y.y"
+#line 1490 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3264,7 +3266,7 @@ yyreduce:
   case 171:
 
 /* Line 1806 of yacc.c  */
-#line 1504 "osm_qos_parser_y.y"
+#line 1506 "osm_qos_parser_y.y"
     {
                             /* 'group' in 'sl2vl-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3285,7 +3287,7 @@ yyreduce:
   case 172:
 
 /* Line 1806 of yacc.c  */
-#line 1521 "osm_qos_parser_y.y"
+#line 1523 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3294,7 +3296,7 @@ yyreduce:
   case 173:
 
 /* Line 1806 of yacc.c  */
-#line 1526 "osm_qos_parser_y.y"
+#line 1528 "osm_qos_parser_y.y"
     {
                             /* 'across' in 'sl2vl-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3317,7 +3319,7 @@ yyreduce:
   case 174:
 
 /* Line 1806 of yacc.c  */
-#line 1545 "osm_qos_parser_y.y"
+#line 1547 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3326,7 +3328,7 @@ yyreduce:
   case 175:
 
 /* Line 1806 of yacc.c  */
-#line 1550 "osm_qos_parser_y.y"
+#line 1552 "osm_qos_parser_y.y"
     {
                             /* 'across-from' in 'sl2vl-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3347,7 +3349,7 @@ yyreduce:
   case 176:
 
 /* Line 1806 of yacc.c  */
-#line 1567 "osm_qos_parser_y.y"
+#line 1569 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3356,7 +3358,7 @@ yyreduce:
   case 177:
 
 /* Line 1806 of yacc.c  */
-#line 1572 "osm_qos_parser_y.y"
+#line 1574 "osm_qos_parser_y.y"
     {
                             /* 'across-to' in 'sl2vl-scope' - any num of instances */
                             cl_list_iterator_t    list_iterator;
@@ -3378,7 +3380,7 @@ yyreduce:
   case 178:
 
 /* Line 1806 of yacc.c  */
-#line 1590 "osm_qos_parser_y.y"
+#line 1592 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3387,7 +3389,7 @@ yyreduce:
   case 179:
 
 /* Line 1806 of yacc.c  */
-#line 1595 "osm_qos_parser_y.y"
+#line 1597 "osm_qos_parser_y.y"
     {
                             /* 'from' in 'sl2vl-scope' - any num of instances */
                         }
@@ -3396,7 +3398,7 @@ yyreduce:
   case 180:
 
 /* Line 1806 of yacc.c  */
-#line 1600 "osm_qos_parser_y.y"
+#line 1602 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3405,7 +3407,7 @@ yyreduce:
   case 181:
 
 /* Line 1806 of yacc.c  */
-#line 1605 "osm_qos_parser_y.y"
+#line 1607 "osm_qos_parser_y.y"
     {
                             /* 'to' in 'sl2vl-scope' - any num of instances */
                         }
@@ -3414,7 +3416,7 @@ yyreduce:
   case 182:
 
 /* Line 1806 of yacc.c  */
-#line 1610 "osm_qos_parser_y.y"
+#line 1612 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3423,7 +3425,7 @@ yyreduce:
   case 185:
 
 /* Line 1806 of yacc.c  */
-#line 1619 "osm_qos_parser_y.y"
+#line 1621 "osm_qos_parser_y.y"
     {
                             int i;
                             for (i = 0; i < OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH; i++)
@@ -3434,7 +3436,7 @@ yyreduce:
   case 188:
 
 /* Line 1806 of yacc.c  */
-#line 1630 "osm_qos_parser_y.y"
+#line 1632 "osm_qos_parser_y.y"
     {
                             int i;
                             for (i = 0; i < OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH; i++)
@@ -3445,7 +3447,7 @@ yyreduce:
   case 189:
 
 /* Line 1806 of yacc.c  */
-#line 1637 "osm_qos_parser_y.y"
+#line 1639 "osm_qos_parser_y.y"
     {
                             int i;
                             cl_list_iterator_t    list_iterator;
@@ -3481,7 +3483,7 @@ yyreduce:
   case 190:
 
 /* Line 1806 of yacc.c  */
-#line 1669 "osm_qos_parser_y.y"
+#line 1671 "osm_qos_parser_y.y"
     {
                             int i;
                             cl_list_iterator_t    list_iterator;
@@ -3517,7 +3519,7 @@ yyreduce:
   case 191:
 
 /* Line 1806 of yacc.c  */
-#line 1702 "osm_qos_parser_y.y"
+#line 1704 "osm_qos_parser_y.y"
     {
                             /* 'sl2vl-table' - one instance of exactly
                                OSM_QOS_POLICY_SL2VL_TABLE_LEN numbers */
@@ -3564,7 +3566,7 @@ yyreduce:
   case 192:
 
 /* Line 1806 of yacc.c  */
-#line 1745 "osm_qos_parser_y.y"
+#line 1747 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3573,7 +3575,7 @@ yyreduce:
   case 193:
 
 /* Line 1806 of yacc.c  */
-#line 1762 "osm_qos_parser_y.y"
+#line 1764 "osm_qos_parser_y.y"
     {
                             /* 'name' of 'qos-level' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3600,7 +3602,7 @@ yyreduce:
   case 194:
 
 /* Line 1806 of yacc.c  */
-#line 1785 "osm_qos_parser_y.y"
+#line 1787 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3609,7 +3611,7 @@ yyreduce:
   case 195:
 
 /* Line 1806 of yacc.c  */
-#line 1790 "osm_qos_parser_y.y"
+#line 1792 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'qos-level' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3636,7 +3638,7 @@ yyreduce:
   case 196:
 
 /* Line 1806 of yacc.c  */
-#line 1813 "osm_qos_parser_y.y"
+#line 1815 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3645,7 +3647,7 @@ yyreduce:
   case 197:
 
 /* Line 1806 of yacc.c  */
-#line 1818 "osm_qos_parser_y.y"
+#line 1820 "osm_qos_parser_y.y"
     {
                             /* 'sl' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3669,7 +3671,7 @@ yyreduce:
   case 198:
 
 /* Line 1806 of yacc.c  */
-#line 1838 "osm_qos_parser_y.y"
+#line 1840 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3678,7 +3680,7 @@ yyreduce:
   case 199:
 
 /* Line 1806 of yacc.c  */
-#line 1843 "osm_qos_parser_y.y"
+#line 1845 "osm_qos_parser_y.y"
     {
                             /* 'mtu-limit' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3702,7 +3704,7 @@ yyreduce:
   case 200:
 
 /* Line 1806 of yacc.c  */
-#line 1863 "osm_qos_parser_y.y"
+#line 1865 "osm_qos_parser_y.y"
     {
                             /* 'mtu-limit' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3712,7 +3714,7 @@ yyreduce:
   case 201:
 
 /* Line 1806 of yacc.c  */
-#line 1869 "osm_qos_parser_y.y"
+#line 1871 "osm_qos_parser_y.y"
     {
                             /* 'rate-limit' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3736,7 +3738,7 @@ yyreduce:
   case 202:
 
 /* Line 1806 of yacc.c  */
-#line 1889 "osm_qos_parser_y.y"
+#line 1891 "osm_qos_parser_y.y"
     {
                             /* 'rate-limit' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3746,7 +3748,7 @@ yyreduce:
   case 203:
 
 /* Line 1806 of yacc.c  */
-#line 1895 "osm_qos_parser_y.y"
+#line 1897 "osm_qos_parser_y.y"
     {
                             /* 'packet-life' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3770,7 +3772,7 @@ yyreduce:
   case 204:
 
 /* Line 1806 of yacc.c  */
-#line 1915 "osm_qos_parser_y.y"
+#line 1917 "osm_qos_parser_y.y"
     {
                             /* 'packet-life' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3780,7 +3782,7 @@ yyreduce:
   case 205:
 
 /* Line 1806 of yacc.c  */
-#line 1921 "osm_qos_parser_y.y"
+#line 1923 "osm_qos_parser_y.y"
     {
                             /* 'path-bits' in 'qos-level' - any num of instances */
                             /* list of path bit ranges */
@@ -3819,7 +3821,7 @@ yyreduce:
   case 206:
 
 /* Line 1806 of yacc.c  */
-#line 1956 "osm_qos_parser_y.y"
+#line 1958 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3828,7 +3830,7 @@ yyreduce:
   case 207:
 
 /* Line 1806 of yacc.c  */
-#line 1961 "osm_qos_parser_y.y"
+#line 1963 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'qos-level' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -3865,7 +3867,7 @@ yyreduce:
   case 208:
 
 /* Line 1806 of yacc.c  */
-#line 1994 "osm_qos_parser_y.y"
+#line 1996 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3874,7 +3876,7 @@ yyreduce:
   case 209:
 
 /* Line 1806 of yacc.c  */
-#line 2011 "osm_qos_parser_y.y"
+#line 2013 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'qos-match-rule' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3901,7 +3903,7 @@ yyreduce:
   case 210:
 
 /* Line 1806 of yacc.c  */
-#line 2034 "osm_qos_parser_y.y"
+#line 2036 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3910,7 +3912,7 @@ yyreduce:
   case 211:
 
 /* Line 1806 of yacc.c  */
-#line 2039 "osm_qos_parser_y.y"
+#line 2041 "osm_qos_parser_y.y"
     {
                             /* 'qos-class' in 'qos-match-rule' - num of instances of list of ranges */
                             /* list of class ranges (QoS Class is 12-bit value) */
@@ -3948,7 +3950,7 @@ yyreduce:
   case 212:
 
 /* Line 1806 of yacc.c  */
-#line 2073 "osm_qos_parser_y.y"
+#line 2075 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3957,7 +3959,7 @@ yyreduce:
   case 213:
 
 /* Line 1806 of yacc.c  */
-#line 2078 "osm_qos_parser_y.y"
+#line 2080 "osm_qos_parser_y.y"
     {
                             /* 'source' in 'qos-match-rule' - text */
                             cl_list_iterator_t    list_iterator;
@@ -3978,7 +3980,7 @@ yyreduce:
   case 214:
 
 /* Line 1806 of yacc.c  */
-#line 2095 "osm_qos_parser_y.y"
+#line 2097 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3987,7 +3989,7 @@ yyreduce:
   case 215:
 
 /* Line 1806 of yacc.c  */
-#line 2100 "osm_qos_parser_y.y"
+#line 2102 "osm_qos_parser_y.y"
     {
                             /* 'destination' in 'qos-match-rule' - text */
                             cl_list_iterator_t    list_iterator;
@@ -4008,7 +4010,7 @@ yyreduce:
   case 216:
 
 /* Line 1806 of yacc.c  */
-#line 2117 "osm_qos_parser_y.y"
+#line 2119 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4017,7 +4019,7 @@ yyreduce:
   case 217:
 
 /* Line 1806 of yacc.c  */
-#line 2122 "osm_qos_parser_y.y"
+#line 2124 "osm_qos_parser_y.y"
     {
                             /* 'qos-level-name' in 'qos-match-rule' - single string */
                             cl_list_iterator_t   list_iterator;
@@ -4044,7 +4046,7 @@ yyreduce:
   case 218:
 
 /* Line 1806 of yacc.c  */
-#line 2145 "osm_qos_parser_y.y"
+#line 2147 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4053,7 +4055,7 @@ yyreduce:
   case 219:
 
 /* Line 1806 of yacc.c  */
-#line 2150 "osm_qos_parser_y.y"
+#line 2152 "osm_qos_parser_y.y"
     {
                             /* 'service-id' in 'qos-match-rule' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -4090,7 +4092,7 @@ yyreduce:
   case 220:
 
 /* Line 1806 of yacc.c  */
-#line 2183 "osm_qos_parser_y.y"
+#line 2185 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4099,7 +4101,7 @@ yyreduce:
   case 221:
 
 /* Line 1806 of yacc.c  */
-#line 2188 "osm_qos_parser_y.y"
+#line 2190 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'qos-match-rule' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -4136,7 +4138,7 @@ yyreduce:
   case 222:
 
 /* Line 1806 of yacc.c  */
-#line 2221 "osm_qos_parser_y.y"
+#line 2223 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4145,7 +4147,7 @@ yyreduce:
   case 223:
 
 /* Line 1806 of yacc.c  */
-#line 2232 "osm_qos_parser_y.y"
+#line 2234 "osm_qos_parser_y.y"
     {
                         cl_list_insert_tail(&tmp_parser_struct.str_list,
                                             strdup(__parser_strip_white(tmp_parser_struct.str)));
@@ -4156,7 +4158,7 @@ yyreduce:
   case 226:
 
 /* Line 1806 of yacc.c  */
-#line 2243 "osm_qos_parser_y.y"
+#line 2245 "osm_qos_parser_y.y"
     {
                         strcat(tmp_parser_struct.str,(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4166,7 +4168,7 @@ yyreduce:
   case 232:
 
 /* Line 1806 of yacc.c  */
-#line 2263 "osm_qos_parser_y.y"
+#line 2265 "osm_qos_parser_y.y"
     {
                         uint64_t * p_num = (uint64_t*)malloc(sizeof(uint64_t));
                         __parser_str2uint64(p_num,(yyvsp[(1) - (1)]));
@@ -4178,7 +4180,7 @@ yyreduce:
   case 233:
 
 /* Line 1806 of yacc.c  */
-#line 2271 "osm_qos_parser_y.y"
+#line 2273 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4190,7 +4192,7 @@ yyreduce:
   case 234:
 
 /* Line 1806 of yacc.c  */
-#line 2277 "osm_qos_parser_y.y"
+#line 2279 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4202,7 +4204,7 @@ yyreduce:
   case 235:
 
 /* Line 1806 of yacc.c  */
-#line 2285 "osm_qos_parser_y.y"
+#line 2287 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4212,7 +4214,7 @@ yyreduce:
   case 236:
 
 /* Line 1806 of yacc.c  */
-#line 2291 "osm_qos_parser_y.y"
+#line 2293 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4222,7 +4224,7 @@ yyreduce:
   case 238:
 
 /* Line 1806 of yacc.c  */
-#line 2300 "osm_qos_parser_y.y"
+#line 2302 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4234,7 +4236,7 @@ yyreduce:
   case 239:
 
 /* Line 1806 of yacc.c  */
-#line 2306 "osm_qos_parser_y.y"
+#line 2308 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         if (tmp_parser_struct.num_pair[0] <= tmp_parser_struct.num_pair[1]) {
@@ -4252,7 +4254,7 @@ yyreduce:
   case 240:
 
 /* Line 1806 of yacc.c  */
-#line 2318 "osm_qos_parser_y.y"
+#line 2320 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         if (tmp_parser_struct.num_pair[0] <= tmp_parser_struct.num_pair[1]) {
@@ -4270,7 +4272,7 @@ yyreduce:
   case 241:
 
 /* Line 1806 of yacc.c  */
-#line 2330 "osm_qos_parser_y.y"
+#line 2332 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4282,7 +4284,7 @@ yyreduce:
   case 242:
 
 /* Line 1806 of yacc.c  */
-#line 2338 "osm_qos_parser_y.y"
+#line 2340 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
@@ -4293,7 +4295,7 @@ yyreduce:
   case 243:
 
 /* Line 1806 of yacc.c  */
-#line 2345 "osm_qos_parser_y.y"
+#line 2347 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4303,7 +4305,7 @@ yyreduce:
   case 244:
 
 /* Line 1806 of yacc.c  */
-#line 2351 "osm_qos_parser_y.y"
+#line 2353 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4313,7 +4315,7 @@ yyreduce:
 
 
 /* Line 1806 of yacc.c  */
-#line 4317 "osm_qos_parser_y.c"
+#line 4319 "osm_qos_parser_y.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -4544,7 +4546,7 @@ yyreturn:
 
 
 /* Line 2067 of yacc.c  */
-#line 2357 "osm_qos_parser_y.y"
+#line 2359 "osm_qos_parser_y.y"
 
 
 /***************************************************

@@ -45,6 +45,8 @@
 #endif				/* HAVE_CONFIG_H */
 
 #include <string.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_REMOTE_SM_C
 #include <opensm/osm_remote_sm.h>
 
 void osm_remote_sm_construct(IN osm_remote_sm_t * p_sm)
@@ -57,15 +59,13 @@ void osm_remote_sm_destroy(IN osm_remote_sm_t * p_sm)
 	memset(p_sm, 0, sizeof(*p_sm));
 }
 
-void osm_remote_sm_init(IN osm_remote_sm_t * p_sm, IN const osm_port_t * p_port,
+void osm_remote_sm_init(IN osm_remote_sm_t * p_sm,
 			IN const ib_sm_info_t * p_smi)
 {
 	CL_ASSERT(p_sm);
-	CL_ASSERT(p_port);
 
 	osm_remote_sm_construct(p_sm);
 
-	p_sm->p_port = p_port;
 	p_sm->smi = *p_smi;
 	return;
 }

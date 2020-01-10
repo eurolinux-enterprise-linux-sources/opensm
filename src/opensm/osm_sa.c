@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  *
@@ -55,6 +55,8 @@
 #include <complib/cl_passivelock.h>
 #include <complib/cl_debug.h>
 #include <iba/ib_types.h>
+#include <opensm/osm_file_ids.h>
+#define FILE_ID OSM_FILE_SA_C
 #include <opensm/osm_sa.h>
 #include <opensm/osm_madw.h>
 #include <opensm/osm_log.h>
@@ -65,6 +67,7 @@
 #include <opensm/osm_multicast.h>
 #include <opensm/osm_inform.h>
 #include <opensm/osm_service.h>
+#include <opensm/osm_guid.h>
 #include <opensm/osm_helper.h>
 #include <vendor/osm_vendor_api.h>
 
@@ -367,8 +370,8 @@ void osm_sa_send_error(IN osm_sa_t * sa, IN const osm_madw_t * p_madw,
 	if (p_resp_sa_mad->attr_id == IB_MAD_ATTR_MULTIPATH_RECORD)
 		p_resp_sa_mad->attr_id = IB_MAD_ATTR_PATH_RECORD;
 
-	if (osm_log_is_active(sa->p_log, OSM_LOG_FRAMES))
-		osm_dump_sa_mad(sa->p_log, p_resp_sa_mad, OSM_LOG_FRAMES);
+	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_FRAMES))
+		osm_dump_sa_mad_v2(sa->p_log, p_resp_sa_mad, FILE_ID, OSM_LOG_FRAMES);
 
 	osm_sa_send(sa, p_resp_madw, FALSE);
 
@@ -480,7 +483,7 @@ void osm_sa_respond(osm_sa_t *sa, osm_madw_t *madw, size_t attr_size,
 		free(item);
 	}
 
-	osm_dump_sa_mad(sa->p_log, resp_sa_mad, OSM_LOG_FRAMES);
+	osm_dump_sa_mad_v2(sa->p_log, resp_sa_mad, FILE_ID, OSM_LOG_FRAMES);
 	osm_sa_send(sa, resp_madw, FALSE);
 
 Exit:
@@ -531,14 +534,14 @@ opensm_dump_to_file(osm_opensm_t * p_osm, const char *file_name,
 static void mcast_mgr_dump_one_port(cl_map_item_t * p_map_item, void *cxt)
 {
 	FILE *file = ((struct opensm_dump_context *)cxt)->file;
-	osm_mcm_port_t *p_mcm_port = (osm_mcm_port_t *) p_map_item;
+	osm_mcm_alias_guid_t *p_mcm_alias_guid = (osm_mcm_alias_guid_t *) p_map_item;
 
 	fprintf(file, "mcm_port: "
 		"port_gid=0x%016" PRIx64 ":0x%016" PRIx64 " "
 		"scope_state=0x%02x proxy_join=0x%x" "\n\n",
-		cl_ntoh64(p_mcm_port->port_gid.unicast.prefix),
-		cl_ntoh64(p_mcm_port->port_gid.unicast.interface_id),
-		p_mcm_port->scope_state, p_mcm_port->proxy_join);
+		cl_ntoh64(p_mcm_alias_guid->port_gid.unicast.prefix),
+		cl_ntoh64(p_mcm_alias_guid->port_gid.unicast.interface_id),
+		p_mcm_alias_guid->scope_state, p_mcm_alias_guid->proxy_join);
 }
 
 static void sa_dump_one_mgrp(osm_mgrp_t *p_mgrp, void *cxt)
@@ -573,7 +576,7 @@ static void sa_dump_one_mgrp(osm_mgrp_t *p_mgrp, void *cxt)
 	dump_context.p_osm = p_osm;
 	dump_context.file = file;
 
-	cl_qmap_apply_func(&p_mgrp->mcm_port_tbl,
+	cl_qmap_apply_func(&p_mgrp->mcm_alias_port_tbl,
 			   mcast_mgr_dump_one_port, &dump_context);
 }
 
@@ -679,6 +682,40 @@ static void sa_dump_one_service(cl_list_item_t * p_list_item, void *cxt)
 		p_svcr->modified_time, p_svcr->lease_period);
 }
 
+static void sa_dump_one_port_guidinfo(cl_map_item_t * p_map_item, void *cxt)
+{
+	FILE *file = ((struct opensm_dump_context *)cxt)->file;
+	osm_port_t *p_port = (osm_port_t *) p_map_item;
+	uint32_t max_block;
+	int block_num;
+
+	if (!p_port->p_physp->p_guids)
+		return;
+
+	max_block = (p_port->p_physp->port_info.guid_cap + GUID_TABLE_MAX_ENTRIES - 1) /
+		     GUID_TABLE_MAX_ENTRIES;
+
+	for (block_num = 0; block_num < max_block; block_num++) {
+		fprintf(file, "GUIDInfo Record:"
+			" base_guid=0x%016" PRIx64 " lid=0x%04x block_num=0x%x"
+			" guid0=0x%016" PRIx64 " guid1=0x%016" PRIx64
+			" guid2=0x%016" PRIx64 " guid3=0x%016" PRIx64
+			" guid4=0x%016" PRIx64 " guid5=0x%016" PRIx64
+			" guid6=0x%016" PRIx64 " guid7=0x%016" PRIx64
+			"\n\n",
+			cl_ntoh64((*p_port->p_physp->p_guids)[0]),
+			cl_ntoh16(osm_port_get_base_lid(p_port)), block_num,
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 1]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 2]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 3]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 4]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 5]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 6]),
+			cl_ntoh64((*p_port->p_physp->p_guids)[block_num * GUID_TABLE_MAX_ENTRIES + 7]));
+	}
+}
+
 static void sa_dump_all_sa(osm_opensm_t * p_osm, FILE * file)
 {
 	struct opensm_dump_context dump_context;
@@ -686,8 +723,11 @@ static void sa_dump_all_sa(osm_opensm_t * p_osm, FILE * file)
 
 	dump_context.p_osm = p_osm;
 	dump_context.file = file;
-	OSM_LOG(&p_osm->log, OSM_LOG_DEBUG, "Dump multicast\n");
+	OSM_LOG(&p_osm->log, OSM_LOG_DEBUG, "Dump guidinfo\n");
 	cl_plock_acquire(&p_osm->lock);
+	cl_qmap_apply_func(&p_osm->subn.port_guid_tbl,
+			   sa_dump_one_port_guidinfo, &dump_context);
+	OSM_LOG(&p_osm->log, OSM_LOG_DEBUG, "Dump multicast\n");
 	for (p_mgrp = (osm_mgrp_t *) cl_fmap_head(&p_osm->subn.mgrp_mgid_tbl);
 	     p_mgrp != (osm_mgrp_t *) cl_fmap_end(&p_osm->subn.mgrp_mgid_tbl);
 	     p_mgrp = (osm_mgrp_t *) cl_fmap_next(&p_mgrp->map_item))
@@ -826,6 +866,83 @@ static int load_infr(osm_opensm_t * p_osm, ib_inform_info_record_t * iir,
 	OSM_LOG(&p_osm->log, OSM_LOG_DEBUG, "adding InformInfo Record...\n");
 
 	osm_infr_insert_to_db(&p_osm->subn, &p_osm->log, p_infr);
+
+_out:
+	cl_plock_release(&p_osm->lock);
+
+	return ret;
+}
+
+static int load_guidinfo(osm_opensm_t * p_osm, ib_net64_t base_guid,
+			 ib_guidinfo_record_t *gir)
+{
+	osm_port_t *p_port;
+	uint32_t max_block;
+	int i, ret = 0;
+	osm_alias_guid_t *p_alias_guid, *p_alias_guid_check;
+
+	cl_plock_excl_acquire(&p_osm->lock);
+
+	p_port = osm_get_port_by_guid(&p_osm->subn, base_guid);
+	if (!p_port)
+		goto _out;
+
+	if (!p_port->p_physp->p_guids) {
+		max_block = (p_port->p_physp->port_info.guid_cap + GUID_TABLE_MAX_ENTRIES - 1) /
+			     GUID_TABLE_MAX_ENTRIES;
+		p_port->p_physp->p_guids = calloc(max_block * GUID_TABLE_MAX_ENTRIES,
+						  sizeof(ib_net64_t));
+		if (!p_port->p_physp->p_guids) {
+			OSM_LOG(&p_osm->log, OSM_LOG_ERROR,
+				"cannot allocate GUID table for port "
+				"GUID 0x%" PRIx64 "\n",
+				cl_ntoh64(p_port->p_physp->port_guid));
+			goto _out;
+		}
+	}
+
+	for (i = 0; i < GUID_TABLE_MAX_ENTRIES; i++) {
+		if (!gir->guid_info.guid[i])
+			continue;
+		/* skip block 0 index 0 */
+		if (gir->block_num == 0 && i == 0)
+			continue;
+		if (gir->block_num * GUID_TABLE_MAX_ENTRIES + i >
+		    p_port->p_physp->port_info.guid_cap)
+			break;
+
+		p_alias_guid = osm_alias_guid_new(gir->guid_info.guid[i],
+						  p_port);
+		if (!p_alias_guid) {
+			OSM_LOG(&p_osm->log, OSM_LOG_ERROR,
+				"Alias guid %d memory allocation failed"
+				" for port GUID 0x%" PRIx64 "\n",
+				gir->block_num * GUID_TABLE_MAX_ENTRIES + i,
+				cl_ntoh64(p_port->p_physp->port_guid));
+			goto _out;
+		}
+
+		p_alias_guid_check =
+			(osm_alias_guid_t *) cl_qmap_insert(&p_osm->subn.alias_port_guid_tbl,
+							    p_alias_guid->alias_guid,
+							    &p_alias_guid->map_item);
+		if (p_alias_guid_check != p_alias_guid) {
+			/* alias GUID is a duplicate */
+			OSM_LOG(&p_osm->log, OSM_LOG_ERROR,
+				"Duplicate alias port GUID 0x%" PRIx64
+				" index %d base port GUID 0x%" PRIx64 "\n",
+				cl_ntoh64(p_alias_guid->alias_guid),
+				gir->block_num * GUID_TABLE_MAX_ENTRIES + i,
+				cl_ntoh64(p_alias_guid->p_base_port->guid));
+			osm_alias_guid_delete(&p_alias_guid);
+			goto _out;
+		}
+	}
+
+	memcpy(&(*p_port->p_physp->p_guids)[gir->block_num * GUID_TABLE_MAX_ENTRIES],
+	       &gir->guid_info, sizeof(ib_guid_info_t));
+
+	osm_queue_guidinfo(&p_osm->sa, p_port, gir->block_num);
 
 _out:
 	cl_plock_release(&p_osm->lock);
@@ -1000,7 +1117,7 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 			proxy = val;
 
 			guid = mcmr.port_gid.unicast.interface_id;
-			port = osm_get_port_by_guid(&p_osm->subn, guid);
+			port = osm_get_port_by_alias_guid(&p_osm->subn, guid);
 			if (port &&
 			    cl_qmap_get(&p_mgrp->mcm_port_tbl, guid) ==
 			    cl_qmap_end(&p_mgrp->mcm_port_tbl) &&
@@ -1105,6 +1222,36 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 				    &rep_addr.addr_type.gsi.service_level);
 
 			if (load_infr(p_osm, &i_rec, &rep_addr))
+				rereg_clients = 1;
+		} else if (!strncmp(p, "GUIDInfo Record:", 16)) {
+			ib_guidinfo_record_t gi_rec;
+			ib_net64_t base_guid;
+
+			p_mgrp = NULL;
+			memset(&gi_rec, 0, sizeof(gi_rec));
+
+			PARSE_AHEAD(p, net64, " base_guid=0x", &base_guid);
+			PARSE_AHEAD(p, net16, " lid=0x", &gi_rec.lid);
+			PARSE_AHEAD(p, net8, " block_num=0x",
+				    &gi_rec.block_num);
+			PARSE_AHEAD(p, net64, " guid0=0x",
+				    &gi_rec.guid_info.guid[0]);
+			PARSE_AHEAD(p, net64, " guid1=0x",
+				    &gi_rec.guid_info.guid[1]);
+			PARSE_AHEAD(p, net64, " guid2=0x",
+				    &gi_rec.guid_info.guid[2]);
+			PARSE_AHEAD(p, net64, " guid3=0x",
+				    &gi_rec.guid_info.guid[3]);
+			PARSE_AHEAD(p, net64, " guid4=0x",
+				    &gi_rec.guid_info.guid[4]);
+			PARSE_AHEAD(p, net64, " guid5=0x",
+				    &gi_rec.guid_info.guid[5]);
+			PARSE_AHEAD(p, net64, " guid6=0x",
+				    &gi_rec.guid_info.guid[6]);
+			PARSE_AHEAD(p, net64, " guid7=0x",
+				    &gi_rec.guid_info.guid[7]);
+
+			if (load_guidinfo(p_osm, base_guid, &gi_rec))
 				rereg_clients = 1;
 		}
 	}
