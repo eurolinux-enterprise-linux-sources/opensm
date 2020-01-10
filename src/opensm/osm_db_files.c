@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2007 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -44,8 +45,10 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <opensm/osm_file_ids.h>
 #define FILE_ID OSM_FILE_DB_FILES_C
 #include <opensm/st.h>
@@ -90,6 +93,7 @@ typedef struct osm_db_domain_imp {
 	char *file_name;
 	st_table *p_hash;
 	cl_spinlock_t lock;
+	boolean_t dirty;
 } osm_db_domain_imp_t;
 /*
  * FIELDS
@@ -108,7 +112,7 @@ typedef struct osm_db_domain_imp {
  * SYNOPSIS
  */
 typedef struct osm_db_imp {
-	char *db_dir_name;
+	const char *db_dir_name;
 } osm_db_imp_t;
 /*
  * FIELDS
@@ -161,7 +165,8 @@ int osm_db_init(IN osm_db_t * p_db, IN osm_log_t * p_log)
 
 	p_db_imp = malloc(sizeof(osm_db_imp_t));
 	if (!p_db_imp) {
-		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6100: No memory.\n");
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6100: "
+			"Failed to allocate db memory\n");
 		return -1;
 	}
 
@@ -206,7 +211,7 @@ err:
 	return 1;
 }
 
-osm_db_domain_t *osm_db_domain_init(IN osm_db_t * p_db, IN char *domain_name)
+osm_db_domain_t *osm_db_domain_init(IN osm_db_t * p_db, IN const char *domain_name)
 {
 	osm_db_domain_t *p_domain;
 	osm_db_domain_imp_t *p_domain_imp;
@@ -218,17 +223,34 @@ osm_db_domain_t *osm_db_domain_init(IN osm_db_t * p_db, IN char *domain_name)
 
 	/* allocate a new domain object */
 	p_domain = malloc(sizeof(osm_db_domain_t));
-	CL_ASSERT(p_domain != NULL);
+	if (p_domain == NULL) {
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 610C: "
+			"Failed to allocate domain memory\n");
+		goto Exit;
+	}
 
 	p_domain_imp = malloc(sizeof(osm_db_domain_imp_t));
-	CL_ASSERT(p_domain_imp != NULL);
+	if (p_domain_imp == NULL) {
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 610D: "
+			"Failed to allocate domain_imp memory\n");
+		free(p_domain);
+		p_domain = NULL;
+		goto Exit;
+	}
 
 	path_len = strlen(((osm_db_imp_t *) p_db->p_db_imp)->db_dir_name)
 	    + strlen(domain_name) + 2;
 
 	/* set the domain file name */
 	p_domain_imp->file_name = malloc(path_len);
-	CL_ASSERT(p_domain_imp->file_name != NULL);
+	if (p_domain_imp->file_name == NULL) {
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 610E: "
+			"Failed to allocate file_name memory\n");
+		free(p_domain_imp);
+		free(p_domain);
+		p_domain = NULL;
+		goto Exit;
+	}
 	snprintf(p_domain_imp->file_name, path_len, "%s/%s",
 		 ((osm_db_imp_t *) p_db->p_db_imp)->db_dir_name, domain_name);
 
@@ -248,6 +270,7 @@ osm_db_domain_t *osm_db_domain_init(IN osm_db_t * p_db, IN char *domain_name)
 	/* initialize the hash table object */
 	p_domain_imp->p_hash = st_init_strtable();
 	CL_ASSERT(p_domain_imp->p_hash != NULL);
+	p_domain_imp->dirty = FALSE;
 
 	p_domain->p_db = p_db;
 	cl_list_insert_tail(&p_db->domains, p_domain);
@@ -272,7 +295,7 @@ int osm_db_restore(IN osm_db_domain_t * p_domain)
 	boolean_t before_key;
 	char *p_first_word, *p_rest_of_line, *p_last;
 	char *p_key = NULL;
-	char *p_prev_val, *p_accum_val = NULL;
+	char *p_prev_val = NULL, *p_accum_val = NULL;
 	char *endptr = NULL;
 	unsigned int line_num;
 
@@ -371,12 +394,18 @@ int osm_db_restore(IN osm_db_domain_t * p_domain)
 				if (st_lookup(p_domain_imp->p_hash,
 					      (st_data_t) p_key,
 					      (void *)&p_prev_val)) {
+					/* if previously used we ignore this guid */
 					OSM_LOG(p_log, OSM_LOG_ERROR,
 						"ERR 6106: "
 						"Key:%s already exists in:%s with value:%s."
 						" Removing it\n", p_key,
 						p_domain_imp->file_name,
 						p_prev_val);
+						free(p_key);
+						p_key = NULL;
+						free(p_accum_val);
+						p_accum_val = NULL;
+						continue;
 				} else {
 					p_prev_val = NULL;
 				}
@@ -391,6 +420,10 @@ int osm_db_restore(IN osm_db_domain_t * p_domain)
 					OSM_LOG(p_log, OSM_LOG_ERROR,
 						"ERR 610B: "
 						"Key:%s is invalid\n", p_key);
+						free(p_key);
+						p_key = NULL;
+						free(p_accum_val);
+						p_accum_val = NULL;
 				} else {
 					/* store our key and value */
 					st_insert(p_domain_imp->p_hash,
@@ -404,6 +437,7 @@ int osm_db_restore(IN osm_db_domain_t * p_domain)
 						     strlen(sLine) + 1);
 				strcpy(p_accum_val, p_prev_val);
 				free(p_prev_val);
+				p_prev_val = NULL;
 				strcat(p_accum_val, sLine);
 			}
 		}		/* in key */
@@ -428,54 +462,79 @@ static int dump_tbl_entry(st_data_t key, st_data_t val, st_data_t arg)
 	return ST_CONTINUE;
 }
 
-int osm_db_store(IN osm_db_domain_t * p_domain)
+int osm_db_store(IN osm_db_domain_t * p_domain,
+		 IN boolean_t fsync_high_avail_files)
 {
 	osm_log_t *p_log = p_domain->p_db->p_log;
 	osm_db_domain_imp_t *p_domain_imp;
-	FILE *p_file;
-	int status = 0;
-	char *p_tmp_file_name;
+	FILE *p_file = NULL;
+	int fd, status = 0;
+	char *p_tmp_file_name = NULL;
 
 	OSM_LOG_ENTER(p_log);
 
 	p_domain_imp = (osm_db_domain_imp_t *) p_domain->p_domain_imp;
+
 	p_tmp_file_name = malloc(sizeof(char) *
 				 (strlen(p_domain_imp->file_name) + 8));
+	if (!p_tmp_file_name) {
+		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6113: "
+			"Failed to allocate memory for temporary file name\n");
+		goto Exit2;
+	}
 	strcpy(p_tmp_file_name, p_domain_imp->file_name);
 	strcat(p_tmp_file_name, ".tmp");
 
 	cl_spinlock_acquire(&p_domain_imp->lock);
 
+	if (p_domain_imp->dirty == FALSE)
+		goto Exit;
+
 	/* open up the output file */
 	p_file = fopen(p_tmp_file_name, "w");
 	if (!p_file) {
 		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6107: "
-			"Failed to open the db file:%s for writing\n",
-			p_domain_imp->file_name);
+			"Failed to open the db file:%s for writing: err:%s\n",
+			p_domain_imp->file_name, strerror(errno));
 		status = 1;
 		goto Exit;
 	}
 
 	st_foreach(p_domain_imp->p_hash, dump_tbl_entry, (st_data_t) p_file);
-	fclose(p_file);
 
-	/* move the domain file */
-	status = remove(p_domain_imp->file_name);
-	if (status) {
-		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6109: "
-			"Failed to remove file:%s (err:%u)\n",
-			p_domain_imp->file_name, status);
+	if (fsync_high_avail_files) {
+		if (fflush(p_file) == 0) {
+			fd = fileno(p_file);
+			if (fd != -1) {
+				if (fsync(fd) == -1)
+					OSM_LOG(p_log, OSM_LOG_ERROR,
+						"ERR 6110: fsync() failed (%s) for %s\n",
+						strerror(errno),
+						p_domain_imp->file_name);
+			} else
+				OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6111: "
+					"fileno() failed for %s\n",
+					p_domain_imp->file_name);
+		} else
+			OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6112: "
+				"fflush() failed (%s) for %s\n",
+				strerror(errno), p_domain_imp->file_name);
 	}
+
+	fclose(p_file);
 
 	status = rename(p_tmp_file_name, p_domain_imp->file_name);
 	if (status) {
 		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 6108: "
-			"Failed to rename the db file to:%s (err:%u)\n",
-			p_domain_imp->file_name, status);
+			"Failed to rename the db file to:%s (err:%s)\n",
+			p_domain_imp->file_name, strerror(errno));
+		goto Exit;
 	}
+	p_domain_imp->dirty = FALSE;
 Exit:
 	cl_spinlock_release(&p_domain_imp->lock);
 	free(p_tmp_file_name);
+Exit2:
 	OSM_LOG_EXIT(p_log);
 	return status;
 }
@@ -556,6 +615,9 @@ int osm_db_update(IN osm_db_domain_t * p_domain, IN char *p_key, IN char *p_val)
 			"Key:%s previously exists in:%s with value:%s\n",
 			p_key, p_domain_imp->file_name, p_prev_val);
 		p_new_key = p_key;
+		/* same key, same value - nothing to update */
+		if (p_prev_val && !strcmp(p_val, p_prev_val))
+			goto Exit;
 	} else {
 		/* need to allocate the key */
 		p_new_key = malloc(sizeof(char) * (strlen(p_key) + 1));
@@ -572,6 +634,9 @@ int osm_db_update(IN osm_db_domain_t * p_domain, IN char *p_key, IN char *p_val)
 	if (p_prev_val)
 		free(p_prev_val);
 
+	p_domain_imp->dirty = TRUE;
+
+Exit:
 	cl_spinlock_release(&p_domain_imp->lock);
 
 	return 0;
@@ -597,7 +662,9 @@ int osm_db_delete(IN osm_db_domain_t * p_domain, IN char *p_key)
 				p_key, p_domain_imp->file_name, p_prev_val);
 			res = 1;
 		} else {
+			free(p_key);
 			free(p_prev_val);
+			p_domain_imp->dirty = TRUE;
 			res = 0;
 		}
 	} else {
@@ -638,6 +705,10 @@ int main(int argc, char **argv)
 	}
 
 	p_dbd = osm_db_domain_init(&db, "lid_by_guid");
+	if (!p_dbd) {
+		printf("db domain init failed\n");
+		exit(1);
+	}
 
 	if (osm_db_restore(p_dbd)) {
 		printf("failed to restore\n");
@@ -691,7 +762,7 @@ int main(int argc, char **argv)
 			printf("key = %s val = %s\n", p_key, p_val);
 		}
 	}
-	if (osm_db_store(p_dbd))
+	if (osm_db_store(p_dbd, FALSE))
 		printf("failed to store\n");
 
 	osm_db_destroy(&db);

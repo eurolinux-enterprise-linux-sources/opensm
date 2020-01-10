@@ -1,7 +1,7 @@
 
 INCLUDES = $(OSMV_INCLUDES)
 
-AM_CFLAGS = -Wall $(DBGFLAGS) -D_XOPEN_SOURCE=600 -D_BSD_SOURCE=1
+AM_CFLAGS = -Wall -Wwrite-strings $(DBGFLAGS) -D_XOPEN_SOURCE=600 -D_BSD_SOURCE=1
 
 lib_LTLIBRARIES = libopensm.la
 
@@ -116,6 +116,7 @@ opensminclude_HEADERS = \
 	$(srcdir)/../include/opensm/osm_subnet.h \
 	$(srcdir)/../include/opensm/osm_switch.h \
 	$(srcdir)/../include/opensm/osm_ucast_mgr.h \
+	$(srcdir)/../include/opensm/osm_mcast_mgr.h \
 	$(srcdir)/../include/opensm/osm_ucast_cache.h \
 	$(srcdir)/../include/opensm/osm_vl15intf.h \
 	$(top_builddir)/include/opensm/osm_version.h \

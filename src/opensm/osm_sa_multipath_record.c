@@ -2,6 +2,7 @@
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -66,23 +67,7 @@
 #define OSM_SA_MPR_MAX_NUM_PATH        127
 #define MAX_HOPS 64
 
-typedef struct osm_mpr_item {
-	cl_list_item_t list_item;
-	ib_path_rec_t path_rec;
-	const osm_port_t *p_src_port;
-	const osm_port_t *p_dest_port;
-	int hops;
-} osm_mpr_item_t;
-
-typedef struct osm_path_parms {
-	ib_net16_t pkey;
-	uint8_t mtu;
-	uint8_t rate;
-	uint8_t sl;
-	uint8_t pkt_life;
-	boolean_t reversible;
-	int hops;
-} osm_path_parms_t;
+#define SA_MPR_RESP_SIZE SA_ITEM_RESP_SIZE(mpr_rec)
 
 static boolean_t sa_multipath_rec_is_tavor_port(IN const osm_port_t * p_port)
 {
@@ -857,10 +842,10 @@ static void mpr_rcv_build_pr(IN osm_sa_t * sa,
 	p_dest_physp = p_dest_alias_guid->p_base_port->p_physp;
 
 	p_pr->dgid.unicast.prefix = osm_physp_get_subnet_prefix(p_dest_physp);
-	p_pr->dgid.unicast.interface_id = osm_physp_get_port_guid(p_dest_physp);
+	p_pr->dgid.unicast.interface_id = p_dest_alias_guid->alias_guid;
 
 	p_pr->sgid.unicast.prefix = osm_physp_get_subnet_prefix(p_src_physp);
-	p_pr->sgid.unicast.interface_id = osm_physp_get_port_guid(p_src_physp);
+	p_pr->sgid.unicast.interface_id = p_src_alias_guid->alias_guid;
 
 	p_pr->dlid = cl_hton16(dest_lid_ho);
 	p_pr->slid = cl_hton16(src_lid_ho);
@@ -889,21 +874,21 @@ static void mpr_rcv_build_pr(IN osm_sa_t * sa,
 	OSM_LOG_EXIT(sa->p_log);
 }
 
-static osm_mpr_item_t *mpr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
-						 IN const ib_multipath_rec_t *
-						 p_mpr,
-						 IN const osm_alias_guid_t *
-						 p_src_alias_guid,
-						 IN const osm_alias_guid_t *
-						 p_dest_alias_guid,
-						 IN const uint16_t src_lid_ho,
-						 IN const uint16_t dest_lid_ho,
-						 IN const ib_net64_t comp_mask,
-						 IN const uint8_t preference)
+static osm_sa_item_t *mpr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
+						IN const ib_multipath_rec_t *
+						p_mpr,
+						IN const osm_alias_guid_t *
+						p_src_alias_guid,
+						IN const osm_alias_guid_t *
+						p_dest_alias_guid,
+						IN const uint16_t src_lid_ho,
+						IN const uint16_t dest_lid_ho,
+						IN const ib_net64_t comp_mask,
+						IN const uint8_t preference)
 {
 	osm_path_parms_t path_parms;
 	osm_path_parms_t rev_path_parms;
-	osm_mpr_item_t *p_pr_item;
+	osm_sa_item_t *p_pr_item;
 	ib_api_status_t status, rev_path_status;
 
 	OSM_LOG_ENTER(sa->p_log);
@@ -911,13 +896,13 @@ static osm_mpr_item_t *mpr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Src LID %u, Dest LID %u\n",
 		src_lid_ho, dest_lid_ho);
 
-	p_pr_item = malloc(sizeof(*p_pr_item));
+	p_pr_item = malloc(SA_MPR_RESP_SIZE);
 	if (p_pr_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4501: "
 			"Unable to allocate path record\n");
 		goto Exit;
 	}
-	memset(p_pr_item, 0, sizeof(*p_pr_item));
+	memset(p_pr_item, 0, SA_MPR_RESP_SIZE);
 
 	status = mpr_rcv_get_path_parms(sa, p_mpr, p_src_alias_guid,
 					p_dest_alias_guid, dest_lid_ho,
@@ -952,13 +937,13 @@ static osm_mpr_item_t *mpr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 		}
 	}
 
-	p_pr_item->p_src_port = p_src_alias_guid->p_base_port;
-	p_pr_item->p_dest_port = p_dest_alias_guid->p_base_port;
-	p_pr_item->hops = path_parms.hops;
+	p_pr_item->resp.mpr_rec.p_src_port = p_src_alias_guid->p_base_port;
+	p_pr_item->resp.mpr_rec.p_dest_port = p_dest_alias_guid->p_base_port;
+	p_pr_item->resp.mpr_rec.hops = path_parms.hops;
 
 	mpr_rcv_build_pr(sa, p_src_alias_guid, p_dest_alias_guid, src_lid_ho,
 			 dest_lid_ho, preference, &path_parms,
-			 &p_pr_item->path_rec);
+			 &p_pr_item->resp.mpr_rec.path_rec);
 
 Exit:
 	OSM_LOG_EXIT(sa->p_log);
@@ -974,7 +959,7 @@ static uint32_t mpr_rcv_get_port_pair_paths(IN osm_sa_t * sa,
 					    IN const ib_net64_t comp_mask,
 					    IN cl_qlist_t * p_list)
 {
-	osm_mpr_item_t *p_pr_item;
+	osm_sa_item_t *p_pr_item;
 	uint16_t src_lid_min_ho;
 	uint16_t src_lid_max_ho;
 	uint16_t dest_lid_min_ho;
@@ -1156,20 +1141,20 @@ Exit:
 #undef min
 #define min(x,y)	(((x) < (y)) ? (x) : (y))
 
-static osm_mpr_item_t *mpr_rcv_get_apm_port_pair_paths(IN osm_sa_t * sa,
-						       IN const
-						       ib_multipath_rec_t *
-						       p_mpr,
-						       IN const osm_alias_guid_t *
-						       p_src_alias_guid,
-						       IN const osm_alias_guid_t *
-						       p_dest_alias_guid,
-						       IN int base_offs,
-						       IN const ib_net64_t
-						       comp_mask,
-						       IN cl_qlist_t * p_list)
+static osm_sa_item_t *mpr_rcv_get_apm_port_pair_paths(IN osm_sa_t * sa,
+						      IN const
+						      ib_multipath_rec_t *
+						      p_mpr,
+						      IN const osm_alias_guid_t *
+						      p_src_alias_guid,
+						      IN const osm_alias_guid_t *
+						      p_dest_alias_guid,
+						      IN int base_offs,
+						      IN const ib_net64_t
+						      comp_mask,
+						      IN cl_qlist_t * p_list)
 {
-	osm_mpr_item_t *p_pr_item = 0;
+	osm_sa_item_t *p_pr_item = 0;
 	uint16_t src_lid_min_ho;
 	uint16_t src_lid_max_ho;
 	uint16_t dest_lid_min_ho;
@@ -1222,7 +1207,7 @@ static osm_mpr_item_t *mpr_rcv_get_apm_port_pair_paths(IN osm_sa_t * sa,
 		if (p_pr_item) {
 			OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 				"Found matching path from Src LID %u to Dest LID %u with %d hops\n",
-				src_lid_ho, dest_lid_ho, p_pr_item->hops);
+				src_lid_ho, dest_lid_ho, p_pr_item->resp.mpr_rec.hops);
 			break;
 		}
 
@@ -1357,7 +1342,7 @@ static void mpr_rcv_get_apm_paths(IN osm_sa_t * sa,
 				  IN cl_qlist_t * p_list)
 {
 	osm_alias_guid_t *pp_alias_guids[4];
-	osm_mpr_item_t *matrix[2][2];
+	osm_sa_item_t *matrix[2][2];
 	int base_offs, src_lid_ho, dest_lid_ho;
 	int sumA, sumB, minA, minB;
 
@@ -1421,20 +1406,46 @@ static void mpr_rcv_get_apm_paths(IN osm_sa_t * sa,
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "APM matrix:\n"
 		"\t{0,0} 0x%X->0x%X (%d)\t| {0,1} 0x%X->0x%X (%d)\n"
 		"\t{1,0} 0x%X->0x%X (%d)\t| {1,1} 0x%X->0x%X (%d)\n",
-		matrix[0][0]->path_rec.slid, matrix[0][0]->path_rec.dlid,
-		matrix[0][0]->hops, matrix[0][1]->path_rec.slid,
-		matrix[0][1]->path_rec.dlid, matrix[0][1]->hops,
-		matrix[1][0]->path_rec.slid, matrix[1][0]->path_rec.dlid,
-		matrix[1][0]->hops, matrix[1][1]->path_rec.slid,
-		matrix[1][1]->path_rec.dlid, matrix[1][1]->hops);
+		matrix[0][0] ? matrix[0][0]->resp.mpr_rec.path_rec.slid : 0,
+		matrix[0][0] ? matrix[0][0]->resp.mpr_rec.path_rec.dlid : 0,
+		matrix[0][0] ? matrix[0][0]->resp.mpr_rec.hops : 0,
+		matrix[0][1] ? matrix[0][1]->resp.mpr_rec.path_rec.slid : 0,
+		matrix[0][1] ? matrix[0][1]->resp.mpr_rec.path_rec.dlid : 0,
+		matrix[0][1] ? matrix[0][1]->resp.mpr_rec.hops : 0,
+		matrix[1][0] ? matrix[1][0]->resp.mpr_rec.path_rec.slid : 0,
+		matrix[1][0] ? matrix[1][0]->resp.mpr_rec.path_rec.dlid : 0,
+		matrix[1][0] ? matrix[1][0]->resp.mpr_rec.hops : 0,
+		matrix[1][1] ? matrix[1][1]->resp.mpr_rec.path_rec.slid : 0,
+		matrix[1][1] ? matrix[1][1]->resp.mpr_rec.path_rec.dlid : 0,
+		matrix[1][1] ? matrix[1][1]->resp.mpr_rec.hops : 0);
+
+	sumA = minA = sumB = minB = 0;
 
 	/* check diagonal A {(0,0), (1,1)} */
-	sumA = matrix[0][0]->hops + matrix[1][1]->hops;
-	minA = min(matrix[0][0]->hops, matrix[1][1]->hops);
+	if (matrix[0][0]) {
+		sumA += matrix[0][0]->resp.mpr_rec.hops;
+		minA = matrix[0][0]->resp.mpr_rec.hops;
+	}
+	if (matrix[1][1]) {
+		sumA += matrix[1][1]->resp.mpr_rec.hops;
+		if (minA)
+			minA = min(minA, matrix[1][1]->resp.mpr_rec.hops);
+		else
+			minA = matrix[1][1]->resp.mpr_rec.hops;
+	}
 
 	/* check diagonal B {(0,1), (1,0)} */
-	sumB = matrix[0][1]->hops + matrix[1][0]->hops;
-	minB = min(matrix[0][1]->hops, matrix[1][0]->hops);
+	if (matrix[0][1]) {
+		sumB += matrix[0][1]->resp.mpr_rec.hops;
+		minB = matrix[0][1]->resp.mpr_rec.hops;
+	}
+	if (matrix[1][0]) {
+		sumB += matrix[1][0]->resp.mpr_rec.hops;
+		if (minB)
+			minB = min(minB, matrix[1][0]->resp.mpr_rec.hops);
+		else
+			minB = matrix[1][0]->resp.mpr_rec.hops;
+	}
 
 	/* and the winner is... */
 	if (minA <= minB || (minA == minB && sumA < sumB)) {
@@ -1442,12 +1453,16 @@ static void mpr_rcv_get_apm_paths(IN osm_sa_t * sa,
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"Diag {0,0} & {1,1} is the best:\n"
 			"\t{0,0} 0x%X->0x%X (%d)\t & {1,1} 0x%X->0x%X (%d)\n",
-			matrix[0][0]->path_rec.slid,
-			matrix[0][0]->path_rec.dlid, matrix[0][0]->hops,
-			matrix[1][1]->path_rec.slid,
-			matrix[1][1]->path_rec.dlid, matrix[1][1]->hops);
-		cl_qlist_insert_tail(p_list, &matrix[0][0]->list_item);
-		cl_qlist_insert_tail(p_list, &matrix[1][1]->list_item);
+			matrix[0][0] ? matrix[0][0]->resp.mpr_rec.path_rec.slid : 0,
+			matrix[0][0] ? matrix[0][0]->resp.mpr_rec.path_rec.dlid : 0,
+			matrix[0][0] ? matrix[0][0]->resp.mpr_rec.hops : 0,
+			matrix[1][1] ? matrix[1][1]->resp.mpr_rec.path_rec.slid : 0,
+			matrix[1][1] ? matrix[1][1]->resp.mpr_rec.path_rec.dlid : 0,
+			matrix[1][1] ? matrix[1][1]->resp.mpr_rec.hops : 0);
+		if (matrix[0][0])
+			cl_qlist_insert_tail(p_list, &matrix[0][0]->list_item);
+		if (matrix[1][1])
+			cl_qlist_insert_tail(p_list, &matrix[1][1]->list_item);
 		free(matrix[0][1]);
 		free(matrix[1][0]);
 	} else {
@@ -1455,12 +1470,16 @@ static void mpr_rcv_get_apm_paths(IN osm_sa_t * sa,
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 			"Diag {0,1} & {1,0} is the best:\n"
 			"\t{0,1} 0x%X->0x%X (%d)\t & {1,0} 0x%X->0x%X (%d)\n",
-			matrix[0][1]->path_rec.slid,
-			matrix[0][1]->path_rec.dlid, matrix[0][1]->hops,
-			matrix[1][0]->path_rec.slid,
-			matrix[1][0]->path_rec.dlid, matrix[1][0]->hops);
-		cl_qlist_insert_tail(p_list, &matrix[0][1]->list_item);
-		cl_qlist_insert_tail(p_list, &matrix[1][0]->list_item);
+			matrix[0][1] ? matrix[0][1]->resp.mpr_rec.path_rec.slid : 0,
+			matrix[0][1] ? matrix[0][1]->resp.mpr_rec.path_rec.dlid : 0,
+			matrix[0][1] ? matrix[0][1]->resp.mpr_rec.hops : 0,
+			matrix[1][0] ? matrix[1][0]->resp.mpr_rec.path_rec.slid : 0,
+			matrix[1][0] ? matrix[1][0]->resp.mpr_rec.path_rec.dlid: 0,
+			matrix[1][0] ? matrix[1][0]->resp.mpr_rec.hops : 0);
+		if (matrix[0][1])
+			cl_qlist_insert_tail(p_list, &matrix[0][1]->list_item);
+		if (matrix[1][0])
+			cl_qlist_insert_tail(p_list, &matrix[1][0]->list_item);
 		free(matrix[0][0]);
 		free(matrix[1][1]);
 	}
@@ -1543,7 +1562,7 @@ void osm_mpr_rcv_process(IN void *context, IN void *data)
 	/* we only support SubnAdmGetMulti method */
 	if (p_sa_mad->method != IB_MAD_METHOD_GETMULTI) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4513: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for MultiPathRecord request\n",
 			ib_get_sa_method_str(p_sa_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;
@@ -1566,7 +1585,14 @@ void osm_mpr_rcv_process(IN void *context, IN void *data)
 		osm_dump_multipath_record_v2(sa->p_log, p_mpr, FILE_ID, OSM_LOG_DEBUG);
 	}
 
-	/* Validatg rate if supplied */
+	/* Make sure required components (S/DGIDCount) are supplied */
+	if (!(p_sa_mad->comp_mask & IB_MPR_COMPMASK_SGIDCOUNT) ||
+	    !(p_sa_mad->comp_mask & IB_MPR_COMPMASK_DGIDCOUNT)) {
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_INSUF_COMPS);
+		goto Exit;
+	}
+
+	/* Validate rate if supplied */
 	if ((p_sa_mad->comp_mask & IB_MPR_COMPMASK_RATESELEC) &&
 	    (p_sa_mad->comp_mask & IB_MPR_COMPMASK_RATE)) {
 		rate = ib_multipath_rec_rate(p_mpr);
@@ -1585,6 +1611,14 @@ void osm_mpr_rcv_process(IN void *context, IN void *data)
 					  IB_SA_MAD_STATUS_REQ_INVALID);
 			goto Exit;
 		}
+	}
+
+	/* Make sure either none or both ServiceID parameters are supplied */
+	if ((p_sa_mad->comp_mask & IB_MPR_COMPMASK_SERVICEID) != 0 &&
+	    (p_sa_mad->comp_mask & IB_MPR_COMPMASK_SERVICEID) !=
+	     IB_MPR_COMPMASK_SERVICEID) {
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_INSUF_COMPS);
+		goto Exit;
 	}
 
 	cl_qlist_init(&pr_list);

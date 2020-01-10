@@ -2,6 +2,7 @@
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -60,6 +61,8 @@
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_sa.h>
 
+#define SA_GIR_RESP_SIZE SA_ITEM_RESP_SIZE(guid_rec)
+
 #define MOD_GIR_COMP_MASK (IB_GIR_COMPMASK_LID | IB_GIR_COMPMASK_BLOCKNUM)
 
 typedef struct osm_gir_item {
@@ -83,12 +86,12 @@ static ib_api_status_t gir_rcv_new_gir(IN osm_sa_t * sa,
 				       IN const osm_physp_t * p_physp,
 				       IN uint8_t const block_num)
 {
-	osm_gir_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	ib_api_status_t status = IB_SUCCESS;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_GIR_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 5102: "
 			"rec_item alloc failed\n");
@@ -100,16 +103,16 @@ static ib_api_status_t gir_rcv_new_gir(IN osm_sa_t * sa,
 		"New GUIDInfoRecord: lid %u, block num %d\n",
 		cl_ntoh16(match_lid), block_num);
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_GIR_RESP_SIZE);
 
-	p_rec_item->rec.lid = match_lid;
-	p_rec_item->rec.block_num = block_num;
+	p_rec_item->resp.guid_rec.lid = match_lid;
+	p_rec_item->resp.guid_rec.block_num = block_num;
 	if (p_physp->p_guids)
-		memcpy(&p_rec_item->rec.guid_info,
+		memcpy(&p_rec_item->resp.guid_rec.guid_info,
 		       *p_physp->p_guids + block_num * GUID_TABLE_MAX_ENTRIES,
 		       sizeof(ib_guid_info_t));
 	else if (!block_num)
-		p_rec_item->rec.guid_info.guid[0] = osm_physp_get_port_guid(p_physp);
+		p_rec_item->resp.guid_rec.guid_info.guid[0] = osm_physp_get_port_guid(p_physp);
 
 	cl_qlist_insert_tail(p_list, &p_rec_item->list_item);
 
@@ -322,18 +325,18 @@ static void guidinfo_respond(IN osm_sa_t *sa, IN osm_madw_t *p_madw,
 			     IN ib_guidinfo_record_t * p_guidinfo_rec)
 {
 	cl_qlist_t rec_list;
-	osm_gir_item_t *item;
+	osm_sa_item_t *item;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	item = malloc(sizeof(*item));
+	item = malloc(SA_GIR_RESP_SIZE);
 	if (!item) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 5101: "
 			"rec_item alloc failed\n");
 		goto Exit;
 	}
 
-	item->rec = *p_guidinfo_rec;
+	item->resp.guid_rec = *p_guidinfo_rec;
 
 	cl_qlist_init(&rec_list);
 	cl_qlist_insert_tail(&rec_list, &item->list_item);
@@ -650,15 +653,21 @@ add_alias_guid:
 							    p_alias_guid->alias_guid,
 							    &p_alias_guid->map_item);
 		if (p_alias_guid_check != p_alias_guid) {
-			/* alias GUID is a duplicate */
-			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 5108: "
-				"Duplicate alias port GUID 0x%" PRIx64
-				" index %d base port GUID 0x%" PRIx64 "\n",
-				cl_ntoh64(p_alias_guid->alias_guid), i,
-				cl_ntoh64(p_alias_guid->p_base_port->guid));
-			osm_alias_guid_delete(&p_alias_guid);
-			/* clear response guid at index to indicate duplicate */
-			p_rcvd_rec->guid_info.guid[i % 8] = 0;
+			/* alias GUID is a duplicate if it exists on another port or on the same port but at another index */
+			if (p_alias_guid_check->p_base_port != p_port ||
+			    (*p_port->p_physp->p_guids)[i] != set_alias_guid) {
+				OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 5108: "
+					"Duplicate alias port GUID 0x%" PRIx64
+					" index %d base port GUID 0x%" PRIx64
+					", alias GUID already assigned to "
+					"base port GUID 0x%" PRIx64 "\n",
+					cl_ntoh64(p_alias_guid->alias_guid), i,
+					cl_ntoh64(p_alias_guid->p_base_port->guid),
+					cl_ntoh64(p_alias_guid_check->p_base_port->guid));
+				osm_alias_guid_delete(&p_alias_guid);
+				/* clear response guid at index to indicate duplicate */
+				p_rcvd_rec->guid_info.guid[i % 8] = 0;
+			}
 		} else {
 			del_alias_guid = (*p_port->p_physp->p_guids)[i];
 			if (del_alias_guid) {
@@ -795,7 +804,7 @@ void osm_gir_rcv_process(IN void *ctx, IN void *data)
 		break;
 	default:
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 5105: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for GUIDInfoRecord request\n",
 			ib_get_sa_method_str(p_rcvd_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		break;

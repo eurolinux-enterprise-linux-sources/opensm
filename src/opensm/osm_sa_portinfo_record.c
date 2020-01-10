@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -60,10 +61,7 @@
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_sa.h>
 
-typedef struct osm_pir_item {
-	cl_list_item_t list_item;
-	ib_portinfo_record_t rec;
-} osm_pir_item_t;
+#define SA_PIR_RESP_SIZE SA_ITEM_RESP_SIZE(port_rec)
 
 typedef struct osm_pir_search_ctxt {
 	const ib_portinfo_record_t *p_rcvd_rec;
@@ -79,14 +77,14 @@ static ib_api_status_t pir_rcv_new_pir(IN osm_sa_t * sa,
 				       IN osm_pir_search_ctxt_t * p_ctxt,
 				       IN ib_net16_t const lid)
 {
-	osm_pir_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	ib_port_info_t *p_pi;
 	osm_physp_t *p_physp0;
 	ib_api_status_t status = IB_SUCCESS;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_PIR_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2102: "
 			"rec_item alloc failed\n");
@@ -100,12 +98,12 @@ static ib_api_status_t pir_rcv_new_pir(IN osm_sa_t * sa,
 		cl_ntoh64(osm_physp_get_port_guid(p_physp)),
 		cl_ntoh16(lid), osm_physp_get_port_num(p_physp));
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_PIR_RESP_SIZE);
 
-	p_rec_item->rec.lid = lid;
-	p_rec_item->rec.port_info = p_physp->port_info;
+	p_rec_item->resp.port_rec.lid = lid;
+	p_rec_item->resp.port_rec.port_info = p_physp->port_info;
 	if (p_ctxt->comp_mask & IB_PIR_COMPMASK_OPTIONS)
-		p_rec_item->rec.options = p_ctxt->p_rcvd_rec->options;
+		p_rec_item->resp.port_rec.options = p_ctxt->p_rcvd_rec->options;
 	if ((p_ctxt->comp_mask & IB_PIR_COMPMASK_OPTIONS) == 0 ||
 	    (p_ctxt->p_rcvd_rec->options & 0x80) == 0) {
 		/* Does requested port have an extended link speed active ? */
@@ -118,7 +116,7 @@ static ib_api_status_t pir_rcv_new_pir(IN osm_sa_t * sa,
 		if ((p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) > 0) {
 			if (ib_port_info_get_link_speed_ext_active(&p_physp->port_info)) {
 				/* Add QDR bits to original link speed components */
-				p_pi = &p_rec_item->rec.port_info;
+				p_pi = &p_rec_item->resp.port_rec.port_info;
 				ib_port_info_set_link_speed_enabled(p_pi,
 								    ib_port_info_get_link_speed_enabled(p_pi) | IB_LINK_SPEED_ACTIVE_10);
 				p_pi->state_info1 =
@@ -130,7 +128,7 @@ static ib_api_status_t pir_rcv_new_pir(IN osm_sa_t * sa,
 			}
 		}
 	}
-	p_rec_item->rec.port_num = osm_physp_get_port_num(p_physp);
+	p_rec_item->resp.port_rec.port_num = osm_physp_get_port_num(p_physp);
 
 	cl_qlist_insert_tail(p_ctxt->p_list, &p_rec_item->list_item);
 
@@ -534,7 +532,7 @@ void osm_pir_rcv_process(IN void *ctx, IN void *data)
 	if (p_rcvd_mad->method != IB_MAD_METHOD_GET &&
 	    p_rcvd_mad->method != IB_MAD_METHOD_GETTABLE) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2105: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for PortInfoRecord request\n",
 			ib_get_sa_method_str(p_rcvd_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;
@@ -579,7 +577,7 @@ void osm_pir_rcv_process(IN void *ctx, IN void *data)
 			sa_pir_by_comp_mask(sa, p_port->p_node, &context);
 		else
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2109: "
-				"No port found with LID %u\n",
+				"No port found with requested LID %u\n",
 				cl_ntoh16(p_rcvd_rec->lid));
 	} else
 		cl_qmap_apply_func(&sa->p_subn->node_guid_tbl,
@@ -595,11 +593,11 @@ void osm_pir_rcv_process(IN void *ctx, IN void *data)
 	   sm_key.
 	 */
 	if (!p_rcvd_mad->sm_key) {
-		osm_pir_item_t *item;
-		for (item = (osm_pir_item_t *) cl_qlist_head(&rec_list);
-		     item != (osm_pir_item_t *) cl_qlist_end(&rec_list);
-		     item = (osm_pir_item_t *) cl_qlist_next(&item->list_item))
-			item->rec.port_info.m_key = 0;
+		osm_sa_item_t *item;
+		for (item = (osm_sa_item_t *) cl_qlist_head(&rec_list);
+		     item != (osm_sa_item_t *) cl_qlist_end(&rec_list);
+		     item = (osm_sa_item_t *) cl_qlist_next(&item->list_item))
+			item->resp.port_rec.port_info.m_key = 0;
 	}
 
 	osm_sa_respond(sa, p_madw, sizeof(ib_portinfo_record_t), &rec_list);

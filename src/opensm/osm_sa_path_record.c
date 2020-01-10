@@ -6,6 +6,7 @@
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2010 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -73,21 +74,9 @@
 #include <opensm/osm_prefix_route.h>
 #include <opensm/osm_ucast_lash.h>
 
+#define SA_PR_RESP_SIZE SA_ITEM_RESP_SIZE(path_rec)
+
 #define MAX_HOPS 64
-
-typedef struct osm_pr_item {
-	cl_list_item_t list_item;
-	ib_path_rec_t path_rec;
-} osm_pr_item_t;
-
-typedef struct osm_path_parms {
-	ib_net16_t pkey;
-	uint8_t mtu;
-	uint8_t rate;
-	uint8_t sl;
-	uint8_t pkt_life;
-	boolean_t reversible;
-} osm_path_parms_t;
 
 static inline boolean_t sa_path_rec_is_tavor_port(IN const osm_port_t * p_port)
 {
@@ -390,7 +379,7 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 					  ib_port_info_compute_rate(p_pi,
 								    p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)) > 0)
 			rate = ib_port_info_compute_rate(p_pi,
-							 p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
+							 p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS);
 
 		if (sa->p_subn->opt.qos) {
 			/*
@@ -650,7 +639,7 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F1A: "
 				"Ports 0x%016" PRIx64 " (%s port %d) and "
 				"0x%016" PRIx64 " (%s port %d) "
-				" do not share specified PKey 0x%04x\n",
+				"do not share specified PKey 0x%04x\n",
 				cl_ntoh64(osm_physp_get_port_guid(p_src_physp)),
 				p_src_physp->p_node->print_desc,
 				p_src_physp->port_num,
@@ -665,18 +654,18 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (p_qos_level && p_qos_level->pkey_range_len &&
 		    !osm_qos_level_has_pkey(p_qos_level, pkey)) {
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F1D: "
-				"Ports 0x%016" PRIx64 " (%s port %d) and "
-				"0x%016"PRIx64" (%s port %d) "
-				"do not share PKeys defined by QoS level "
-				"\"%s\"\n",
+				"QoS level \"%s\" doesn't define specified PKey 0x%04x "
+				"for ports 0x%016" PRIx64 " (%s port %d) and "
+				"0x%016"PRIx64" (%s port %d)\n",
+				p_qos_level->name,
+				cl_ntoh16(pkey),
 				cl_ntoh64(osm_physp_get_port_guid(p_src_physp)),
 				p_src_physp->p_node->print_desc,
 				p_src_alias_guid->p_base_port->p_physp->port_num,
 				cl_ntoh64(osm_physp_get_port_guid
 					  (p_dest_physp)),
 				p_dest_physp->p_node->print_desc,
-				p_dest_alias_guid->p_base_port->p_physp->port_num,
-				p_qos_level->name);
+				p_dest_alias_guid->p_base_port->p_physp->port_num);
 			status = IB_NOT_FOUND;
 			goto Exit;
 		}
@@ -824,10 +813,28 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 	 * send the currently computed SL value as a hint and let the routing
 	 * engine override it.
 	 */
-	if (p_re && p_re->path_sl)
+	if (p_re && p_re->path_sl) {
+		uint8_t pr_sl;
+		pr_sl = sl;
+
 		sl = p_re->path_sl(p_re->context, sl,
 				   cl_hton16(src_lid_ho), cl_hton16(dest_lid_ho));
 
+		if ((comp_mask & IB_PR_COMPMASK_SL) && (sl != pr_sl)) {
+			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F2A: "
+				"Requested SL (%u) doesn't match SL calculated"
+				"by routing engine (%u) "
+				"[%s port %d <-> %s port %d]\n",
+				pr_sl,
+				sl,
+				p_src_alias_guid->p_base_port->p_node->print_desc,
+				p_src_alias_guid->p_base_port->p_physp->port_num,
+				p_dest_alias_guid->p_base_port->p_node->print_desc,
+				p_dest_alias_guid->p_base_port->p_physp->port_num);
+			status = IB_NOT_FOUND;
+			goto Exit;
+		}
+	}
 	/* reset pkey when raw traffic */
 	if (comp_mask & IB_PR_COMPMASK_RAWTRAFFIC &&
 	    cl_ntoh32(p_pr->hop_flow_raw) & (1 << 31))
@@ -931,7 +938,7 @@ static void pr_rcv_build_pr(IN osm_sa_t * sa,
 	OSM_LOG_EXIT(sa->p_log);
 }
 
-static osm_pr_item_t *pr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
+static osm_sa_item_t *pr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 					       IN const ib_path_rec_t * p_pr,
 					       IN const osm_alias_guid_t * p_src_alias_guid,
 					       IN const osm_alias_guid_t * p_dest_alias_guid,
@@ -944,7 +951,7 @@ static osm_pr_item_t *pr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 {
 	osm_path_parms_t path_parms;
 	osm_path_parms_t rev_path_parms;
-	osm_pr_item_t *p_pr_item;
+	osm_sa_item_t *p_pr_item;
 	ib_api_status_t status, rev_path_status;
 
 	OSM_LOG_ENTER(sa->p_log);
@@ -952,13 +959,13 @@ static osm_pr_item_t *pr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Src LID %u, Dest LID %u\n",
 		src_lid_ho, dest_lid_ho);
 
-	p_pr_item = malloc(sizeof(*p_pr_item));
+	p_pr_item = malloc(SA_PR_RESP_SIZE);
 	if (p_pr_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F01: "
 			"Unable to allocate path record\n");
 		goto Exit;
 	}
-	memset(p_pr_item, 0, sizeof(*p_pr_item));
+	memset(p_pr_item, 0, SA_PR_RESP_SIZE);
 
 	status = pr_rcv_get_path_parms(sa, p_pr, p_src_alias_guid, src_lid_ho,
 				       p_dest_alias_guid, dest_lid_ho,
@@ -995,7 +1002,7 @@ static osm_pr_item_t *pr_rcv_get_lid_pair_path(IN osm_sa_t * sa,
 
 	pr_rcv_build_pr(sa, p_src_alias_guid, p_dest_alias_guid, p_sgid, p_dgid,
 			src_lid_ho, dest_lid_ho, preference, &path_parms,
-			&p_pr_item->path_rec);
+			&p_pr_item->resp.path_rec);
 
 Exit:
 	OSM_LOG_EXIT(sa->p_log);
@@ -1013,7 +1020,7 @@ static void pr_rcv_get_port_pair_paths(IN osm_sa_t * sa,
 {
 	const ib_path_rec_t *p_pr = ib_sa_mad_get_payload_ptr(sa_mad);
 	ib_net64_t comp_mask = sa_mad->comp_mask;
-	osm_pr_item_t *p_pr_item;
+	osm_sa_item_t *p_pr_item;
 	uint16_t src_lid_min_ho;
 	uint16_t src_lid_max_ho;
 	uint16_t dest_lid_min_ho;
@@ -1263,7 +1270,7 @@ static ib_net64_t find_router(const osm_sa_t *sa, ib_net64_t prefix)
 	return osm_port_get_guid(osm_router_get_port_ptr(rtr));
 }
 
-static ib_net16_t pr_rcv_get_end_points(IN osm_sa_t * sa,
+ib_net16_t osm_pr_get_end_points(IN osm_sa_t * sa,
 					IN const ib_sa_mad_t *sa_mad,
 					OUT const osm_alias_guid_t ** pp_src_alias_guid,
 					OUT const osm_alias_guid_t ** pp_dest_alias_guid,
@@ -1442,7 +1449,7 @@ Exit:
 	OSM_LOG_EXIT(sa->p_log);
 }
 
-static void pr_rcv_process_half(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
+void osm_pr_process_half(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
 				IN const osm_port_t * requester_port,
 				IN const osm_alias_guid_t * p_src_alias_guid,
 				IN const osm_alias_guid_t * p_dest_alias_guid,
@@ -1497,7 +1504,7 @@ static void pr_rcv_process_half(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
 	OSM_LOG_EXIT(sa->p_log);
 }
 
-static void pr_rcv_process_pair(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
+void osm_pr_process_pair(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
 				IN const osm_port_t * requester_port,
 				IN const osm_alias_guid_t * p_src_alias_guid,
 				IN const osm_alias_guid_t * p_dest_alias_guid,
@@ -1626,7 +1633,7 @@ static void pr_process_multicast(osm_sa_t * sa, const ib_sa_mad_t *sa_mad,
 	ib_path_rec_t *pr = ib_sa_mad_get_payload_ptr(sa_mad);
 	osm_mgrp_t *mgrp;
 	ib_api_status_t status;
-	osm_pr_item_t *pr_item;
+	osm_sa_item_t *pr_item;
 	uint32_t flow_label;
 	uint8_t sl, hop_limit;
 
@@ -1650,34 +1657,34 @@ static void pr_process_multicast(osm_sa_t * sa, const ib_sa_mad_t *sa_mad,
 		return;
 	}
 
-	pr_item = malloc(sizeof(*pr_item));
+	pr_item = malloc(SA_PR_RESP_SIZE);
 	if (pr_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F18: "
 			"Unable to allocate path record for MC group\n");
 		return;
 	}
-	memset(pr_item, 0, sizeof(*pr_item));
+	memset(pr_item, 0, SA_PR_RESP_SIZE);
 
 	/* Copy PathRecord request into response */
-	pr_item->path_rec = *pr;
+	pr_item->resp.path_rec = *pr;
 
 	/* Now, use the MC info to cruft up the PathRecord response */
-	pr_item->path_rec.dgid = mgrp->mcmember_rec.mgid;
-	pr_item->path_rec.dlid = mgrp->mcmember_rec.mlid;
-	pr_item->path_rec.tclass = mgrp->mcmember_rec.tclass;
-	pr_item->path_rec.num_path = 1;
-	pr_item->path_rec.pkey = mgrp->mcmember_rec.pkey;
+	pr_item->resp.path_rec.dgid = mgrp->mcmember_rec.mgid;
+	pr_item->resp.path_rec.dlid = mgrp->mcmember_rec.mlid;
+	pr_item->resp.path_rec.tclass = mgrp->mcmember_rec.tclass;
+	pr_item->resp.path_rec.num_path = 1;
+	pr_item->resp.path_rec.pkey = mgrp->mcmember_rec.pkey;
 
 	/* MTU, rate, and packet lifetime should be exactly */
-	pr_item->path_rec.mtu = (2 << 6) | mgrp->mcmember_rec.mtu;
-	pr_item->path_rec.rate = (2 << 6) | mgrp->mcmember_rec.rate;
-	pr_item->path_rec.pkt_life = (2 << 6) | mgrp->mcmember_rec.pkt_life;
+	pr_item->resp.path_rec.mtu = (IB_PATH_SELECTOR_EXACTLY << 6) | mgrp->mcmember_rec.mtu;
+	pr_item->resp.path_rec.rate = (IB_PATH_SELECTOR_EXACTLY << 6) | mgrp->mcmember_rec.rate;
+	pr_item->resp.path_rec.pkt_life = (IB_PATH_SELECTOR_EXACTLY << 6) | mgrp->mcmember_rec.pkt_life;
 
 	/* SL, Hop Limit, and Flow Label */
 	ib_member_get_sl_flow_hop(mgrp->mcmember_rec.sl_flow_hop,
 				  &sl, &flow_label, &hop_limit);
-	ib_path_rec_set_sl(&pr_item->path_rec, sl);
-	ib_path_rec_set_qos_class(&pr_item->path_rec, 0);
+	ib_path_rec_set_sl(&pr_item->resp.path_rec, sl);
+	ib_path_rec_set_qos_class(&pr_item->resp.path_rec, 0);
 
 	/* HopLimit is not yet set in non link local MC groups */
 	/* If it were, this would not be needed */
@@ -1685,7 +1692,7 @@ static void pr_process_multicast(osm_sa_t * sa, const ib_sa_mad_t *sa_mad,
 	    IB_MC_SCOPE_LINK_LOCAL)
 		hop_limit = IB_HOPLIMIT_MAX;
 
-	pr_item->path_rec.hop_flow_raw =
+	pr_item->resp.path_rec.hop_flow_raw =
 	    cl_hton32(hop_limit) | (flow_label << 8);
 
 	cl_qlist_insert_tail(list, &pr_item->list_item);
@@ -1714,7 +1721,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 	if (p_sa_mad->method != IB_MAD_METHOD_GET &&
 	    p_sa_mad->method != IB_MAD_METHOD_GETTABLE) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F17: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for PathRecord request\n",
 			ib_get_sa_method_str(p_sa_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;
@@ -1758,6 +1765,14 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 		}
 	}
 
+	/* Make sure either none or both ServiceID parameters are supplied */
+	if ((p_sa_mad->comp_mask & IB_PR_COMPMASK_SERVICEID) != 0 &&
+	    (p_sa_mad->comp_mask & IB_PR_COMPMASK_SERVICEID) !=
+	     IB_PR_COMPMASK_SERVICEID) {
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_INSUF_COMPS);
+		goto Exit;
+	}
+
 	cl_qlist_init(&pr_list);
 
 	/*
@@ -1775,7 +1790,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Unicast destination requested\n");
 
-	if (pr_rcv_get_end_points(sa, p_sa_mad,
+	if (osm_pr_get_end_points(sa, p_sa_mad,
 				  &p_src_alias_guid, &p_dest_alias_guid,
 				  &p_src_port, &p_dest_port,
 				  &p_sgid, &p_dgid) != IB_SA_MAD_STATUS_SUCCESS)
@@ -1786,11 +1801,11 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 	 */
 	if (p_src_alias_guid) {
 		if (p_dest_alias_guid)
-			pr_rcv_process_pair(sa, p_sa_mad, requester_port,
+			osm_pr_process_pair(sa, p_sa_mad, requester_port,
 					    p_src_alias_guid, p_dest_alias_guid,
 					    p_sgid, p_dgid, &pr_list);
 		else if (!p_dest_port)
-			pr_rcv_process_half(sa, p_sa_mad, requester_port,
+			osm_pr_process_half(sa, p_sa_mad, requester_port,
 					    p_src_alias_guid, NULL, p_sgid,
 					    p_dgid, &pr_list);
 		else {
@@ -1800,7 +1815,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 			       (osm_alias_guid_t *) cl_qmap_end(&sa->p_subn->alias_port_guid_tbl)) {
 				if (osm_get_port_by_alias_guid(sa->p_subn, p_dest_alias_guid->alias_guid) ==
 				    p_dest_port)
-					pr_rcv_process_pair(sa, p_sa_mad,
+					osm_pr_process_pair(sa, p_sa_mad,
 							    requester_port,
 							    p_src_alias_guid,
 							    p_dest_alias_guid,
@@ -1815,7 +1830,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 		}
 	} else {
 		if (p_dest_alias_guid)
-			pr_rcv_process_half(sa, p_sa_mad, requester_port,
+			osm_pr_process_half(sa, p_sa_mad, requester_port,
 					    NULL, p_dest_alias_guid, p_sgid,
 					    p_dgid, &pr_list);
 		else if (!p_src_port && !p_dest_port)
@@ -1832,7 +1847,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 				if (osm_get_port_by_alias_guid(sa->p_subn,
 							       p_src_alias_guid->alias_guid) ==
 				    p_src_port)
-					pr_rcv_process_half(sa, p_sa_mad,
+					osm_pr_process_half(sa, p_sa_mad,
 							    requester_port,
 							    p_src_alias_guid,
 							    NULL, p_sgid,
@@ -1847,7 +1862,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 				if (osm_get_port_by_alias_guid(sa->p_subn,
 							       p_dest_alias_guid->alias_guid) ==
 				    p_dest_port)
-					pr_rcv_process_half(sa, p_sa_mad,
+					osm_pr_process_half(sa, p_sa_mad,
 							    requester_port,
 							    NULL,
 							    p_dest_alias_guid,
@@ -1870,7 +1885,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 						if (osm_get_port_by_alias_guid(sa->p_subn,
 									       p_dest_alias_guid->alias_guid) ==
 						    p_dest_port)
-						pr_rcv_process_pair(sa,
+						osm_pr_process_pair(sa,
 								    p_sa_mad,
 								    requester_port,
 								    p_src_alias_guid,

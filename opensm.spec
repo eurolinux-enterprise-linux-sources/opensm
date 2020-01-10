@@ -1,5 +1,5 @@
 Name: opensm
-Version: 3.3.15
+Version: 3.3.17
 Release: 1%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 Group: System Environment/Daemons
@@ -11,7 +11,7 @@ Source2: opensm.initd
 Source3: opensm.sysconfig
 Patch0: opensm-3.3.13-prefix.patch
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.9, libtool, bison, flex, byacc
+BuildRequires: libibmad-devel = 1.3.11, libtool, bison, flex, byacc
 Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
 ExcludeArch: s390 s390x
 
@@ -50,7 +50,7 @@ Static version of opensm libraries
 %patch0 -p1 -b .prefix
 
 %build
-%configure --with-opensm-conf-sub-dir=rdma
+%configure CFLAGS="$CFLAGS -fno-strict-aliasing" --with-opensm-conf-sub-dir=rdma
 make %{?_smp_mflags}
 cd opensm
 ./opensm -c ../opensm.conf
@@ -97,7 +97,7 @@ fi
 %config(noreplace) %{_sysconfdir}/logrotate.d/opensm
 %config(noreplace) %{_sysconfdir}/rdma/opensm.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/opensm
-%doc doc/ AUTHORS COPYING ChangeLog INSTALL README NEWS
+%doc doc/* AUTHORS COPYING ChangeLog INSTALL README NEWS
 
 %files libs
 %defattr(-,root,root,-)
@@ -113,6 +113,10 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Tue Jun 17 2014 Doug Ledford <dledford@redhat.com> - 3.3.17-1
+- Update to latest upstream release
+- Resolves: bz1082730
+
 * Mon Oct 15 2012 Doug Ledford <dledford@redhat.com> - 3.3.15-1
 - Update to latest upstream source (adds more SRIOV support)
 - Fix init script when no config files are present

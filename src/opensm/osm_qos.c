@@ -91,8 +91,16 @@ static qos_mad_item_t *osm_qos_mad_create(IN osm_sm_t * sm,
 	osm_madw_context_t context;
 	osm_madw_t *p_madw;
 	osm_node_t *p_node;
+	osm_physp_t *physp0;
+	ib_net64_t m_key;
 
 	p_node = osm_physp_get_node_ptr(p);
+	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH &&
+	    osm_physp_get_port_num(p) != 0) {
+		physp0 = osm_node_get_physp_ptr(p_node, 0);
+		m_key = ib_port_info_get_m_key(&physp0->port_info);
+	} else
+		m_key = ib_port_info_get_m_key(&p->port_info);
 
 	switch (attr_id){
 	case IB_MAD_ATTR_SLVL_TABLE:
@@ -118,6 +126,7 @@ static qos_mad_item_t *osm_qos_mad_create(IN osm_sm_t * sm,
 	p_madw = osm_prepare_req_set(sm, osm_physp_get_dr_path_ptr(p),
 				     p_data, data_size,
 				     attr_id, cl_hton32(attr_mod),
+				     FALSE, m_key,
 				     CL_DISP_MSGID_NONE, &context);
 
 	if (p_madw == NULL) {
@@ -144,6 +153,7 @@ static ib_api_status_t vlarb_update_table_block(osm_sm_t * sm,
 						unsigned block_num,
 						cl_qlist_t *mad_list)
 {
+	struct osm_routing_engine *re = sm->p_subn->p_osm->routing_engine_used;
 	ib_vl_arb_table_t block;
 	uint32_t attr_mod;
 	unsigned vl_mask, i;
@@ -152,6 +162,11 @@ static ib_api_status_t vlarb_update_table_block(osm_sm_t * sm,
 
 	memset(&block, 0, sizeof(block));
 	memcpy(&block, table_block, block_length * sizeof(block.vl_entry[0]));
+
+	if (re && re->update_vlarb)
+		re->update_vlarb(re->context, p, port_num, &block,
+				 block_length, block_num);
+
 	for (i = 0; i < block_length; i++)
 		block.vl_entry[i].vl &= vl_mask;
 

@@ -1,7 +1,9 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
+ * Copyright (C) 2012-2013 Tokyo Institute of Technology. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -35,13 +37,13 @@
 
 /*
  * Abstract:
- *	Defines sized datatypes for Linux User mode
- *  exported sizes are int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t
- *  int64_t, uint64_t.
+ * 	Declaration of osm_mcast_work_obj_t.
+ * 	Provide access to a mcast function which searches the root swicth for
+ * 	a spanning tree.
  */
 
-#ifndef _CL_TYPES_OSD_H_
-#define _CL_TYPES_OSD_H_
+#ifndef _OSM_MCAST_MGR_H_
+#define _OSM_MCAST_MGR_H_
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -52,46 +54,19 @@
 #endif				/* __cplusplus */
 
 BEGIN_C_DECLS
-#if defined (_DEBUG_)
-#ifdef __IA64__
-#define cl_break() asm("   break 0")
-#else				/* __IA64__ */
-#define cl_break() asm("   int $3")
-#endif				/* __IA64__ */
-#else				/* _DEBUG_ */
-#define cl_break
-#endif
-#include <inttypes.h>
-#include <assert.h>
-#include <string.h>
 
-/*
- * Branch prediction hints
- */
-#if defined(HAVE_BUILTIN_EXPECT)
-#define PT(exp)    __builtin_expect( ((uintptr_t)(exp)), 1 )
-#define PF(exp)    __builtin_expect( ((uintptr_t)(exp)), 0 )
-#else
-#define PT(exp)    (exp)
-#define PF(exp)    (exp)
-#endif
+typedef struct osm_mcast_work_obj {
+	cl_list_item_t list_item;
+	osm_port_t *p_port;
+	cl_map_item_t map_item;
+} osm_mcast_work_obj_t;
 
-#if defined (_DEBUG_)
-#define CL_ASSERT	assert
-#else				/* _DEBUG_ */
-#define CL_ASSERT( __exp__ )
-#endif				/* _DEBUG_ */
-/*
- * Types not explicitly defined are native to the platform.
- */
-typedef int boolean_t;
-typedef volatile int32_t atomic32_t;
+int osm_mcast_make_port_list_and_map(cl_qlist_t * list, cl_qmap_t * map,
+				     osm_mgrp_box_t * mbox);
 
-#ifndef NULL
-#define NULL	(void*)0
-#endif
+void osm_mcast_drop_port_list(cl_qlist_t * list);
 
-#define UNUSED_PARAM( P )
+osm_switch_t * osm_mcast_mgr_find_root_switch(osm_sm_t * sm, cl_qlist_t * list);
 
 END_C_DECLS
-#endif				/* _CL_TYPES_OSD_H_ */
+#endif				/* _OSM_MCAST_MGR_H_ */

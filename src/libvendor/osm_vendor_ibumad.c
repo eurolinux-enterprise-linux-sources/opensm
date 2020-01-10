@@ -133,6 +133,7 @@ static void clear_madw(osm_vendor_t * p_vend)
 {
 	umad_match_t *m, *e, *old_m;
 	ib_net64_t old_tid;
+	uint8_t old_mgmt_class;
 
 	OSM_LOG_ENTER(p_vend->p_log);
 	pthread_mutex_lock(&p_vend->match_tbl_mutex);
@@ -140,14 +141,16 @@ static void clear_madw(osm_vendor_t * p_vend)
 		if (m->tid) {
 			old_m = m;
 			old_tid = m->tid;
+			old_mgmt_class = m->mgmt_class;
 			m->tid = 0;
 			osm_mad_pool_put(((osm_umad_bind_info_t
 					   *) ((osm_madw_t *) m->v)->h_bind)->
 					 p_mad_pool, m->v);
 			pthread_mutex_unlock(&p_vend->match_tbl_mutex);
 			OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5401: "
-				"evicting entry %p (tid was 0x%" PRIx64 ")\n",
-				old_m, cl_ntoh64(old_tid));
+				"evicting entry %p (tid was 0x%" PRIx64
+				" mgmt class 0x%x)\n",
+				old_m, cl_ntoh64(old_tid), old_mgmt_class);
 			goto Exit;
 		}
 	}
@@ -285,7 +288,7 @@ static void *umad_receiver(void *p_ptr)
 	osm_umad_bind_info_t *p_bind;
 	osm_mad_addr_t osm_addr;
 	osm_madw_t *p_madw, *p_req_madw;
-	ib_mad_t *mad;
+	ib_mad_t *p_mad, *p_req_mad;
 	void *umad = 0;
 	int mad_agent, length;
 
@@ -337,11 +340,11 @@ static void *umad_receiver(void *p_ptr)
 			continue;
 		}
 
-		mad = (ib_mad_t *) umad_get_mad(umad);
+		p_mad = (ib_mad_t *) umad_get_mad(umad);
 
 		ib_mad_addr_conv(umad, &osm_addr,
-				 mad->mgmt_class == IB_MCLASS_SUBN_LID ||
-				 mad->mgmt_class == IB_MCLASS_SUBN_DIR);
+				 p_mad->mgmt_class == IB_MCLASS_SUBN_LID ||
+				 p_mad->mgmt_class == IB_MCLASS_SUBN_DIR);
 
 		if (!(p_madw = osm_mad_pool_get(p_bind->p_mad_pool,
 						(osm_bind_handle_t) p_bind,
@@ -364,15 +367,15 @@ static void *umad_receiver(void *p_ptr)
 
 		/* if status != 0 then we are handling recv timeout on send */
 		if (umad_status(p_madw->vend_wrap.umad)) {
-			if (!(p_req_madw = get_madw(p_vend, &mad->trans_id,
-						    mad->mgmt_class))) {
+			if (!(p_req_madw = get_madw(p_vend, &p_mad->trans_id,
+						    p_mad->mgmt_class))) {
 				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR,
 					"ERR 5412: "
 					"Failed to obtain request madw for timed out MAD"
 					" (class=0x%X method=0x%X attr=0x%X tid=0x%"PRIx64") -- dropping\n",
-					mad->mgmt_class, mad->method,
-					cl_ntoh16(mad->attr_id),
-					cl_ntoh64(mad->trans_id));
+					p_mad->mgmt_class, p_mad->method,
+					cl_ntoh16(p_mad->attr_id),
+					cl_ntoh64(p_mad->trans_id));
 			} else {
 				p_req_madw->status = IB_TIMEOUT;
 				log_send_error(p_vend, p_req_madw);
@@ -391,30 +394,71 @@ static void *umad_receiver(void *p_ptr)
 		}
 
 		p_req_madw = 0;
-		if (ib_mad_is_response(mad) &&
-		    !(p_req_madw = get_madw(p_vend, &mad->trans_id,
-					    mad->mgmt_class))) {
-			OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5413: "
-				"Failed to obtain request madw for received MAD"
-				" (class=0x%X method=0x%X attr=0x%X tid=0x%"PRIx64") -- dropping\n",
-				mad->mgmt_class, mad->method,
-				cl_ntoh16((mad)->attr_id),
-				cl_ntoh64(mad->trans_id));
-			osm_mad_pool_put(p_bind->p_mad_pool, p_madw);
-			continue;
+		if (ib_mad_is_response(p_mad)) {
+			p_req_madw = get_madw(p_vend, &p_mad->trans_id,
+					      p_mad->mgmt_class);
+			if (PF(!p_req_madw)) {
+				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR,
+					"ERR 5413: Failed to obtain request "
+					"madw for received MAD "
+					"(class=0x%X method=0x%X attr=0x%X "
+					"tid=0x%"PRIx64") -- dropping\n",
+					p_mad->mgmt_class, p_mad->method,
+					cl_ntoh16(p_mad->attr_id),
+					cl_ntoh64(p_mad->trans_id));
+				osm_mad_pool_put(p_bind->p_mad_pool, p_madw);
+				continue;
+			}
+
+			/*
+			 * Check that request MAD was really a request,
+			 * and make sure that attribute ID, attribute
+			 * modifier and transaction ID are the same in
+			 * request and response.
+			 *
+			 * Exception for o15-0.2-1.11:
+			 * SA response to a SubnAdmGetMulti() containing a
+			 * MultiPathRecord shall have PathRecord attribute ID.
+			 */
+			p_req_mad = osm_madw_get_mad_ptr(p_req_madw);
+			if (PF(ib_mad_is_response(p_req_mad) ||
+			       (p_mad->attr_id != p_req_mad->attr_id &&
+                                !(p_mad->mgmt_class == IB_MCLASS_SUBN_ADM &&
+                                  p_req_mad->attr_id ==
+					IB_MAD_ATTR_MULTIPATH_RECORD &&
+                                  p_mad->attr_id == IB_MAD_ATTR_PATH_RECORD)) ||
+			       p_mad->attr_mod != p_req_mad->attr_mod ||
+			       p_mad->trans_id != p_req_mad->trans_id)) {
+				OSM_LOG(p_vend->p_log, OSM_LOG_ERROR,
+					"ERR 541A: "
+					"Response MAD validation failed "
+					"(request attr=0x%X modif=0x%X "
+					"tid=0x%"PRIx64", "
+					"response attr=0x%X modif=0x%X "
+					"tid=0x%"PRIx64") -- dropping\n",
+					cl_ntoh16(p_req_mad->attr_id),
+					cl_ntoh32(p_req_mad->attr_mod),
+					cl_ntoh64(p_req_mad->trans_id),
+					cl_ntoh16(p_mad->attr_id),
+					cl_ntoh32(p_mad->attr_mod),
+					cl_ntoh64(p_mad->trans_id));
+				osm_mad_pool_put(p_bind->p_mad_pool, p_madw);
+				continue;
+			}
 		}
+
 #ifndef VENDOR_RMPP_SUPPORT
-		if ((mad->mgmt_class != IB_MCLASS_SUBN_DIR) &&
-		    (mad->mgmt_class != IB_MCLASS_SUBN_LID) &&
-		    (ib_rmpp_is_flag_set((ib_rmpp_mad_t *) mad,
+		if ((p_mad->mgmt_class != IB_MCLASS_SUBN_DIR) &&
+		    (p_mad->mgmt_class != IB_MCLASS_SUBN_LID) &&
+		    (ib_rmpp_is_flag_set((ib_rmpp_mad_t *) p_mad,
 					 IB_RMPP_FLAG_ACTIVE))) {
 			OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5414: "
 				"class 0x%x method 0x%x RMPP version %d type "
 				"%d flags 0x%x received -- dropping\n",
-				mad->mgmt_class, mad->method,
-				((ib_rmpp_mad_t *) mad)->rmpp_version,
-				((ib_rmpp_mad_t *) mad)->rmpp_type,
-				((ib_rmpp_mad_t *) mad)->rmpp_flags);
+				p_mad->mgmt_class, p_mad->method,
+				((ib_rmpp_mad_t *) p_mad)->rmpp_version,
+				((ib_rmpp_mad_t *) p_mad)->rmpp_type,
+				((ib_rmpp_mad_t *) p_mad)->rmpp_flags);
 			osm_mad_pool_put(p_bind->p_mad_pool, p_madw);
 			continue;
 		}
@@ -538,7 +582,7 @@ osm_vendor_t *osm_vendor_new(IN osm_log_t * const p_log,
 
 	memset(p_vend, 0, sizeof(*p_vend));
 
-	if (osm_vendor_init(p_vend, p_log, timeout) < 0) {
+	if (osm_vendor_init(p_vend, p_log, timeout) != IB_SUCCESS) {
 		free(p_vend);
 		p_vend = NULL;
 	}
@@ -602,6 +646,7 @@ osm_vendor_get_all_port_attr(IN osm_vendor_t * const p_vend,
 				attr->lid = ca.ports[j]->base_lid;
 				attr->port_num = ca.ports[j]->portnum;
 				attr->sm_lid = ca.ports[j]->sm_lid;
+				attr->sm_sl = ca.ports[j]->sm_sl;
 				attr->link_state = ca.ports[j]->state;
 				if (attr->num_pkeys && attr->p_pkey_table) {
 					if (attr->num_pkeys > ca.ports[j]->pkeys_size)
@@ -611,6 +656,11 @@ osm_vendor_get_all_port_attr(IN osm_vendor_t * const p_vend,
 							cl_hton16(ca.ports[j]->pkeys[k]);
 				}
 				attr->num_pkeys = ca.ports[j]->pkeys_size;
+				if (attr->num_gids && attr->p_gid_table) {
+					attr->p_gid_table[0].unicast.prefix = cl_hton64(ca.ports[j]->gid_prefix);
+					attr->p_gid_table[0].unicast.interface_id = cl_hton64(ca.ports[j]->port_guid);
+					attr->num_gids = 1;
+				}
 				attr++;
 				if (attr - p_attr_array > *p_num_ports) {
 					done = 1;
@@ -1093,8 +1143,10 @@ Resp:
 			     resp_expected ? p_bind->timeout : 0,
 			     p_bind->max_retries)) < 0) {
 		OSM_LOG(p_vend->p_log, OSM_LOG_ERROR, "ERR 5430: "
-			"Send p_madw = %p of size %d TID 0x%" PRIx64 " failed %d (%m)\n",
-			p_madw, sent_mad_size, tid, ret);
+			"Send p_madw = %p of size %d, Class 0x%x, Method 0x%X, "
+			"Attr 0x%X, TID 0x%" PRIx64 " failed %d (%m)\n",
+			p_madw, sent_mad_size, p_mad->mgmt_class,
+			p_mad->method, cl_ntoh16(p_mad->attr_id), tid, ret);
 		if (resp_expected) {
 			get_madw(p_vend, &p_mad->trans_id,
 				 p_mad->mgmt_class);	/* remove from aging table */

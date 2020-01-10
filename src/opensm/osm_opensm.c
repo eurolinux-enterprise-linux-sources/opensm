@@ -243,12 +243,18 @@ void osm_opensm_construct(IN osm_opensm_t * p_osm)
 	memset(p_osm, 0, sizeof(*p_osm));
 	p_osm->osm_version = OSM_VERSION;
 	osm_subn_construct(&p_osm->subn);
+	osm_db_construct(&p_osm->db);
+	osm_log_construct(&p_osm->log);
+}
+
+void osm_opensm_construct_finish(IN osm_opensm_t * p_osm)
+{
 	osm_sm_construct(&p_osm->sm);
 	osm_sa_construct(&p_osm->sa);
-	osm_db_construct(&p_osm->db);
 	osm_mad_pool_construct(&p_osm->mad_pool);
+	p_osm->mad_pool_constructed = TRUE;
 	osm_vl15_construct(&p_osm->vl15);
-	osm_log_construct(&p_osm->log);
+	p_osm->vl15_constructed = TRUE;
 }
 
 static void destroy_routing_engines(osm_opensm_t *osm)
@@ -312,7 +318,8 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 	cl_disp_shutdown(&p_osm->disp);
 
 	/* dump SA DB */
-	if (p_osm->subn.opt.sa_db_dump)
+	if ((p_osm->sm.p_subn->sm_state == IB_SMINFO_STATE_MASTER) &&
+	     p_osm->subn.opt.sa_db_dump)
 		osm_sa_db_file_dump(p_osm);
 
 	/* do the destruction in reverse order as init */
@@ -324,9 +331,17 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 	osm_perfmgr_destroy(&p_osm->perfmgr);
 #endif				/* ENABLE_OSM_PERF_MGR */
 	osm_congestion_control_destroy(&p_osm->cc);
+}
+
+void osm_opensm_destroy_finish(IN osm_opensm_t * p_osm)
+{
 	osm_db_destroy(&p_osm->db);
-	osm_vl15_destroy(&p_osm->vl15, &p_osm->mad_pool);
-	osm_mad_pool_destroy(&p_osm->mad_pool);
+	if (p_osm->vl15_constructed && p_osm->mad_pool_constructed)
+		osm_vl15_destroy(&p_osm->vl15, &p_osm->mad_pool);
+	if (p_osm->mad_pool_constructed)
+		osm_mad_pool_destroy(&p_osm->mad_pool);
+	p_osm->vl15_constructed = FALSE;
+	p_osm->mad_pool_constructed = FALSE;
 	osm_vendor_delete(&p_osm->p_vendor);
 	osm_subn_destroy(&p_osm->subn);
 	cl_disp_destroy(&p_osm->disp);
@@ -336,8 +351,8 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 #else
 	cl_event_destroy(&p_osm->stats.event);
 #endif
-	close_node_name_map(p_osm->node_name_map);
-
+	if (p_osm->node_name_map)
+		close_node_name_map(p_osm->node_name_map);
 	cl_plock_destroy(&p_osm->lock);
 
 	osm_log_destroy(&p_osm->log);
@@ -354,7 +369,8 @@ static void load_plugins(osm_opensm_t *osm, const char *plugin_names)
 		epi = osm_epi_construct(osm, name);
 		if (!epi)
 			osm_log_v2(&osm->log, OSM_LOG_ERROR, FILE_ID,
-				   "cannot load plugin \'%s\'\n", name);
+				   "ERR 1000: cannot load plugin \'%s\'\n",
+				   name);
 		else
 			cl_qlist_insert_tail(&osm->plugin_list, &epi->list);
 		name = strtok_r(NULL, " \t\n", &p);
@@ -427,10 +443,22 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 
 	p_osm->p_vendor =
 	    osm_vendor_new(&p_osm->log, p_opt->transaction_timeout);
-	if (p_osm->p_vendor == NULL) {
+	if (p_osm->p_vendor == NULL)
 		status = IB_INSUFFICIENT_RESOURCES;
-		goto Exit;
-	}
+
+Exit:
+	OSM_LOG(&p_osm->log, OSM_LOG_FUNCS, "]\n");	/* Format Waived */
+	return status;
+}
+
+ib_api_status_t osm_opensm_init_finish(IN osm_opensm_t * p_osm,
+				       IN const osm_subn_opt_t * p_opt)
+{
+	ib_api_status_t status;
+
+	osm_opensm_construct_finish(p_osm);
+
+	p_osm->subn.sm_port_guid = p_opt->guid;
 
 	status = osm_mad_pool_init(&p_osm->mad_pool);
 	if (status != IB_SUCCESS)

@@ -92,7 +92,7 @@ pkey_mgr_process_physical_port(IN osm_log_t * p_log,
 	osm_node_t *p_node = osm_physp_get_node_ptr(p_physp);
 	osm_pkey_tbl_t *p_pkey_tbl;
 	ib_net16_t *p_orig_pkey;
-	char *stat = NULL;
+	const char *stat = NULL;
 	osm_pending_pkey_t *p_pending;
 
 	p_pkey_tbl = &p_physp->pkeys;
@@ -178,18 +178,26 @@ pkey_mgr_update_pkey_entry(IN osm_sm_t * sm,
 {
 	osm_madw_context_t context;
 	osm_node_t *p_node = osm_physp_get_node_ptr(p_physp);
+	osm_physp_t *physp0;
 	uint32_t attr_mod;
+	ib_net64_t m_key;
 
 	context.pkey_context.node_guid = osm_node_get_node_guid(p_node);
 	context.pkey_context.port_guid = osm_physp_get_port_guid(p_physp);
 	context.pkey_context.set_method = TRUE;
 	attr_mod = block_index;
-	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH)
+	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH &&
+	    osm_physp_get_port_num(p_physp) != 0) {
 		attr_mod |= osm_physp_get_port_num(p_physp) << 16;
+		physp0 = osm_node_get_physp_ptr(p_node, 0);
+		m_key = ib_port_info_get_m_key(&physp0->port_info);
+	} else
+		m_key = ib_port_info_get_m_key(&p_physp->port_info);
 	return osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 			   (uint8_t *) block, sizeof(*block),
 			   IB_MAD_ATTR_P_KEY_TABLE,
-			   cl_hton32(attr_mod), CL_DISP_MSGID_NONE, &context);
+			   cl_hton32(attr_mod), FALSE, m_key,
+			   CL_DISP_MSGID_NONE, &context);
 }
 
 static ib_api_status_t
@@ -200,6 +208,8 @@ pkey_mgr_enforce_partition(IN osm_log_t * p_log, osm_sm_t * sm,
 	osm_madw_context_t context;
 	uint8_t payload[IB_SMP_DATA_SIZE];
 	ib_port_info_t *p_pi;
+	ib_net64_t m_key;
+	osm_physp_t *physp0;
 	ib_api_status_t status;
 	uint8_t enforce_bits;
 
@@ -234,17 +244,22 @@ pkey_mgr_enforce_partition(IN osm_log_t * p_log, osm_sm_t * sm,
 	p_pi->state_info2 = 0;
 	ib_port_info_set_port_state(p_pi, IB_LINK_NO_CHANGE);
 
+	physp0 = osm_node_get_physp_ptr(p_physp->p_node, 0);
+	m_key = ib_port_info_get_m_key(&physp0->port_info);
+
 	context.pi_context.node_guid =
 	    osm_node_get_node_guid(osm_physp_get_node_ptr(p_physp));
 	context.pi_context.port_guid = osm_physp_get_port_guid(p_physp);
 	context.pi_context.set_method = TRUE;
 	context.pi_context.light_sweep = FALSE;
 	context.pi_context.active_transition = FALSE;
+	context.pi_context.client_rereg = FALSE;
 
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 			     payload, sizeof(payload),
 			     IB_MAD_ATTR_PORT_INFO,
 			     cl_hton32(osm_physp_get_port_num(p_physp)),
+			     FALSE, m_key,
 			     CL_DISP_MSGID_NONE, &context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0511: "
@@ -265,24 +280,30 @@ pkey_mgr_enforce_partition(IN osm_log_t * p_log, osm_sm_t * sm,
 }
 
 static void clear_accum_pkey_index(osm_pkey_tbl_t * p_pkey_tbl,
-                                   uint16_t pkey_index)
+				   uint16_t pkey_index)
 {
 	uint16_t pkey_idx_bias, pkey_idx;
-	uint32_t i;
 	void *ptr;
 	uintptr_t pkey_idx_ptr;
+	cl_map_iterator_t map_iter, map_iter_temp;
+
+	map_iter = cl_map_head(&p_pkey_tbl->accum_pkeys);
 
 	pkey_idx_bias = pkey_index + 1; // adjust for pkey index bias in accum_pkeys
-	for (i = 1; i < cl_ptr_vector_get_size(&p_pkey_tbl->accum_pkeys); i++) {
-		ptr = cl_ptr_vector_get(&p_pkey_tbl->accum_pkeys, i);
-		if (ptr != NULL) {
-			pkey_idx_ptr = (uintptr_t) ptr;
-			pkey_idx = pkey_idx_ptr;
-			if (pkey_idx == pkey_idx_bias) {
-				osm_pkey_tbl_clear_accum_pkeys(p_pkey_tbl, i);
-				break;
-			}
+
+	while (map_iter != cl_map_end(&p_pkey_tbl->accum_pkeys)) {
+		map_iter_temp = cl_map_next(map_iter);
+		ptr = (uint16_t *) cl_map_obj(map_iter);
+		CL_ASSERT(ptr);
+		pkey_idx_ptr = (uintptr_t) ptr;
+		pkey_idx = pkey_idx_ptr;
+		if (pkey_idx == pkey_idx_bias) {
+			cl_map_remove_item(&p_pkey_tbl->accum_pkeys, map_iter);
+			if (p_pkey_tbl->last_pkey_idx == pkey_idx)
+				osm_pkey_find_last_accum_pkey_index(p_pkey_tbl);
+			break;
 		}
+		map_iter = map_iter_temp;
 	}
 }
 
@@ -362,17 +383,14 @@ static int pkey_mgr_update_port(osm_log_t * p_log, osm_sm_t * sm,
 			pkey_index = p_pending->index;
 			found = TRUE;
 		} else {
-			if (p_pending->pkey < cl_ptr_vector_get_size(&p_pkey_tbl->accum_pkeys)) {
-				ptr = cl_ptr_vector_get(&p_pkey_tbl->accum_pkeys,
-							p_pending->pkey);
-				if (ptr != NULL) {
-					pkey_idx_ptr = (uintptr_t) ptr;
-					pkey_idx = pkey_idx_ptr;
-					pkey_idx--; /* adjust pkey index for bias */
-					block_index = pkey_idx / IB_NUM_PKEY_ELEMENTS_IN_BLOCK;
-					pkey_index = pkey_idx % IB_NUM_PKEY_ELEMENTS_IN_BLOCK;
-					found = TRUE;
-				}
+			ptr = cl_map_get(&p_pkey_tbl->accum_pkeys,p_pending->pkey);
+			if (ptr != NULL) {
+				pkey_idx_ptr = (uintptr_t) ptr;
+				pkey_idx = pkey_idx_ptr;
+				pkey_idx--; /* adjust pkey index for bias */
+				block_index = pkey_idx / IB_NUM_PKEY_ELEMENTS_IN_BLOCK;
+				pkey_index = pkey_idx % IB_NUM_PKEY_ELEMENTS_IN_BLOCK;
+				found = TRUE;
 			}
 
 			if (!found) {
@@ -481,7 +499,7 @@ static int pkey_mgr_update_port(osm_log_t * p_log, osm_sm_t * sm,
 					       block_index);
 		if (status == IB_SUCCESS)
 			OSM_LOG(p_log, OSM_LOG_DEBUG,
-				"Updated pkey table block %d for node 0x%016"
+				"Updated pkey table block %u for node 0x%016"
 				PRIx64 " port %u (%s)\n", block_index,
 				cl_ntoh64(osm_node_get_node_guid(p_node)),
 				osm_physp_get_port_num(p_physp),
@@ -489,7 +507,7 @@ static int pkey_mgr_update_port(osm_log_t * p_log, osm_sm_t * sm,
 		else {
 			OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0506: "
 				"pkey_mgr_update_pkey_entry() failed to update "
-				"pkey table block %d for node 0x%016" PRIx64
+				"pkey table block %u for node 0x%016" PRIx64
 				" port %u (%s)\n", block_index,
 				cl_ntoh64(osm_node_get_node_guid(p_node)),
 				osm_physp_get_port_num(p_physp),
@@ -546,7 +564,7 @@ static int update_peer_block(osm_log_t * p_log, osm_sm_t * sm,
 					       peer_block_idx) != IB_SUCCESS) {
 			OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0509: "
 				"pkey_mgr_update_pkey_entry() failed to update "
-				"pkey table block %d for node 0x%016"
+				"pkey table block %u for node 0x%016"
 				PRIx64 " port %u (%s)\n",
 				peer_block_idx,
 				cl_ntoh64(osm_node_get_node_guid(p_node)),

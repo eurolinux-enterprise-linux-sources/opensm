@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2013 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 2008 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2007 The Regents of the University of California.
  *
@@ -39,6 +40,7 @@
 #include <iba/ib_types.h>
 #include <complib/cl_qlist.h>
 #include <opensm/osm_config.h>
+#include <opensm/osm_switch.h>
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -77,6 +79,7 @@ typedef enum {
 	OSM_EVENT_ID_UCAST_ROUTING_DONE,
 	OSM_EVENT_ID_STATE_CHANGE,
 	OSM_EVENT_ID_SA_DB_DUMPED,
+	OSM_EVENT_ID_LFT_CHANGE,
 	OSM_EVENT_ID_MAX
 } osm_epi_event_id_t;
 
@@ -85,6 +88,24 @@ typedef struct osm_epi_port_id {
 	uint8_t port_num;
 	char node_name[OSM_EPI_NODE_NAME_LEN];
 } osm_epi_port_id_t;
+
+typedef enum {
+	LFT_CHANGED_LFT_TOP = (1 << 0),
+	LFT_CHANGED_BLOCK = (1 << 1)
+} osm_epi_lft_change_flags_t;
+
+typedef enum {
+	UCAST_ROUTING_NONE,
+	UCAST_ROUTING_HEAVY_SWEEP,
+	UCAST_ROUTING_REROUTE
+} osm_epi_ucast_routing_flags_t;
+
+typedef struct osm_epi_lft_change_event {
+	osm_switch_t *p_sw;
+	osm_epi_lft_change_flags_t flags;
+	uint16_t lft_top;
+	uint32_t block_num;
+} osm_epi_lft_change_event_t;
 
 /** =========================================================================
  * Port error event

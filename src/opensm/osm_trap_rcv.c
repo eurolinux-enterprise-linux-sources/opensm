@@ -90,7 +90,7 @@ static osm_physp_t *get_physp_by_lid_and_num(IN osm_sm_t * sm,
 	if (!p_port)
 		return NULL;
 
-	if (osm_node_get_num_physp(p_port->p_node) < num)
+	if (osm_node_get_num_physp(p_port->p_node) <= num)
 		return NULL;
 
 	return osm_node_get_physp_ptr(p_port->p_node, num);
@@ -113,6 +113,8 @@ static uint64_t aging_tracker_callback(IN uint64_t key, IN uint32_t num_regs,
 	lid = (ib_net16_t) ((key & 0x0000FFFF00000000ULL) >> 32);
 	port_num = (uint8_t) ((key & 0x00FF000000000000ULL) >> 48);
 
+	CL_PLOCK_ACQUIRE(sm->p_lock);
+
 	p_physp = get_physp_by_lid_and_num(sm, lid, port_num);
 	if (!p_physp)
 		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
@@ -129,6 +131,7 @@ static uint64_t aging_tracker_callback(IN uint64_t key, IN uint32_t num_regs,
 		osm_physp_set_health(p_physp, TRUE);
 	}
 
+	CL_PLOCK_RELEASE(sm->p_lock);
 	OSM_LOG_EXIT(sm->p_log);
 
 	/* We want to remove the event from the tracker - so
@@ -213,6 +216,9 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
 	uint8_t payload[IB_SMP_DATA_SIZE];
 	osm_madw_context_t context;
 	ib_port_info_t *pi = (ib_port_info_t *)payload;
+	osm_physp_t *physp0;
+	osm_port_t *p_port;
+	ib_net64_t m_key;
 	ib_api_status_t status;
 
 	/* select the nearest port to master opensm */
@@ -235,13 +241,28 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
 	context.pi_context.set_method = TRUE;
 	context.pi_context.light_sweep = FALSE;
 	context.pi_context.active_transition = FALSE;
+	context.pi_context.client_rereg = FALSE;
+	if (osm_node_get_type(p->p_node) == IB_NODE_TYPE_SWITCH &&
+	    osm_physp_get_port_num(p) != 0) {
+		physp0 = osm_node_get_physp_ptr(p->p_node, 0);
+		m_key = ib_port_info_get_m_key(&physp0->port_info);
+	} else
+		m_key = ib_port_info_get_m_key(&p->port_info);
 
-	CL_PLOCK_ACQUIRE(sm->p_lock);
+	if (osm_node_get_type(p->p_node) != IB_NODE_TYPE_SWITCH) {
+		if (!pi->base_lid) {
+			p_port = osm_get_port_by_guid(sm->p_subn,
+						      osm_physp_get_port_guid(p));
+			pi->base_lid = p_port->lid;
+		}
+		pi->master_sm_base_lid = sm->p_subn->sm_base_lid;
+	}
+
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p),
 			   payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
 			   cl_hton32(osm_physp_get_port_num(p)),
+			   FALSE, m_key,
 			   CL_DISP_MSGID_NONE, &context);
-	CL_PLOCK_RELEASE(sm->p_lock);
 	return status;
 }
 
@@ -254,9 +275,9 @@ static void log_trap_info(osm_log_t *p_log, ib_mad_notice_attr_t *p_ntci,
 	if (ib_notice_is_generic(p_ntci)) {
 		char str[32];
 
-		if ((p_ntci->g_or_v.generic.trap_num == CL_HTON16(129)) ||
-		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(130)) ||
-		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(131)))
+		if ((p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_LINK_INTEGRITY_THRESHOLD_TRAP)) ||
+		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_BUFFER_OVERRUN_THRESHOLD_TRAP)) ||
+		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_WATCHDOG_TIMER_EXPIRED_TRAP)))
 			snprintf(str, sizeof(str), " Port %u",
 				 p_ntci->data_details.ntc_129_131.port_num);
 		else
@@ -272,8 +293,8 @@ static void log_trap_info(osm_log_t *p_log, ib_mad_notice_attr_t *p_ntci,
 			cl_ntoh32(ib_notice_get_prod_type(p_ntci)),
 			ib_get_producer_type_str(ib_notice_get_prod_type(p_ntci)),
 			cl_hton16(source_lid), str, cl_ntoh64(trans_id));
-		if ((p_ntci->g_or_v.generic.trap_num == CL_HTON16(257)) ||
-		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(258))) {
+		if ((p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_BAD_PKEY_TRAP)) ||
+		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_BAD_QKEY_TRAP))) {
 			OSM_LOG(p_log, OSM_LOG_ERROR,
 				"Bad %s_Key:0x%x on SL:%d from "
 				"LID1:%u QP1:0x%x to "
@@ -352,6 +373,9 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 	boolean_t physp_change_trap = FALSE;
 	uint64_t event_wheel_timeout = OSM_DEFAULT_TRAP_SUPRESSION_TIMEOUT;
 	boolean_t run_heavy_sweep = FALSE;
+	char buf[1024];
+	osm_dr_path_t *p_path;
+	unsigned n;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -421,11 +445,11 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 	}
 
 	osm_dump_notice_v2(sm->p_log, p_ntci, FILE_ID, OSM_LOG_VERBOSE);
-
+	CL_PLOCK_ACQUIRE(sm->p_lock);
 	p_physp = osm_get_physp_by_mad_addr(sm->p_log, sm->p_subn,
 					    &tmp_madw.mad_addr);
 	if (p_physp)
-		p_smp->m_key = p_physp->port_info.m_key;
+		p_smp->m_key = ib_port_info_get_m_key(&p_physp->port_info);
 	else
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3809: "
 			"Failed to find source physical port for trap\n");
@@ -447,9 +471,9 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 
 	if (is_gsi == FALSE) {
 		if (ib_notice_is_generic(p_ntci) &&
-		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(129) ||
-		     p_ntci->g_or_v.generic.trap_num == CL_HTON16(130) ||
-		     p_ntci->g_or_v.generic.trap_num == CL_HTON16(131))) {
+		    (p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_LINK_INTEGRITY_THRESHOLD_TRAP) ||
+		     p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_BUFFER_OVERRUN_THRESHOLD_TRAP) ||
+		     p_ntci->g_or_v.generic.trap_num == CL_HTON16(SM_WATCHDOG_TIMER_EXPIRED_TRAP))) {
 			/* If this is a trap 129, 130, or 131 - then this is a
 			 * trap signaling a change on a physical port.
 			 * Mark the physp_change_trap flag as TRUE.
@@ -513,15 +537,13 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 	/* Check for node description update. IB Spec v1.2.1 pg 823 */
 	if (!ib_notice_is_generic(p_ntci))
 		goto check_sweep;
-	if (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == 144 &&
+	if (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == SM_LOCAL_CHANGES_TRAP &&
 	    p_ntci->data_details.ntc_144.local_changes & TRAP_144_MASK_OTHER_LOCAL_CHANGES &&
 	    p_ntci->data_details.ntc_144.change_flgs & TRAP_144_MASK_NODE_DESCRIPTION_CHANGE) {
 		OSM_LOG(sm->p_log, OSM_LOG_INFO, "Trap 144 Node description update\n");
 
 		if (p_physp) {
-			CL_PLOCK_ACQUIRE(sm->p_lock);
 			osm_req_get_node_desc(sm, p_physp);
-			CL_PLOCK_RELEASE(sm->p_lock);
 			if (!(p_ntci->data_details.ntc_144.change_flgs & ~TRAP_144_MASK_NODE_DESCRIPTION_CHANGE) &&
 			    p_ntci->data_details.ntc_144.new_cap_mask == p_physp->port_info.capability_mask)
 				goto check_report;
@@ -530,12 +552,21 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 				"ERR 3812: No physical port found for "
 				"trap 144: \"node description update\"\n");
 		goto check_sweep;
-	} else if (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == 145) {
-		if (p_physp)
-			/* this assumes that trap 145 content is not broken? */
-			p_physp->p_node->node_info.sys_guid =
-				p_ntci->data_details.ntc_145.new_sys_guid;
-		else
+	} else if (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == SM_SYS_IMG_GUID_CHANGED_TRAP) {
+		if (p_physp) {
+			CL_PLOCK_RELEASE(sm->p_lock);
+			CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
+			p_physp = osm_get_physp_by_mad_addr(sm->p_log,
+							    sm->p_subn,
+							    &tmp_madw.mad_addr);
+			if (p_physp) {
+				/* this assumes that trap 145 content is not broken? */
+				p_physp->p_node->node_info.sys_guid =
+					p_ntci->data_details.ntc_145.new_sys_guid;
+			}
+			CL_PLOCK_RELEASE(sm->p_lock);
+			CL_PLOCK_ACQUIRE(sm->p_lock);
+		} else
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 				"ERR 3813: No physical port found for "
 				"trap 145: \"SystemImageGUID update\"\n");
@@ -543,6 +574,27 @@ static void trap_rcv_process_request(IN osm_sm_t * sm,
 	}
 
 check_sweep:
+	if (osm_log_is_active_v2(sm->p_log, OSM_LOG_INFO, FILE_ID)) {
+		if (ib_notice_is_generic(p_ntci) &&
+		    cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == SM_LINK_STATE_CHANGED_TRAP) {
+			p_path = (p_physp) ?
+			    osm_physp_get_dr_path_ptr(p_physp) : NULL;
+			if (p_path) {
+				n = sprintf(buf, "SM class trap %u: ",
+					    cl_ntoh16(p_ntci->g_or_v.generic.trap_num));
+				n += snprintf(buf + n, sizeof(buf) - n,
+					      "Directed Path Dump of %u hop path: "
+					      "Path = ", p_path->hop_count);
+
+				osm_dump_dr_path_as_buf(sizeof(buf) - n, p_path,
+							buf + n);
+
+				osm_log_v2(sm->p_log, OSM_LOG_INFO, FILE_ID,
+					   "%s\n", buf);
+			}
+		}
+	}
+
 	/* do a sweep if we received a trap */
 	if (sm->p_subn->opt.sweep_on_trap) {
 		/* if this is trap number 128 or run_heavy_sweep is TRUE -
@@ -552,8 +604,8 @@ check_sweep:
 		   TODO: In the future this can be changed to just getting
 		   PortInfo on this port instead of sweeping the entire subnet. */
 		if (ib_notice_is_generic(p_ntci) &&
-		    (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == 128 ||
-		     cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == 144 ||
+		    (cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == SM_LINK_STATE_CHANGED_TRAP ||
+		     cl_ntoh16(p_ntci->g_or_v.generic.trap_num) == SM_LOCAL_CHANGES_TRAP ||
 		     run_heavy_sweep)) {
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 				"Forcing heavy sweep. Received trap:%u\n",
@@ -600,9 +652,7 @@ check_report:
 	}
 
 	/* we need a lock here as the InformInfo DB must be stable */
-	CL_PLOCK_ACQUIRE(sm->p_lock);
 	status = osm_report_notice(sm->p_log, sm->p_subn, p_ntci);
-	CL_PLOCK_RELEASE(sm->p_lock);
 	if (status != IB_SUCCESS) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3803: "
 			"Error sending trap reports (%s)\n",
@@ -611,18 +661,7 @@ check_report:
 	}
 
 Exit:
-	OSM_LOG_EXIT(sm->p_log);
-}
-
-static void trap_rcv_process_response(IN osm_sm_t * sm,
-				      IN const osm_madw_t * p_madw)
-{
-
-	OSM_LOG_ENTER(sm->p_log);
-
-	OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3808: "
-		"This function is not supported yet\n");
-
+	CL_PLOCK_RELEASE(sm->p_lock);
 	OSM_LOG_EXIT(sm->p_log);
 }
 
@@ -630,7 +669,7 @@ void osm_trap_rcv_process(IN void *context, IN void *data)
 {
 	osm_sm_t *sm = context;
 	osm_madw_t *p_madw = data;
-	ib_smp_t *p_smp;
+	ib_smp_t __attribute__((unused)) *p_smp;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -638,15 +677,9 @@ void osm_trap_rcv_process(IN void *context, IN void *data)
 
 	p_smp = osm_madw_get_smp_ptr(p_madw);
 
-	/*
-	   Determine if this is a request for our own Trap
-	   or if this is a response to our request for another
-	   SM's Trap.
-	 */
-	if (ib_smp_is_response(p_smp))
-		trap_rcv_process_response(sm, p_madw);
-	else
-		trap_rcv_process_request(sm, p_madw);
+	/* Only Trap requests get here */
+	CL_ASSERT(!ib_smp_is_response(p_smp));
+	trap_rcv_process_request(sm, p_madw);
 
 	OSM_LOG_EXIT(sm->p_log);
 }

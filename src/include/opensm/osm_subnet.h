@@ -5,6 +5,7 @@
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -243,7 +244,7 @@ typedef struct osm_cct {
 * SYNOPSIS
 */
 typedef struct osm_subn_opt {
-	char *config_file;
+	const char *config_file;
 	ib_net64_t guid;
 	ib_net64_t m_key;
 	ib_net64_t sm_key;
@@ -251,6 +252,7 @@ typedef struct osm_subn_opt {
 	ib_net64_t subnet_prefix;
 	ib_net16_t m_key_lease_period;
 	uint8_t m_key_protect_bits;
+	boolean_t m_key_lookup;
 	uint32_t sweep_interval;
 	uint32_t max_wire_smps;
 	uint32_t max_wire_smps2;
@@ -315,6 +317,7 @@ typedef struct osm_subn_opt {
 	uint16_t max_reverse_hops;
 	char *ids_guid_file;
 	char *guid_routing_order_file;
+	boolean_t guid_routing_order_no_scatter;
 	char *sa_db_file;
 	boolean_t sa_db_dump;
 	char *torus_conf_file;
@@ -324,7 +327,9 @@ typedef struct osm_subn_opt {
 	boolean_t daemon;
 	boolean_t sm_inactive;
 	boolean_t babbling_port_policy;
+	boolean_t drop_event_subscriptions;
 	boolean_t use_optimized_slvl;
+	boolean_t fsync_high_avail_files;
 	osm_qos_options_t qos_options;
 	osm_qos_options_t qos_ca_options;
 	osm_qos_options_t qos_sw0_options;
@@ -356,6 +361,7 @@ typedef struct osm_subn_opt {
 	char *event_db_dump_file;
 	int perfmgr_rm_nodes;
 	boolean_t perfmgr_log_errors;
+	boolean_t perfmgr_query_cpi;
 #endif				/* ENABLE_OSM_PERF_MGR */
 	char *event_plugin_name;
 	char *event_plugin_options;
@@ -593,9 +599,16 @@ typedef struct osm_subn_opt {
 *	babbling_port_policy
 *		OpenSM will enforce its "babbling" port policy.
 *
+*	drop_event_subscriptions
+*		OpenSM will drop event subscriptions if the port goes away.
+*
 *	use_optimized_slvl
 *		Use optimized SLtoVLMappingTable programming if
 *		device indicates it supports this.
+*
+*	fsync_high_avail_files
+*		Synchronize high availability in memory files
+*		with storage.
 *
 *	perfmgr
 *		Enable or disable the performance manager
@@ -742,6 +755,7 @@ typedef struct osm_subn {
 	uint8_t min_ca_mtu;
 	uint8_t min_ca_rate;
 	uint8_t min_data_vls;
+	uint8_t min_sw_data_vls;
 	boolean_t ignore_existing_lfts;
 	boolean_t subnet_initialization_error;
 	boolean_t force_heavy_sweep;
@@ -1504,7 +1518,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt);
 *
 * SYNOPSIS
 */
-int osm_subn_parse_conf_file(char *conf_file, osm_subn_opt_t * p_opt);
+int osm_subn_parse_conf_file(const char *conf_file, osm_subn_opt_t * p_opt);
 /*
 * PARAMETERS
 *

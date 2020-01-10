@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -52,10 +53,7 @@
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_sa.h>
 
-typedef struct osm_pkey_item {
-	cl_list_item_t list_item;
-	ib_pkey_table_record_t rec;
-} osm_pkey_item_t;
+#define SA_PKEY_RESP_SIZE SA_ITEM_RESP_SIZE(pkey_rec)
 
 typedef struct osm_pkey_search_ctxt {
 	const ib_pkey_table_record_t *p_rcvd_rec;
@@ -70,13 +68,13 @@ static void sa_pkey_create(IN osm_sa_t * sa, IN osm_physp_t * p_physp,
 			   IN osm_pkey_search_ctxt_t * p_ctxt,
 			   IN uint16_t block)
 {
-	osm_pkey_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	uint16_t lid;
 	ib_pkey_table_t *tbl;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_PKEY_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4602: "
 			"rec_item alloc failed\n");
@@ -94,20 +92,20 @@ static void sa_pkey_create(IN osm_sa_t * sa, IN osm_physp_t * p_physp,
 		cl_ntoh64(osm_physp_get_port_guid(p_physp)),
 		cl_ntoh16(lid), osm_physp_get_port_num(p_physp), block);
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_PKEY_RESP_SIZE);
 
-	p_rec_item->rec.lid = lid;
-	p_rec_item->rec.block_num = block;
-	p_rec_item->rec.port_num = osm_physp_get_port_num(p_physp);
+	p_rec_item->resp.pkey_rec.lid = lid;
+	p_rec_item->resp.pkey_rec.block_num = block;
+	p_rec_item->resp.pkey_rec.port_num = osm_physp_get_port_num(p_physp);
 	/* FIXME: There are ninf.PartitionCap or swinf.PartitionEnforcementCap
 	   pkey entries so everything in that range is a valid block number
 	   even if opensm is not using it. Return 0. However things outside
-	   that range should return no entries.. Not sure how to figure that
+	   that range should return no entries. Not sure how to figure that
 	   here? The range of pkey_tbl can be less than the cap, so
 	   this falsely triggers. */
 	tbl = osm_pkey_tbl_block_get(osm_physp_get_pkey_tbl(p_physp), block);
 	if (tbl)
-		p_rec_item->rec.pkey_tbl = *tbl;
+		p_rec_item->resp.pkey_rec.pkey_tbl = *tbl;
 
 	cl_qlist_insert_tail(p_ctxt->p_list, &p_rec_item->list_item);
 
@@ -240,7 +238,7 @@ void osm_pkey_rec_rcv_process(IN void *ctx, IN void *data)
 	if (p_rcvd_mad->method != IB_MAD_METHOD_GET &&
 	    p_rcvd_mad->method != IB_MAD_METHOD_GETTABLE) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4605: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for PKeyRecord request\n",
 			ib_get_sa_method_str(p_rcvd_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;
@@ -254,8 +252,8 @@ void osm_pkey_rec_rcv_process(IN void *ctx, IN void *data)
 	if (p_rcvd_mad->sm_key != sa->p_subn->opt.sa_key) {
 		/* This is not a trusted requester! */
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4608: "
-			"Request from non-trusted requester: "
-			"Given SM_Key:0x%016" PRIx64 "\n",
+			"Ignoring PKeyRecord request from non-trusted requester"
+			" with SM_Key 0x%016" PRIx64 "\n",
 			cl_ntoh64(p_rcvd_mad->sm_key));
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;

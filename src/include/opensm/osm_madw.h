@@ -182,6 +182,7 @@ typedef struct osm_pi_context {
 	boolean_t set_method;
 	boolean_t light_sweep;
 	boolean_t active_transition;
+	boolean_t client_rereg;
 } osm_pi_context_t;
 /*********/
 
@@ -229,6 +230,7 @@ typedef struct osm_si_context {
 	ib_net64_t node_guid;
 	boolean_t set_method;
 	boolean_t light_sweep;
+	boolean_t lft_top_change;
 } osm_si_context_t;
 /*********/
 
@@ -334,7 +336,8 @@ typedef struct osm_perfmgr_context {
 	uint64_t node_guid;
 	uint16_t port;
 	uint8_t mad_method;	/* was this a get or a set */
-#if ENABLE_OSM_PERF_MGR_PROFILE
+	ib_net16_t mad_attr_id;
+#ifdef ENABLE_OSM_PERF_MGR_PROFILE
 	struct timeval query_start;
 #endif
 } osm_perfmgr_context_t;

@@ -248,7 +248,7 @@ static int partition_create(unsigned lineno, struct part_conf *conf,
 		struct precreate_mgroup broadcast_mgroup;
 		memset(&broadcast_mgroup, 0, sizeof(broadcast_mgroup));
 		broadcast_mgroup.mgid = osm_ipoib_broadcast_mgid;
-		pkey |= cl_hton16(0x8000);
+		pkey = CL_HTON16(0x8000) | conf->p_prtn->pkey;
 		memcpy(&broadcast_mgroup.mgid.raw[4], &pkey , sizeof(pkey));
 		broadcast_mgroup.flags.mtu = conf->flags.mtu;
 		broadcast_mgroup.flags.rate = conf->flags.rate;
@@ -296,12 +296,14 @@ static int parse_group_flag(unsigned lineno, osm_log_t * p_log,
 		else
 			flags->scope_mask |= (1<<scope);
 	} else if (!strncmp(flag, "Q_Key", strlen(flag))) {
+		rc = 1;
 		if (!val || (flags->Q_Key = strtoul(val, NULL, 0)) == 0)
 			OSM_LOG(p_log, OSM_LOG_VERBOSE,
 				"PARSE WARN: line %d: "
 				"flag \'Q_Key\' requires valid value"
 				" - using '0'\n", lineno);
 	} else if (!strncmp(flag, "TClass", strlen(flag))) {
+		rc =1;
 		if (!val || (flags->TClass = strtoul(val, NULL, 0)) == 0)
 			OSM_LOG(p_log, OSM_LOG_VERBOSE,
 				"PARSE WARN: line %d: "
@@ -406,7 +408,7 @@ static int partition_add_port(unsigned lineno, struct part_conf *conf,
 			membership = FULL;
 		else if (!strncmp(flag, "both", strlen(flag)))
 			membership = BOTH;
-		else if (!strncmp(flag, "limited", strlen(flag))) {
+		else if (strncmp(flag, "limited", strlen(flag))) {
 			OSM_LOG(conf->p_log, OSM_LOG_VERBOSE,
 				"PARSE WARN: line %d: "
 				"unrecognized port flag \'%s\'."
@@ -694,6 +696,9 @@ done:
 	return len;
 }
 
+/**
+ * @return 1 on error, 0 on success
+ */
 int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 			       const char *file_name)
 {
@@ -701,6 +706,7 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 	struct part_conf *conf = NULL;
 	FILE *file;
 	int lineno;
+	int is_parse_success;
 
 	file = fopen(file_name, "r");
 	if (!file) {
@@ -711,6 +717,8 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 	}
 
 	lineno = 0;
+
+	is_parse_success = 0;
 
 	while (fgets(line, sizeof(line) - 1, file) != NULL) {
 		char *q, *p = line;
@@ -739,6 +747,7 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 					"PARSE ERROR: line %d: "
 					"internal: cannot create config\n",
 					lineno);
+				is_parse_success = -1;
 				break;
 			}
 
@@ -748,8 +757,11 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 
 			len = parse_part_conf(conf, p, lineno);
 			if (len < 0) {
+				is_parse_success = -1;
 				break;
 			}
+
+			is_parse_success = 1;
 
 			p += len;
 
@@ -758,9 +770,12 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 				conf = NULL;
 			}
 		} while (q);
+
+		if (is_parse_success == -1)
+			break;
 	}
 
 	fclose(file);
 
-	return 0;
+	return (is_parse_success == 1) ? 0 : 1;
 }

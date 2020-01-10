@@ -6,6 +6,7 @@
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -184,9 +185,10 @@ static const char *module_name_str[] = {
 	"osm_vl_arb_rcv.c",
 	"st.c",
 	"osm_ucast_dfsssp.c",
+	"osm_congestion_control.c",
 	/* Add new module names here ... */
 	/* FILE_ID define in those modules must be identical to index here */
-	/* last FILE_ID is currently 88 */
+	/* last FILE_ID is currently 89 */
 };
 
 #define MOD_NAME_STR_UNKNOWN_VAL (ARR_SIZE(module_name_str))
@@ -700,6 +702,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "subnet_prefix", OPT_OFFSET(subnet_prefix), opts_parse_net64, NULL, 1 },
 	{ "m_key_lease_period", OPT_OFFSET(m_key_lease_period), opts_parse_net16, NULL, 1 },
 	{ "m_key_protection_level", OPT_OFFSET(m_key_protect_bits), opts_parse_uint8, NULL, 1 },
+	{ "m_key_lookup", OPT_OFFSET(m_key_lookup), opts_parse_boolean, NULL, 1 },
 	{ "sweep_interval", OPT_OFFSET(sweep_interval), opts_parse_uint32, NULL, 1 },
 	{ "max_wire_smps", OPT_OFFSET(max_wire_smps), opts_parse_uint32, NULL, 1 },
 	{ "max_wire_smps2", OPT_OFFSET(max_wire_smps2), opts_parse_uint32, NULL, 1 },
@@ -764,6 +767,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "max_reverse_hops", OPT_OFFSET(max_reverse_hops), opts_parse_uint16, NULL, 0 },
 	{ "ids_guid_file", OPT_OFFSET(ids_guid_file), opts_parse_charp, NULL, 0 },
 	{ "guid_routing_order_file", OPT_OFFSET(guid_routing_order_file), opts_parse_charp, NULL, 0 },
+	{ "guid_routing_order_no_scatter", OPT_OFFSET(guid_routing_order_no_scatter), opts_parse_boolean, NULL, 0 },
 	{ "sa_db_file", OPT_OFFSET(sa_db_file), opts_parse_charp, NULL, 0 },
 	{ "sa_db_dump", OPT_OFFSET(sa_db_dump), opts_parse_boolean, NULL, 1 },
 	{ "torus_config", OPT_OFFSET(torus_conf_file), opts_parse_charp, NULL, 1 },
@@ -773,7 +777,9 @@ static const opt_rec_t opt_tbl[] = {
 	{ "daemon", OPT_OFFSET(daemon), opts_parse_boolean, NULL, 0 },
 	{ "sm_inactive", OPT_OFFSET(sm_inactive), opts_parse_boolean, NULL, 1 },
 	{ "babbling_port_policy", OPT_OFFSET(babbling_port_policy), opts_parse_boolean, NULL, 1 },
+	{ "drop_event_subscriptions", OPT_OFFSET(drop_event_subscriptions), opts_parse_boolean, NULL, 1 },
 	{ "use_optimized_slvl", OPT_OFFSET(use_optimized_slvl), opts_parse_boolean, NULL, 1 },
+	{ "fsync_high_avail_files", OPT_OFFSET(fsync_high_avail_files), opts_parse_boolean, NULL, 1 },
 #ifdef ENABLE_OSM_PERF_MGR
 	{ "perfmgr", OPT_OFFSET(perfmgr), opts_parse_boolean, NULL, 0 },
 	{ "perfmgr_redir", OPT_OFFSET(perfmgr_redir), opts_parse_boolean, NULL, 0 },
@@ -783,6 +789,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "event_db_dump_file", OPT_OFFSET(event_db_dump_file), opts_parse_charp, NULL, 0 },
 	{ "perfmgr_rm_nodes", OPT_OFFSET(perfmgr_rm_nodes), opts_parse_boolean, NULL, 0 },
 	{ "perfmgr_log_errors", OPT_OFFSET(perfmgr_log_errors), opts_parse_boolean, NULL, 0 },
+	{ "perfmgr_query_cpi", OPT_OFFSET(perfmgr_query_cpi), opts_parse_boolean, NULL, 0 },
 #endif				/* ENABLE_OSM_PERF_MGR */
 	{ "event_plugin_name", OPT_OFFSET(event_plugin_name), opts_parse_charp, NULL, 0 },
 	{ "event_plugin_options", OPT_OFFSET(event_plugin_options), opts_parse_charp, NULL, 0 },
@@ -915,7 +922,8 @@ static void subn_validate_neighbor(osm_subn_t *p_subn)
 		valid_entry = TRUE;
 
 		OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_DEBUG,
-			"Validating neighbor for 0x%016" PRIx64 ", port %d\n",
+			"Validating neighbor for guid:0x%016" PRIx64
+			", port %d\n",
 			p_item->guid, p_item->portnum);
 		if (p_item->guid == 0) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
@@ -923,31 +931,40 @@ static void subn_validate_neighbor(osm_subn_t *p_subn)
 			valid_entry = FALSE;
 		} else if (p_item->portnum == 0) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
-				"ERR 7514: found invalid zero port\n");
+				"ERR 7514: found invalid zero port for "
+				"guid: 0x%016" PRIx64 "\n",
+				p_item->guid);
 			valid_entry = FALSE;
 		} else if (osm_db_neighbor_get(p_subn->p_neighbor,
 					       p_item->guid, p_item->portnum,
 					       &guid, &port)) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
 				"ERR 7515: could not find neighbor for "
-				"guid: 0x%016" PRIx64 "\n", p_item->guid);
+				"guid: 0x%016" PRIx64 ", port %d\n",
+				p_item->guid, p_item->portnum);
 			valid_entry = FALSE;
 		} else if (guid == 0) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
 				"ERR 7516: found invalid neighbor "
-				"zero guid");
+				"zero guid for guid: 0x%016" PRIx64
+				", port %d\n",
+				p_item->guid, p_item->portnum);
 			valid_entry = FALSE;
 		} else if (port == 0) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
 				"ERR 7517: found invalid neighbor "
-				"zero port\n");
+				"zero port for guid: 0x%016" PRIx64
+				", port %d\n",
+				p_item->guid, p_item->portnum);
 			valid_entry = FALSE;
 		} else if (osm_db_neighbor_get(p_subn->p_neighbor,
 					       guid, port, &guid, &port) ||
 			guid != p_item->guid || port != p_item->portnum) {
 			OSM_LOG(&(p_subn->p_osm->log), OSM_LOG_ERROR,
 				"ERR 7518: neighbor does not point "
-				"back at us\n");
+				"back at us (guid: 0x%016" PRIx64
+				", port %d)\n",
+				p_item->guid, p_item->portnum);
 			valid_entry = FALSE;
 		}
 
@@ -1167,6 +1184,7 @@ ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
 	p_subn->min_ca_mtu = IB_MAX_MTU;
 	p_subn->min_ca_rate = IB_MAX_RATE;
 	p_subn->min_data_vls = IB_MAX_NUM_VLS - 1;
+	p_subn->min_sw_data_vls = IB_MAX_NUM_VLS - 1;
 	p_subn->ignore_existing_lfts = TRUE;
 
 	/* we assume master by default - so we only need to set it true if STANDBY */
@@ -1422,6 +1440,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->subnet_prefix = IB_DEFAULT_SUBNET_PREFIX;
 	p_opt->m_key_lease_period = 0;
 	p_opt->m_key_protect_bits = 0;
+	p_opt->m_key_lookup = TRUE;
 	p_opt->sweep_interval = OSM_DEFAULT_SWEEP_INTERVAL_SECS;
 	p_opt->max_wire_smps = OSM_DEFAULT_SMP_MAX_ON_WIRE;
 	p_opt->max_wire_smps2 = p_opt->max_wire_smps;
@@ -1464,7 +1483,9 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->daemon = FALSE;
 	p_opt->sm_inactive = FALSE;
 	p_opt->babbling_port_policy = FALSE;
+	p_opt->drop_event_subscriptions = FALSE;
 	p_opt->use_optimized_slvl = FALSE;
+	p_opt->fsync_high_avail_files = TRUE;
 #ifdef ENABLE_OSM_PERF_MGR
 	p_opt->perfmgr = FALSE;
 	p_opt->perfmgr_redir = TRUE;
@@ -1475,6 +1496,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->event_db_dump_file = NULL; /* use default */
 	p_opt->perfmgr_rm_nodes = TRUE;
 	p_opt->perfmgr_log_errors = TRUE;
+	p_opt->perfmgr_query_cpi = FALSE;
 #endif				/* ENABLE_OSM_PERF_MGR */
 
 	p_opt->event_plugin_name = NULL;
@@ -1483,8 +1505,9 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 
 	p_opt->dump_files_dir = getenv("OSM_TMP_DIR");
 	if (!p_opt->dump_files_dir || !(*p_opt->dump_files_dir))
-		p_opt->dump_files_dir = OSM_DEFAULT_TMP_DIR;
-	p_opt->dump_files_dir = strdup(p_opt->dump_files_dir);
+		p_opt->dump_files_dir = strdup(OSM_DEFAULT_TMP_DIR);
+	else
+		p_opt->dump_files_dir = strdup(p_opt->dump_files_dir);
 	p_opt->log_file = strdup(OSM_DEFAULT_LOG_FILE);
 	p_opt->log_max_size = 0;
 	p_opt->partition_config_file = strdup(OSM_DEFAULT_PARTITION_CONFIG_FILE);
@@ -1513,6 +1536,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->max_reverse_hops = 0;
 	p_opt->ids_guid_file = NULL;
 	p_opt->guid_routing_order_file = NULL;
+	p_opt->guid_routing_order_no_scatter = FALSE;
 	p_opt->sa_db_file = NULL;
 	p_opt->sa_db_dump = FALSE;
 	p_opt->torus_conf_file = strdup(OSM_DEFAULT_TORUS_CONF_FILE);
@@ -1520,7 +1544,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->exit_on_fatal = TRUE;
 	p_opt->congestion_control = FALSE;
 	p_opt->cc_key = OSM_DEFAULT_CC_KEY;
-	p_opt->cc_max_outstanding_mads = OSM_PERFMGR_DEFAULT_MAX_OUTSTANDING_QUERIES;
+	p_opt->cc_max_outstanding_mads = OSM_CC_DEFAULT_MAX_OUTSTANDING_QUERIES;
 	p_opt->enable_quirks = FALSE;
 	p_opt->no_clients_rereg = FALSE;
 	p_opt->prefix_routes_file = strdup(OSM_DEFAULT_PREFIX_ROUTES_FILE);
@@ -1973,8 +1997,8 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		else {
 			log_report(" Invalid Cached Option Value:part_enforce = %s"
 	                           ", Using Default:%s\n",
-	                           p_opts->part_enforce = OSM_PARTITION_ENFORCE_BOTH);
-			p_opts->part_enforce = OSM_PARTITION_ENFORCE_BOTH;
+	                           p_opts->part_enforce, OSM_PARTITION_ENFORCE_BOTH);
+			strcpy(p_opts->part_enforce, OSM_PARTITION_ENFORCE_BOTH);
 			p_opts->part_enforce_enum = OSM_PARTITION_ENFORCE_TYPE_BOTH;
 		}
 	}
@@ -2033,21 +2057,10 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		}
 	}
 
-	if (p_opts->root_guid_file != NULL) {
-		FILE *root_file = fopen(p_opts->root_guid_file, "r");
-		if (!root_file) {
-			log_report("Root guid file provided: %s doesn't exist.\n"
-				    "Using default roots discovery algorithm\n",
-				    p_opts->root_guid_file);
-			p_opts->root_guid_file = NULL;
-		} else
-			fclose(root_file);
-	}
-
 	return 0;
 }
 
-int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
+int osm_subn_parse_conf_file(const char *file_name, osm_subn_opt_t * p_opts)
 {
 	char line[1024];
 	FILE *opts_file;
@@ -2066,7 +2079,6 @@ int osm_subn_parse_conf_file(char *file_name, osm_subn_opt_t * p_opts)
 	}
 
 	printf(" Reading Cached Option File: %s\n", file_name);
-	cl_log_event("OpenSM", CL_LOG_INFO, line, NULL, 0);
 
 	p_opts->config_file = file_name;
 	if (!p_opts->file_opts && !(p_opts->file_opts = malloc(sizeof(*p_opts)))) {
@@ -2168,7 +2180,7 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 
 			token_matched = 1;
 
-			if (strcmp(r->name, p_key))
+			if (!r->can_update || strcmp(r->name, p_key))
 				continue;
 
 			p_field1 = (void *)p_opts->file_opts + r->opt_offset;
@@ -2206,6 +2218,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"m_key_lease_period %u\n\n"
 		"# The protection level used for the M_Key on this subnet\n"
 		"m_key_protection_level %u\n\n"
+		"# If FALSE, SM won't try to determine the m_key of unknown ports\n"
+		"m_key_lookup %s\n\n"
 		"# SM_Key value of the SM used for SM authentication\n"
 		"sm_key 0x%016" PRIx64 "\n\n"
 		"# SM_Key value to qualify rcv SA queries as 'trusted'\n"
@@ -2288,6 +2302,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		cl_ntoh64(p_opts->m_key),
 		cl_ntoh16(p_opts->m_key_lease_period),
 		p_opts->m_key_protect_bits,
+		p_opts->m_key_lookup ? "TRUE" : "FALSE",
 		cl_ntoh64(p_opts->sm_key),
 		cl_ntoh64(p_opts->sa_key),
 		cl_ntoh64(p_opts->subnet_prefix),
@@ -2411,11 +2426,14 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 
 	fprintf(out,
 		"# The file holding the fat-tree I/O node guids\n"
-		"# One guid in each line\nio_guid_file %s\n\n",
+		"# One guid in each line.\n"
+		"# If only io_guid file is provided, the rest of nodes\n"
+		"# are considered as compute nodes.\n"
+		"io_guid_file %s\n\n",
 		p_opts->io_guid_file ? p_opts->io_guid_file : null_str);
 
 	fprintf(out,
-		"# Number of reverse hops allowed for I/O nodes \n"
+		"# Number of reverse hops allowed for I/O nodes\n"
 		"# Used for connectivity between I/O nodes connected to Top Switches\nmax_reverse_hops %d\n\n",
 		p_opts->max_reverse_hops);
 
@@ -2492,7 +2510,8 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Maximum number of timeout based SMPs allowed to be outstanding\n"
 		"# A value less than or equal to max_wire_smps disables this mechanism\n"
 		"max_wire_smps2 %u\n\n"
-		"# The timeout in [usec] used for sending SMPs above max_wire_smps limit and below max_wire_smps2 limit\n"
+		"# The timeout in [usec] used for sending SMPs above max_wire_smps limit\n"
+		"# and below max_wire_smps2 limit\n"
 		"max_smps_timeout %u\n\n"
 		"# The maximum time in [msec] allowed for a transaction to complete\n"
 		"transaction_timeout %u\n\n"
@@ -2521,12 +2540,18 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"sm_inactive %s\n\n"
 		"# Babbling Port Policy\n"
 		"babbling_port_policy %s\n\n"
+		"# Drop event subscriptions (InformInfo) if the port goes away\n"
+		"drop_event_subscriptions %s\n\n"
 		"# Use Optimized SLtoVLMapping programming if supported by device\n"
-		"use_optimized_slvl %s\n\n",
+		"use_optimized_slvl %s\n\n"
+		"# Sync in memory files used for high availability with storage\n"
+		"fsync_high_avail_files %s\n\n",
 		p_opts->daemon ? "TRUE" : "FALSE",
 		p_opts->sm_inactive ? "TRUE" : "FALSE",
 		p_opts->babbling_port_policy ? "TRUE" : "FALSE",
-		p_opts->use_optimized_slvl ? "TRUE" : "FALSE");
+		p_opts->drop_event_subscriptions ? "TRUE" : "FALSE",
+		p_opts->use_optimized_slvl ? "TRUE" : "FALSE",
+		p_opts->fsync_high_avail_files ? "TRUE" : "FALSE");
 
 #ifdef ENABLE_OSM_PERF_MGR
 	fprintf(out,
@@ -2543,14 +2568,17 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Remove missing nodes from DB\n"
 		"perfmgr_rm_nodes %s\n\n"
 		"# Log error counters to opensm.log\n"
-		"perfmgr_log_errors %s\n\n",
+		"perfmgr_log_errors %s\n\n"
+		"# Query PerfMgrGet(ClassPortInfo) for extended capabilities\n"
+		"perfmgr_query_cpi %s\n\n",
 		p_opts->perfmgr ? "TRUE" : "FALSE",
 		p_opts->perfmgr_redir ? "TRUE" : "FALSE",
 		p_opts->perfmgr_sweep_time_s,
 		p_opts->perfmgr_max_outstanding_queries,
 		p_opts->perfmgr_ignore_cas ? "TRUE" : "FALSE",
 		p_opts->perfmgr_rm_nodes ? "TRUE" : "FALSE",
-		p_opts->perfmgr_log_errors ? "TRUE" : "FALSE");
+		p_opts->perfmgr_log_errors ? "TRUE" : "FALSE",
+		p_opts->perfmgr_query_cpi ? "TRUE" : "FALSE");
 
 	fprintf(out,
 		"#\n# Event DB Options\n#\n"

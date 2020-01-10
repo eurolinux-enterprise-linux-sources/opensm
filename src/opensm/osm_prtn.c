@@ -105,13 +105,13 @@ void osm_prtn_delete(IN osm_subn_t * p_subn, IN OUT osm_prtn_t ** pp_prtn)
 			/* osm_mgrp_cleanup will not delete
 			 * "well_known" groups */
 			p->mgrps[i]->well_known = FALSE;
-			osm_mgrp_cleanup(p_subn, p->mgrps[i]);
 			OSM_LOG(&p_subn->p_osm->log, OSM_LOG_DEBUG,
 				"removing mgroup %s from partition (0x%x)\n",
 				inet_ntop(AF_INET6,
 					  p->mgrps[i]->mcmember_rec.mgid.raw,
 					  gid_str, sizeof gid_str),
 				cl_hton16(p->pkey));
+			osm_mgrp_cleanup(p_subn, p->mgrps[i]);
 		}
 
 		free(p->mgrps);
@@ -253,10 +253,10 @@ ib_api_status_t osm_prtn_add_mcgroup(osm_log_t * p_log, osm_subn_t * p_subn,
 	mc_rec.mgid = *mgid;
 
 	mc_rec.qkey = CL_HTON32(Q_Key);
-	mc_rec.mtu = mtu | (2 << 6);
+	mc_rec.mtu = mtu | (IB_PATH_SELECTOR_EXACTLY << 6);
 	mc_rec.tclass = tclass;
 	mc_rec.pkey = pkey;
-	mc_rec.rate = rate | (2 << 6);
+	mc_rec.rate = rate | (IB_PATH_SELECTOR_EXACTLY << 6);
 	mc_rec.pkt_life = p_subn->opt.subnet_timeout;
 	mc_rec.sl_flow_hop = ib_member_set_sl_flow_hop(sl, FlowLabel, hop_limit);
 	/* Scope in MCMemberRecord (if present) needs to be consistent with MGID */
@@ -376,6 +376,7 @@ ib_api_status_t osm_prtn_make_partitions(osm_log_t * p_log, osm_subn_t * p_subn)
 	struct stat statbuf;
 	const char *file_name;
 	boolean_t is_config = TRUE;
+	boolean_t is_wrong_config = FALSE;
 	ib_api_status_t status = IB_SUCCESS;
 	cl_map_item_t *p_next;
 	osm_prtn_t *p;
@@ -383,12 +384,13 @@ ib_api_status_t osm_prtn_make_partitions(osm_log_t * p_log, osm_subn_t * p_subn)
 	file_name = p_subn->opt.partition_config_file ?
 	    p_subn->opt.partition_config_file : OSM_DEFAULT_PARTITION_CONFIG_FILE;
 	if (stat(file_name, &statbuf)) {
-		OSM_LOG(p_log, OSM_LOG_ERROR, "Partition configuration "
+		OSM_LOG(p_log, OSM_LOG_VERBOSE, "Partition configuration "
 			"%s is not accessible (%s)\n", file_name,
 			strerror(errno));
 		is_config = FALSE;
 	}
 
+retry_default:
 	/* clean up current port maps */
 	p_next = cl_qmap_head(&p_subn->prtn_pkey_tbl);
 	while (p_next != cl_qmap_end(&p_subn->prtn_pkey_tbl)) {
@@ -404,9 +406,11 @@ ib_api_status_t osm_prtn_make_partitions(osm_log_t * p_log, osm_subn_t * p_subn)
 	if (status != IB_SUCCESS)
 		goto _err;
 
-	if (is_config && osm_prtn_config_parse_file(p_log, p_subn, file_name))
+	if (is_config && osm_prtn_config_parse_file(p_log, p_subn, file_name)) {
 		OSM_LOG(p_log, OSM_LOG_VERBOSE, "Partition configuration "
 			"was not fully processed\n");
+		is_wrong_config = TRUE;
+	}
 
 	/* and now clean up empty partitions */
 	p_next = cl_qmap_head(&p_subn->prtn_pkey_tbl);
@@ -419,6 +423,13 @@ ib_api_status_t osm_prtn_make_partitions(osm_log_t * p_log, osm_subn_t * p_subn)
 					    (cl_map_item_t *) p);
 			osm_prtn_delete(p_subn, &p);
 		}
+	}
+
+	if (is_config && is_wrong_config) {
+		OSM_LOG(p_log, OSM_LOG_ERROR, "Partition configuration "
+			"in error; retrying with default config\n");
+		is_config = FALSE;
+		goto retry_default;
 	}
 
 _err:

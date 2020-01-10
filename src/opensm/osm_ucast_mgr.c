@@ -259,7 +259,7 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 					 p_mgr->p_subn->opt.lmc,
 					 p_mgr->is_dor,
 					 p_mgr->p_subn->opt.port_shifting,
-					 p_mgr->p_subn->opt.scatter_ports);
+					 p_port->use_scatter);
 
 	if (port == OSM_NO_PATH) {
 		/* do not try to overwrite the ppro of non existing port ... */
@@ -729,6 +729,7 @@ static int add_guid_to_order_list(void *ctx, uint64_t guid, char *p)
 
 	cl_qlist_insert_tail(&m->port_order_list, &port->list_item);
 	port->flag = 1;
+	port->use_scatter =  (m->p_subn->opt.guid_routing_order_no_scatter == TRUE) ? 0 : m->p_subn->opt.scatter_ports;
 
 	return 0;
 }
@@ -738,9 +739,10 @@ static void add_port_to_order_list(cl_map_item_t * p_map_item, void *ctx)
 	osm_port_t *port = (osm_port_t *) p_map_item;
 	osm_ucast_mgr_t *m = ctx;
 
-	if (!port->flag)
+	if (!port->flag) {
+		port->use_scatter = m->p_subn->opt.scatter_ports;
 		cl_qlist_insert_tail(&m->port_order_list, &port->list_item);
-	else
+	} else
 		port->flag = 0;
 }
 
@@ -799,11 +801,12 @@ static void add_sw_endports_to_order_list(osm_switch_t * sw,
 			port = osm_get_port_by_guid(m->p_subn,
 						    p->p_remote_physp->
 						    port_guid);
-			if (!port)
+			if (!port || port->flag)
 				continue;
 			cl_qlist_insert_tail(&m->port_order_list,
 					     &port->list_item);
 			port->flag = 1;
+			port->use_scatter = m->p_subn->opt.scatter_ports;
 		}
 	}
 }
@@ -864,8 +867,8 @@ static int ucast_mgr_build_lfts(osm_ucast_mgr_t * p_mgr)
 			OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A0D: "
 				"cannot parse guid routing order file \'%s\'\n",
 				p_mgr->p_subn->opt.guid_routing_order_file);
-	} else
-		sort_ports_by_switch_load(p_mgr);
+	}
+	sort_ports_by_switch_load(p_mgr);
 
 	if (p_mgr->p_subn->opt.port_prof_ignore_file) {
 		cl_qmap_apply_func(&p_mgr->p_subn->sw_guid_tbl,
@@ -895,6 +898,7 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 	osm_ucast_mgr_t *p_mgr = cxt;
 	osm_switch_t * p_sw = (osm_switch_t *) p_map_item;
 	osm_node_t *p_node;
+	osm_physp_t *p_physp;
 	osm_dr_path_t *p_path;
 	osm_madw_context_t context;
 	ib_api_status_t status;
@@ -916,7 +920,11 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 	if (p_mgr->max_lid < p_sw->max_lid_ho)
 		p_mgr->max_lid = p_sw->max_lid_ho;
 
-	p_path = osm_physp_get_dr_path_ptr(osm_node_get_physp_ptr(p_node, 0));
+	p_physp = osm_node_get_physp_ptr(p_node, 0);
+
+	CL_ASSERT(p_physp);
+
+	p_path = osm_physp_get_dr_path_ptr(p_physp);
 
 	/*
 	   Set the top of the unicast forwarding table.
@@ -926,7 +934,9 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 	if (lin_top != si.lin_top) {
 		set_swinfo_require = TRUE;
 		si.lin_top = lin_top;
-	}
+		context.si_context.lft_top_change = TRUE;
+	} else
+		context.si_context.lft_top_change = FALSE;
 
 	/* check to see if the change state bit is on. If it is - then we
 	   need to clear it. */
@@ -951,7 +961,9 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 
 		status = osm_req_set(p_mgr->sm, p_path, (uint8_t *) & si,
 				     sizeof(si), IB_MAD_ATTR_SWITCH_INFO,
-				     0, CL_DISP_MSGID_NONE, &context);
+				     0, FALSE,
+				     ib_port_info_get_m_key(&p_physp->port_info),
+				     CL_DISP_MSGID_NONE, &context);
 
 		if (status != IB_SUCCESS)
 			OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A06: "
@@ -965,9 +977,9 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 static int set_lft_block(IN osm_switch_t *p_sw, IN osm_ucast_mgr_t *p_mgr,
 			 IN uint16_t block_id_ho)
 {
-	uint8_t block[IB_SMP_DATA_SIZE];
 	osm_madw_context_t context;
 	osm_dr_path_t *p_path;
+	osm_physp_t *p_physp;
 	ib_api_status_t status;
 
 	/*
@@ -982,15 +994,19 @@ static int set_lft_block(IN osm_switch_t *p_sw, IN osm_ucast_mgr_t *p_mgr,
 		return -1;
 	}
 
-	p_path = osm_physp_get_dr_path_ptr(osm_node_get_physp_ptr(p_sw->p_node, 0));
+	p_physp = osm_node_get_physp_ptr(p_sw->p_node, 0);
+	if (!p_physp)
+		return -1;
+
+	p_path = osm_physp_get_dr_path_ptr(p_physp);
 
 	context.lft_context.node_guid = osm_node_get_node_guid(p_sw->p_node);
 	context.lft_context.set_method = TRUE;
 
-	if (!osm_switch_get_lft_block(p_sw, block_id_ho, block) ||
-	    (!p_sw->need_update && !p_mgr->p_subn->need_update &&
-	     !memcmp(block, p_sw->new_lft + block_id_ho * IB_SMP_DATA_SIZE,
-		     IB_SMP_DATA_SIZE)))
+	if (!p_sw->need_update && !p_mgr->p_subn->need_update &&
+	    !memcmp(p_sw->new_lft + block_id_ho * IB_SMP_DATA_SIZE,
+		    p_sw->lft + block_id_ho * IB_SMP_DATA_SIZE,
+		    IB_SMP_DATA_SIZE))
 		return 0;
 
 	OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
@@ -1000,8 +1016,10 @@ static int set_lft_block(IN osm_switch_t *p_sw, IN osm_ucast_mgr_t *p_mgr,
 	status = osm_req_set(p_mgr->sm, p_path,
 			     p_sw->new_lft + block_id_ho * IB_SMP_DATA_SIZE,
 			     IB_SMP_DATA_SIZE, IB_MAD_ATTR_LIN_FWD_TBL,
-			     cl_hton32(block_id_ho),
+			     cl_hton32(block_id_ho), FALSE,
+			     ib_port_info_get_m_key(&p_physp->port_info),
 			     CL_DISP_MSGID_NONE, &context);
+
 	if (status != IB_SUCCESS) {
 		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A05: "
 			"Sending linear fwd. tbl. block failed (%s)\n",
@@ -1107,14 +1125,7 @@ int osm_ucast_mgr_process(IN osm_ucast_mgr_t * p_mgr)
 	if (!p_osm->routing_engine_used &&
 	    p_osm->no_fallback_routing_engine != TRUE) {
 		/* If configured routing algorithm failed, use default MinHop */
-		struct osm_routing_engine *r = p_osm->default_routing_engine;
-
-		r->build_lid_matrices(r->context);
-		failed = r->ucast_build_fwd_tables(r->context);
-		if (!failed) {
-			p_osm->routing_engine_used = r;
-			osm_ucast_mgr_set_fwd_tables(p_mgr);
-		}
+		failed = ucast_mgr_route(p_osm->default_routing_engine, p_osm);
 	}
 
 	if (p_osm->routing_engine_used) {
@@ -1172,5 +1183,10 @@ int osm_ucast_dor_setup(struct osm_routing_engine *r, osm_opensm_t * osm)
 	r->context = &osm->sm.ucast_mgr;
 	r->build_lid_matrices = ucast_build_lid_matrices;
 	r->ucast_build_fwd_tables = ucast_dor_build_lfts;
+	return 0;
+}
+
+int ucast_dummy_build_lid_matrices(void *context)
+{
 	return 0;
 }

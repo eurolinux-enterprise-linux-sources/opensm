@@ -1,4 +1,1538 @@
 
+** Version: HEAD
+
+Thu Jan 30 21:03:46 2014 +0200 Hal Rosenstock
+650b60c0b77bcbd0d8912c4f241ff774705cd564
+
+	* Update package number for OpenSM to 3.3.17 for release
+
+Thu Jan 30 21:01:54 2014 +0200 Hal Rosenstock
+94d947ce6d21e802d22502c087e3842014a7a81e
+
+	* Update opensm_release_notes-3.3.txt
+
+Thu Jan 30 18:53:58 2014 +0200 Hal Rosenstock
+49132000b9208213a191e8e075f8b99a23a1bef7
+
+	* Update (internal) shared library versions
+
+Wed Jan 29 22:17:48 2014 +0200 Hal Rosenstock
+074ec5a4d2e7c3200aab383cd633e150bb8c1583
+
+	* osm_perfmgr.h: Cosmetic formatting changes
+
+Mon Jan 27 14:39:45 2014 +0200 Alex Netes
+05af77646d156d285d2d3122dd65f8ad9c600991
+
+	* osm_drop_mgr.c: Add missing assert
+
+Sun Jan 26 18:14:27 2014 +0200 Alex Netes
+de254f9901c0a2f8187c56026a7f414bceb58786
+
+	* osm_opensm.c: Add missing ERR number
+
+Mon Jan 13 15:26:35 2014 +0900 Jens Domke
+5b2390eac3ef47a8b6f9330e9a904ad7af6f241a
+
+	* dfsssp: optimization for dedicated compute and IO nodes
+
+Tue Jan 21 23:33:01 2014 -0500 Hal Rosenstock
+b1e58bbf50ca403199a9c1ea49b4b74fdd312c5c
+
+	* osmeventplugin: Fix compile warning
+
+Thu Jan 16 18:15:02 2014 +0200 Hal Rosenstock
+48c9f436d6c85d32d2748ba4c2756e2736bc5e7e
+
+	* osm_prtn_config.c: Some changes to osm_prtn_config_parse_file
+
+Sun May 5 12:20:40 2013 +0300 Alex Netes
+0ff054ae2f6e53e9e908f72f23b35cb40b3aeab4
+
+	* osm_trap_rcv.c: Removed unneeded lock when disabling port
+
+Thu Nov 15 18:09:57 2012 +0200 Hal Rosenstock
+e7c4ec39fff6c6c243ac57434eb8f8bbe6f783f8
+
+	* osm_trap_rcv.c: Minimize time holding RW lock for SystemImageGUID changed trap 145
+
+Thu Oct 18 17:59:04 2012 +0200 Hal Rosenstock
+1418f8a2673162fa888cf42f51ca5c4890dde3e8
+
+	* osm_trap_rcv.c: In trap_rcv_process_request, change locking strategy
+
+Wed Aug 29 19:31:19 2012 +0300 Alex Netes
+280a2ac0ba17b909481ebbd3ed406104629f2a36
+
+	* osm_trap_rcv.c: fix locking in trap_rcv_process_request()
+
+Mon Jan 13 13:45:09 2014 -0500 Vladimir Koushnir
+33f4f174be6f11466c789410946159636ad3a046
+
+	* Add new option for guid_routing_order_no_scatter
+
+Mon Jan 13 13:19:29 2014 -0500 Vladimir Koushnir
+a5f54f1e4bede8e1deef242e9e63f6ebb0ba526a
+
+	* osm_ucast_mgr.c: After applying guid_order options, add nodes sorted by neighbor switch load
+
+Sat Jan 4 12:37:59 2014 -0500 Bernd Schubert
+5a97c782a4b4f968c2d964c371decec5083f8499
+
+	* Try default partition config if parsing partitions.conf fails
+
+Sun Jan 5 17:53:40 2014 +0200 Hal Rosenstock
+6321afa188af556850811739630cfaf854dfec23
+
+	* osm_subnet.c: Cosmetic change to config file output
+
+Sat Jan 4 17:25:11 2014 +0200 Hal Rosenstock
+a45e311710b58ecee0dee74a0b48eabe63c10a6a
+
+	* osm_db_files.c: Minor improvement to fix in previous commit 86cf679666f49f6073c1ddf2b9ff644a41537a57
+
+Sat Jan 4 17:10:51 2014 +0200 Hal Rosenstock
+86cf679666f49f6073c1ddf2b9ff644a41537a57
+
+	* osm_db_files.c: Fix issue introduced in commit aaa7b1e67ec6e5fc2a10accf46d538f9d47c6323
+
+Fri Jan 3 08:40:48 2014 -0500 Ilya Nelkenbaum
+ed7be1a62f30e7e065a5a536e8fec33d158b1326
+
+	* Add client_rereg flag to Port Info context
+
+Mon Dec 30 10:59:54 2013 -0500 Hal Rosenstock
+aaa7b1e67ec6e5fc2a10accf46d538f9d47c6323
+
+	* osm_db_files.c: Some minor fixes/improvements to osm_db_store
+
+Sat Jan 4 16:41:17 2014 +0200 Hal Rosenstock
+3cae07c6390ef8b85d93e90f2dbe1f0a42c57a5e
+
+	* osm_perfmgr.c: Cosmetic formatting changes
+
+Wed Jan 1 08:44:28 2014 -0500 Alex Netes
+07b24a3e1335d3d53e0ea85b162ec901b369a469
+
+	* osm_port_info_rcv.c: Reset client reregister bit only on a response to SET
+
+Mon Dec 30 07:24:57 2013 -0500 Alex Netes
+413e4fa2fbd12c7c9f8018b5ef2b4e67449e5c1f
+
+	* osm_trap_rcv.c: fix race condition during sweep
+
+Mon Dec 30 07:24:48 2013 -0500 Daniel Klein
+84c9832d5ce4b557295bd0cdd540848c3367fc77
+
+	* osm_ucast_ftree.c: replace assert with error return value
+
+Thu Dec 26 08:39:12 2013 -0500 Vladimir Koushnir
+90a7960db7fc078201013faf421bcb554dcf8aef
+
+	* osm_ucast_file.c: Fix crash when port is invalid in LFT file
+
+Sat Dec 21 07:54:48 2013 -0500 Hal Rosenstock
+cc5fa1774f6bc98e1ae22522171a25522d443038
+
+	* Add support for synchronizing in memory files with storage
+
+Wed Dec 11 15:38:18 2013 +0200 Vladimir Koushnir
+0a1c0f0d94ccf10c43b59ee8cf249f2a441f99ae
+
+	* osm_sa_path_record.c: Improve ERR 1F1D to show the pkey specified in PathQuery
+
+Sun Dec 1 18:23:26 2013 +0200 Daniel Klein
+94e99a80e01cb07f3e2d01bdbf69b06dd9ac3b7e
+
+	* osm_mcast_mgr.c: Removed mcast_mgr_purge_tree_node due to code duplication
+
+Tue Dec 10 11:13:38 2013 +0200 Vladimir Koushnir
+929934e881f21efe68f6b099abef7e788b7b8ff0
+
+	* osm_pkey.[h c]: Remove dead function osm_pkey_tbl_clear_accum_pkeys
+
+Mon Dec 2 14:58:03 2013 +0200 Alex Netes
+bf42ec8ccbd2cc4af3fabe3b1926a0595ba16ad4
+
+	* osm_mtree.c: Cosmetic change in osm_mtree_destroy function
+
+Wed Dec 4 14:00:54 2013 +0200 Vladimir Koushnir
+a1ccf88513dba90ef2697f7f512a360d338ea006
+
+	* osm_sa_path_record.c: path_sl may return SL different from requested SL
+
+Thu Dec 5 06:10:19 2013 -0800 Line Holen
+7e96f32172fafea3f0340764286dfb9f53658566
+
+	* osm_sm_state_mgr.c: Fix handling of polling retry number
+
+Tue Dec 3 08:25:06 2013 -0500 Daniel Klein
+8f3f7d04eb9fe16f36529c5da6a85a8ad8495421
+
+	* osm_sm_state_mgr.c: Fix race condition during sm_state_mgr_send_master_sm_info_req
+
+Wed Nov 27 16:27:52 2013 +0200 Daniel Klein
+78d87b9a89641ffc42b36b1bd6c05348fea3a025
+
+	* osm_mcast_mgr.c: fixed missing error message number
+
+Tue Nov 19 16:34:37 2013 +0200 Alex Netes
+b1b1b37b7e4f83804dbc8ae780a067c0641c1097
+
+	* Fix minhop population in fabric with duplicate lids
+
+Tue Nov 19 14:15:20 2013 +0200 Alex Netes
+a1df1d7e1a3930d35ec3876c1c0a4a0fe5040f35
+
+	* osm_state_mgr.c: Fix error print in state_mgr_check_tbl_consistency()
+
+Tue Nov 19 14:10:06 2013 +0200 Alex Netes
+ed9de4c80981a7ff47791e15ad466bd9f948572d
+
+	* osm_mcast_mgr.c: Fix wrong comparison in mcast_mgr_subdivide()
+
+Fri Nov 15 04:53:31 2013 -0800 Line Holen
+1441937446ce61c4c550b1a5034c005187a0a3b4
+
+	* osm_mcast_mgr.c Add block number to error message
+
+Wed Nov 13 14:28:47 2013 +0200 Vladimir Koushnir
+c5d5faa1b10f33ab8c5e06fa9af71eb222643000
+
+	* Only rewrite db files during heavy sweep when there is a real change
+
+Tue Nov 12 17:42:02 2013 +0200 Vladimir Koushnir
+edd5e74562908141ecaf67cf3c20b791923c570e
+
+	* Redundant remove() function call during db file generation
+
+Sun Nov 10 18:09:25 2013 +0200 Vladimir Koushnir
+9853841f369decde551d03ff4c1f21a59afbc23e
+
+	* Implement atomic update operation for sa_db_file
+
+Tue Nov 12 06:18:36 2013 -0500 Vladimir Koushnir
+175455201dc349dfee1253386ae5c0f90e83be33
+
+	* Remove unused lid matrix calculation in Torus_2Qos routing
+
+Tue Nov 12 16:27:42 2013 -0500 Alex Netes
+dcb2df0f0f13aa8b77c5f16bdcc4c27d11dae6df
+
+	* osm_link_mgr.c: Fix uninitialized value (physp0)
+
+Mon Sep 16 10:38:45 2013 +0200 Shlomi Nimrodi
+7160cce6e2ec517fd573364ee271f6380d549b89
+
+	* osm_link_mgr.c: Fix uninitialized value (physp0)
+
+Thu May 9 17:45:19 2013 +0300 Alex Netes
+5aa4ea3a20ba7732460d0040cbed4acd0d09907c
+
+	* osm_link_mgr.c: fix uninitialized variable usage
+
+Wed Nov 6 17:24:12 2013 +0200 Alex Netes
+9aa6dcd284223a782e62534dc099b50828c9155b
+
+	* osm_drop_mgr.c: fix timeouts on Get Pkey from ext switch ports
+
+Tue Nov 5 17:15:26 2013 +0200 Dan Ben Yosef
+361c01435734c9c00bc936e4236668d3e1b6c0ef
+
+	* Fix dropping node after setPkey mad
+
+Mon Nov 4 12:43:08 2013 -0500 Vladimir Koushnir
+2585f585f28f5e3b4cd14ba489d0b6d1f476ceea
+
+	* Improve memory consumption of pkey manager by using cl_map for accum_pkeys
+
+Mon Nov 4 15:11:13 2013 +0200 Vladimir Koushnir
+754bd75336e4a8202d2e0782a29a4cf765ca44a7
+
+	* osm_opensm.c: When exiting, update SADB only in MASTER state
+
+Mon Nov 4 07:52:56 2013 -0500 Dan Ben Yosef
+3cc0a3e642facf7ea21e960b31fd9834df7d3a82
+
+	* Fix timeout handling for pkeyGet for sw port 0
+
+Fri Nov 1 09:17:57 2013 -0400 Dan Ben Yosef
+189a39d748a049f002032abf52c935ed294ca967
+
+	* Fix possible use of lid 0 when sending set PortInfo after failure of the first PortInfo set
+
+Fri Nov 1 08:10:23 2013 -0400 Dan Ben Yosef
+6d1d1a4cbf07a1dda1df016c10aaf3b72ec0342a
+
+	* Fix handling of get P_KeyTable on timeout
+
+Sun Oct 27 16:19:47 2013 +0200 Alex Netes
+df385e88f8a9158cf34ab67eba800463067f4016
+
+	* osm_ucast_cache.c: Fix memory leak in ucast_cache
+
+Mon Oct 28 12:35:04 2013 +0200 Vladimir Koushnir
+79ba8770ef909d94f051c612f1b7180d7b9b726d
+
+	* osm_link_mgr.c: active_transition parameter in PortInfo(Set) context may not be initialized
+
+Wed Oct 23 10:38:17 2013 -0400 Alex Netes
+b44206235abc6a6f144cf5b9395bd62965b1532d
+
+	* Resend trap 144 when detecting remote MASTER SM with lower priority
+
+Thu Oct 17 13:10:46 2013 +0200 Bernd Schubert
+cf014ec7d2188c34f3f66a00efc2db1b2ddcb203
+
+	* reduce log level for missing partition configuration file.
+
+Sun Oct 20 08:30:08 2013 -0400 Daniel Klein
+49ea151795e5a99741bb92d35536ff0b9df7868a
+
+	* osm_pkey.c: Fix find common pkey bug fix
+
+Mon Oct 7 16:35:46 2013 -0400 Hal Rosenstock
+d3aeae83fe7c71bd052376ae155eb2bfd9e2720d
+
+	* osmtest: Handle other than default subnet prefix
+
+Mon Oct 7 16:35:40 2013 -0400 Hal Rosenstock
+de029540feb2882c23fb43abb88583680d6356f4
+
+	* osm_trap_rcv.c: Log DR path to node when trap 128
+
+Mon Oct 7 16:35:36 2013 -0400 Hal Rosenstock
+181c863180df272500ff993abb1e62ca56bd2729
+
+	* osm_vendor_ibumad.c: Improve ERR 5430 log message
+
+Fri Oct 4 00:03:06 2013 +0900 Jens Domke
+e3aa9e8461a15654985d27148db7af2dd33fe797
+
+	* dfsssp: send multicast forwarding tables to switches
+
+Fri Oct 4 00:03:05 2013 +0900 Jens Domke
+4a39fb11387284d60a680ec62a9b50a9415a1461
+
+	* dfsssp: send multicast forwarding tables to switches
+
+Tue Oct 1 12:41:40 2013 +0300 Alex Netes
+d5f6e254c4f34b81ef3962e6c142828e748b1c67
+
+	* osm_sa_mcmember_record.c: Fix incorrect comparison of IPv6 MGID when searching for SNM MLID
+
+Mon Sep 30 17:05:55 2013 +0300 Alex Netes
+908c524296a2f94e5fd11f55a2f0049be404aa40
+
+	* osm_guid_mgr.c: Fix GUIDInfo SET function
+
+Mon Sep 16 07:38:38 2013 -0700 Line Holen
+7321689517078ea643f1275c99674fce935d7cc2
+
+	* osm_state_mgr.c Add info to some error messages
+
+Sat Sep 14 17:08:50 2013 +0300 Hal Rosenstock
+0fc753d342e8487d097d9cfef9493e8e40d4b0d0
+
+	* osm_sa_path_record.c: Eliminate extraneous space in 1F1A log message
+
+Wed Sep 11 09:29:39 2013 -0400 Hal Rosenstock
+18b3be9269ddbb58f02bd06f0a7b8678fc81a646
+
+	* Use trap number defines rather than actual trap numbers
+
+Thu Sep 12 16:41:33 2013 +0300 Hal Rosenstock
+270a7004877308fa80fb68ac64aafb388efa953d
+
+	* osm_db_files.c: Add osm_db_domain_init failure handling into test program
+
+Thu Sep 12 01:14:13 2013 -0700 Line Holen
+2b82c1cd758c395d94c24f6afd9a3c2fb4895d86
+
+	* Handle memory allocation failure in osm_db_domain_init()
+
+Wed Sep 11 12:41:58 2013 +0200 Vladimir Koushnir
+82841323af4cc56535f334a0d0c3af11343e2633
+
+	* Use after free in osm_prtn_delete
+
+Tue Sep 10 03:50:12 2013 -0700 Line Holen
+e8bf592d7bb2f0ca357985ac0c7f2a765b7f50b8
+
+	* Clean up event subscriptions if a port goes away
+
+Thu Sep 5 10:18:38 2013 -0400 Hal Rosenstock
+e186b4a37995405d787b92b89292c20f08f84bfd
+
+	* osm_sa_guidinfo_record.c: False duplicate GUID error messages
+
+Tue Sep 3 04:31:23 2013 -0700 Line Holen
+d95d461bc1a1ac63a84b37bfc2a09ca8aca1e79e
+
+	* osm_sa_informinfo.c Add attribute info to log messages
+
+Wed May 1 18:10:17 2013 +0300 Alex Netes
+7c9afa00b00bc0fe08363dfc1c155bf39a88d3ba
+
+	* Improve m_key lookup
+
+Wed May 1 19:14:34 2013 +0300 Alex Netes
+3e146fa76deae23442b6a9d74b6725e2d7dd0030
+
+	* Add option to disable M_Key lookup
+
+Wed Aug 14 03:26:42 2013 -0700 Line Holen
+94789a85a870752c5e574281e6eb8f7a6f56baa4
+
+	* osm_port_info_rcv.c Issue a log message if we cannot read the MKey of a port
+
+Thu Aug 22 10:31:06 2013 -0400 Alex Netes
+807d9ed630266bd60dd783faf364ea5e7c4358d5
+
+	* osm_trap_rcv.c: Fix locking in aging callback
+
+Thu Aug 22 10:54:09 2013 -0400 Dan Ben Yosef
+b67db2b87f0d460a8bccf9cf2c644cd7197d7e02
+
+	* osm_helper.c: Fix out-of-bounds read
+
+Tue Aug 20 12:31:50 2013 -0400 Dan Ben Yosef
+ef86015aadcf9b90726cc72868be38109f04a4e5
+
+	* osm_db_files.c : Fix resource leak guid2lid parser
+
+Tue Aug 20 10:28:49 2013 -0400 Vladimir Koushnir
+4a2d2d84e8b0fd0754d6a67f0dce4d9398393cff
+
+	* osm_subnet.c: Fix memory leak caused by commit dc0760cb8088fbe079e19682570a884ba01e94ff
+
+Tue Aug 20 17:23:14 2013 +0300 Alex Netes
+168eaeb522bcb34406e12c45eff5fc68fbb4e834
+
+	* osm_db_files.c: Fix memory leak when deleting entries from osm db
+
+Wed Aug 14 17:29:08 2013 +0300 Alex Netes
+eb294d5454d74a54753b95a016a0c478e641d04e
+
+	* osm_lid_mgr.c: Don't configure MTU and LMC for base SP0
+
+Wed Jul 31 17:11:36 2013 +0300 Hal Rosenstock
+edfaddc7b7788297fcce19d9890f0e7191b9e2da
+
+	* osm_ucast_dfsssp.c: Fix some typos
+
+Wed Jul 31 15:04:06 2013 +0900 Jens Domke
+e1804f4fdd148fc9cc45798b8b45e86efd61dee1
+
+	* dfsssp - add missing and change existing return values
+
+Tue Jul 30 11:03:17 2013 +0300 Daniel Klein
+d5ef9afb82dfe1007cf044490387b9e38c65a8e6
+
+	* update man page and usage explanation for --lfts_file
+
+Tue Jul 30 17:08:06 2013 +0300 Hal Rosenstock
+6fdd84495fdf83d2b59ce9f7846ea4edbd1091df
+
+	* osm_sa_path_record.c: Fix rate setting issue in SA PR handling
+
+Mon Jul 29 10:37:36 2013 +0300 Alex Netes
+4d6925caa05a41fa155c8a00d329cc97e7d88b57
+
+	* osm_vendor_ibumad.c: Fix explicit null derefenced issue found by coverity
+
+Tue Nov 27 16:06:25 2012 +0200 Alex Netes
+2d67f3e34c190b3e647e70aa3754bed3d6c062c5
+
+	* opensm/osm_db_pack.c: Removed uneeded asserts
+
+Mon Jul 22 21:19:48 2013 -0400 Eitan Zahavi
+09e1e7ee1399cb4d81cd0b821fda8a4a29f1021e
+
+	* libvendor/osm_pkt_randomizer.c: Fix broken compilation with vendor sim
+
+Thu Jul 18 09:53:34 2013 -0400 Alex Netes
+a47e5d049eb3f2e3ded70e3e61e04608f2451d4e
+
+	* complib/cl_event_wheel.c: Roundup timeout to nearest msec
+
+Tue Jul 9 10:52:53 2013 +0300 Alex Netes
+6ff99aa57af9608945e69e41b1e707b14331d6f1
+
+	* complib/cl_event_wheel.c: Add print of num_regs in cl_event_wheel_dump
+
+Tue Jul 9 10:43:43 2013 +0300 Alex Netes
+a3957f258a8cfd70ccdead1ede1452a65ec809df
+
+	* complib/cl_event_wheel.c: Fix duplicate error codes
+
+Thu Jul 4 14:00:22 2013 +0300 Alex Netes
+ceb4041ff7bc6b6caaccd1c6ca7b68507a9b80ba
+
+	* Fix test scenario in cl_event_wheel
+
+Wed Jul 3 20:06:48 2013 +0300 Hal Rosenstock
+51b187bc4843e741171bbcfad3e9ecd2d929f7dc
+
+	* Add flags to OSM_EVENT_ID_UCAST_ROUTING_DONE
+
+Tue Jul 2 17:55:12 2013 +0300 Hal Rosenstock
+5824714a0892e45038c0620d056f6926710e06c8
+
+	* osmeventplugin/osmeventplugin.c: Add Mellanox copyright
+
+Tue Jul 2 17:46:09 2013 +0300 Hal Rosenstock
+7186965c3a02fea16e63b2815b68a2504606bdef
+
+	* osm_event_plugin.h: Add Mellanox copyright
+
+Tue Jul 2 16:40:38 2013 +0300 Jeff Becker
+c97bd7b5d3f621c10f95ed3d0553c6c57cfe2874
+
+	* Permit toggling log flush from console
+
+Fri Jun 28 01:07:00 2013 -0700 Roland Dreier
+cd3b715107c7499be0c1b632cc2b2bf2aeaaf95e
+
+	* osmtest: Make the "-guid" option's argument mandatory
+
+Wed Apr 3 11:28:12 2013 +0300 Alex Netes
+0154977f90422ce6c1b457e2634d4cbfad075511
+
+	* complib/cl_event_wheel.h: Some cosmetic fixes
+
+Wed Jun 26 01:18:13 2013 -0700 Line Holen
+b78b1d53cf9a9ff6269b658b3a4a8cd15f8894b8
+
+	* osm_sa_mcmember_record.c validate_requested_mgid returning boolean
+
+Mon Jun 24 12:47:39 2013 -0400 Vladimir Koushnir
+58ee065dbdeaa714379466cf864bbf6f306cb21b
+
+	* osm_ucast_mgr.c: Fix extra copy in set_lft_block routine
+
+Sat Jun 22 18:21:51 2013 +0300 Vladimir Koushnir
+2a8c474fd61be844fdb5e1a7202bf45cabcd5c5a
+
+	* complib: Fix memory leak in cl_thread_pool_destroy function
+
+Tue Jun 25 21:46:24 2013 +0300 Vladimir Koushnir
+5bf6e727fd909d1548f88f96e107c2e06920e058
+
+	* osm_ucast_mgr.c: Fix duplicated code for fallback routing engine
+
+Mon Jun 24 08:02:58 2013 +0300 Alex Netes
+1960fbc63acc2bb165ffe0337692838ade932b9d
+
+	* osm_trap_rcv.c: Fix crash in babbling port feature
+
+Sun Jun 9 18:05:01 2013 +0300 Vladimir Koushnir
+96eafa0544ba3a2040dfb43b1df5be5d77f73d95
+
+	* ftree: Allow defining only io_guids file and consider rest of nodes as CN nodes
+
+Thu Jun 20 00:44:02 2013 -0700 Line Holen
+2e5966eaadb64f748462831014660a8f350171b9
+
+	* osm_sm_state_mgr.c Trivial log changes
+
+Wed Jun 5 11:14:59 2013 +0000 Line Holen
+aed167565a9571efed67805634988911de54bb06
+
+	* Log changes related to event subscription and forwarding
+
+Wed Jun 5 14:52:01 2013 +0300 Dan Ben Yosef
+1872d116e9cf27399307e1d3aad5eb54824251e8
+
+	* osm_sa_sminfo_record.c: fix sminfo sa query returns all sminfo records when filtering by LID in osm_smir_rcv_process
+
+Tue Dec 4 16:44:06 2012 +0200 Dan Ben Yosef
+b92f25acc193e870dd8fa47c766a4b1a02bc815e
+
+	* osm_ucast_cache.c : Fix dereference null return value
+
+Sun Apr 28 10:06:00 2013 +0300 Alex Netes
+21765ade61c96c319d157293e57e10f2f0e07846
+
+	* When SM fails to load/parse root_guids file use MinHop heuristics
+
+Mon Jun 3 11:44:01 2013 +0300 Vladimir Koushnir
+7c21c145e228cab52670819a22478fba409efb6c
+
+	* Fix shift pattern support in FTREE routing for native ftree topologies
+
+Sun Dec 2 16:07:49 2012 +0200 Dan Ben Yosef
+35f4419e6f2451f2124e826e8e93b02c733d068c
+
+	* osm_ucast_ftree.c: fix dereferencing null variable
+
+Sun Dec 2 13:48:47 2012 +0200 Dan Ben Yosef
+4d36d6d133c09e45fe394b3519ac9cae5ebbe1c5
+
+	* osm_ucast_ftree.c : fix dereferencing null variable
+
+Thu Aug 16 16:33:55 2012 +0300 Dan Ben Yosef
+49f1a71299e4aa28a8319334c772525f67cbd1ca
+
+	* opensm: fix possible double free in osm_ucast_ftree.c
+
+Sun Apr 29 12:25:41 2012 +0300 Vladimir Koushnir
+269512894d0bbb814707bf0aae56e832228f32f9
+
+	* Fix fat-tree routing for CAs with more than 1 connected port
+
+Tue Jun 11 14:30:41 2013 +0300 Hal Rosenstock
+75bba51121c5545209b15489b9928fe4fd826007
+
+	* Minor log formatting changes
+
+Mon Jun 3 11:40:47 2013 +0000 Line Holen
+16b4dfc9f8c1cf7283590607b7bfd83ab287260e
+
+	* Some log changes
+
+Thu Jun 6 14:35:45 2013 +0000 Line Holen
+51f87eec666f0a3911df301195c63b42bbdf6dc6
+
+	* Add attribute information to SA request error messages
+
+Wed Jun 5 11:14:12 2013 +0000 Line Holen
+42558d6dc04d748ba0c923bf5f3eae065da55c60
+
+	* osm_sm_state_mgr.c Don't clear IS_SM bit when changing state to NOT_ACTIVE
+
+Mon Jun 3 11:39:46 2013 +0000 Line Holen
+abd47ccc7b18d54f7c6caf593dbdf4726a8af5d4
+
+	* osm_sa_mcmember_record.c Reduce number of error messages the for same event
+
+Thu May 30 18:16:43 2013 +0000 Line Holen
+ae9d7e7f4e2f62eabad4cf9d60cd5b68a8295147
+
+	* Add trap details to notice log message
+
+Thu May 30 21:14:00 2013 +0300 Jens Domke
+21a5b5f988c20a9ed024cc039b4cf56198b6aadd
+
+	* DFSSSP - workaround for better VL balancing
+
+Thu May 30 07:38:56 2013 -0700 Line Holen
+b42ae68c0b2341308d66fe07f271a76c16ee9cfc
+
+	* osm_console_io.c Memory leak when closing console
+
+Wed May 29 15:41:41 2013 +0300 Dan Ben Yosef
+bcf00cb2036530de2c2a1b04708a836fb612653f
+
+	* osm_ucast_dfsssp.c: Fix memory leak in dfsssp_do_dijkstra_routing
+
+Tue May 28 04:20:54 2013 -0700 Line Holen
+f42a23223142fe2a984f37b3f3aa71dddef86ec7
+
+	* Fix segfault in osm_mgrp_delete_port()
+
+Sat May 25 18:01:46 2013 +0300 Hal Rosenstock
+886de5d544bfc80c6ded7f424296a7f0afff7043
+
+	* ib_types.h: Fix commentary typo
+
+Wed May 22 17:31:29 2013 +0300 Hal Rosenstock
+234401bda9a5185acad047ab97725b8524afac3b
+
+	* cl_threadpool.h: Remove vestigial mention of cl_thread_pool_construct
+
+Tue May 14 04:26:51 2013 -0700 Line Holen
+e20f37aa46eebaa505bfa87c82556d0139126bed
+
+	* osm_subnet.c Remove empty syslog message
+
+Mon May 13 09:30:43 2013 -0700 Line Holen
+1a94326774821805588de4abf382265d69c95bbe
+
+	* osm_sa_multipath_record.c Use aliasGUIDs when building responses
+
+Mon May 13 20:13:52 2013 +0300 Hal Rosenstock
+898e9a321edae75152d490017846c317ea3f23bb
+
+	* osm_ucast_lash.c: Cosmetic formatting change
+
+Thu May 9 18:48:09 2013 +0300 Alex Netes
+6d0413dfc662bd8749655fbb7a5c2c5bb1962973
+
+	* opensm/osm_ucast_dfsssp.c: Fix unused variable in update_mcft()
+
+Thu May 2 21:15:26 2013 +0900 Jens Domke
+83950842ea845dd2803d80c685ebdad9fabb0622
+
+	* OpenSM: dfsssp - add support for multicast
+
+Tue Apr 23 17:09:19 2013 +0300 Alex Netes
+943a40a5890db9874eceaa63461ecf99eb60ae12
+
+	* opensm: Fix Q_Key, TClass and limited keys parsing warnings in partitions.conf
+
+Thu Apr 11 10:19:35 2013 -0400 Alex Netes
+0fc6e8b996951eff2e1b40599af9b0deefb35009
+
+	* osm_lid_mgr.c: Fix duplicate LID assignment after SM port down
+
+Thu Apr 11 14:19:27 2013 +0000 Ira Weiny
+583d4cf3729f805a15b2260ccf92fe166f4e579f
+
+	* osm_console_io.c: Handle another write-strings issue
+
+Wed Apr 10 14:18:53 2013 +0300 Hal Rosenstock
+becc27ece0815807f39e45ac8016df18dabd9b29
+
+	* osm_sa_mad_ctrl.c: Drop incoming SA queries when shutting down
+
+Wed Apr 10 00:50:01 2013 +0300 Hal Rosenstock
+dbeb7a790227914618e342b1bc04a21f347e9331
+
+	* Change LFT event to be per block/per switch rather than just per switch
+
+Wed Apr 10 00:43:17 2013 +0300 Hal Rosenstock
+25c088aa6256d435b07c0b7dca8b14e907faa112
+
+	* Setup SM port GUID in subnet object as soon as it is known
+
+Wed Apr 10 00:37:14 2013 +0300 Hal Rosenstock
+92c502aeb960edbfbb0c7c13bac3565a485a129f
+
+	* osm_sa_mcmember_record.c: On join and leave, validate subnet prefix in port GID
+
+Wed Apr 10 00:35:07 2013 +0300 Hal Rosenstock
+cbbe385b81744b6caa5d982b03c9156470239edf
+
+	* osm_sa_mcmember_record.c: Improve debug log message in validate_modify
+
+Wed Apr 10 00:32:42 2013 +0300 Hal Rosenstock
+4f835ae9a0450573e76f23805b41bccd26a170c8
+
+	* osm_congestion_control.c: Simplify some code
+
+Wed Apr 10 00:31:19 2013 +0300 Hal Rosenstock
+23ebbe96ce2beca4846726891f5d1c4eacb887c3
+
+	* osm_log.c: Remove unneeded initialization in osm_log
+
+Tue Apr 9 22:50:57 2013 +0300 Hal Rosenstock
+550fdeb2b02abc7b653825ded9f5f9446657ef34
+
+	* osm_lid_mgr.c: Some commentary fixes/updates
+
+Fri Apr 5 15:32:35 2013 -0700 Albert Chu
+1d5084577ae686620df9dc6695087b7fea8c3f4c
+
+	* opensm: Add configure output messages for several configure options
+
+Fri Apr 5 05:31:44 2013 +0300 Hal Rosenstock
+91384edf75306acf70be78f114253efbe9c460f9
+
+	* osm_lid_mgr.c: Fix a couple of commentary typos
+
+Mon Apr 1 16:16:25 2013 +0300 Hal Rosenstock
+a23880018798d6715b179f95e85d7b83bbf8463c
+
+	* ib_types.h: Trap 144 PortInfo:CapabilityMask2 changed bit definition
+
+Mon Mar 25 12:41:35 2013 +0200 Ammar Haj Hamad
+564b6eb858f319e4282c7925ef6ace7c1f9bd74f
+
+	* opensm: fix dfsssp uninitialized value
+
+Mon Mar 18 17:42:11 2013 +0200 Hal Rosenstock
+6cd61141d8442c49d4e5b6bcb29eeeb037384c83
+
+	* opensm: Add support for LFT changed event
+
+Mon Mar 18 17:41:39 2013 +0200 Hal Rosenstock
+c0602edd30b9e2efbd3e2d917a423c120f8dbd4d
+
+	* opensm/osm_port_info_rcv.c: Fix min_sw_data_vls calculation
+
+Thu Mar 14 20:18:20 2013 +0200 Hal Rosenstock
+395157e5de360e02c5e4c827febc21442af3ad67
+
+	* opensm/osm_node.h: Fix some commentary typos
+
+Thu Mar 14 17:42:22 2013 +0200 Hal Rosenstock
+2d8df36729434a8ab68035eec9898b512b918e91
+
+	* opensm/osm_sw_info_rcv.c: Fix double release of lock in osm_si_rcv_process
+
+Thu Mar 14 13:08:39 2013 +0200 Hal Rosenstock
+664494a8157684f2f277fb457556a7c27feae0af
+
+	* opensm: Fix issues causing const warnings for strings
+
+Mon Mar 11 15:35:29 2013 +0200 Hal Rosenstock
+8840f825a7a2800acfa4b9559c111dff30f9b6af
+
+	* opensm/osm_switch.h: Cosmetic change
+
+Sat Mar 9 17:25:38 2013 +0200 Hal Rosenstock
+1a06167c7a2450e110ffcba179c829fa43b6ac9b
+
+	* opensm/man/osmtest.8: Add option for using full world path queries
+
+Fri Mar 8 09:31:10 2013 -0700 Jim Schutt
+eb43f7e5fd768b24148924c2443774525b4f15e0
+
+	* opensm/osm_torus.c: clarify log messages on stale priv pointers
+
+Fri Mar 8 08:59:01 2013 -0700 Jim Schutt
+e7435ef51bd6f07c2d9520e959a731e78e83078e
+
+	* opensm/osm_torus.c: avoid the possibility of following stale ->priv pointers
+
+Fri Mar 8 18:35:29 2013 -0800 Ira Weiny
+1f7ceb8c05fdbe84d75c79d8abb768000ec520ad
+
+	* opensm/osmtest: fix debug build
+
+Thu Mar 7 16:11:08 2013 +0200 Hal Rosenstock
+dc0760cb8088fbe079e19682570a884ba01e94ff
+
+	* opensm/osm_subnet.c: Miscellaneous minor fixes
+
+Mon Mar 4 23:45:10 2013 +0200 Hal Rosenstock
+4924ea7283e2027a49e8a8a7ca33b20f96af2ae7
+
+	* osmtest: Add support for full world path records back as option
+
+Mon Mar 4 22:52:38 2013 +0200 Hal Rosenstock
+6f1a67e966d62040319f093eb61d9c72e2a4390a
+
+	* osmtest/osmtest.c: Minor reordering of code in osmtest_write_all_path_recs
+
+Mon Feb 25 16:02:54 2013 +0200 Dan Ben Yosef
+e9556df81f50ee3653bc10420a7529a81804e331
+
+	* opensm/osmtest.c: half_world_query when creating inventory file
+
+Sat Mar 2 18:02:39 2013 +0200 Hal Rosenstock
+81d3ea3a41af100f8e6b61ea1c68eabfed0b815f
+
+	* opensm/osm_subnet.c: Change default for perfmgr_query_cpi to FALSE
+
+Fri Mar 1 16:39:13 2013 -0800 Albert Chu
+309317deaa08cc3937d2676b43390f85c2c6c7da
+
+	* opensm/osm_ucast_ftree.c: Fix invalid debug output message
+
+Thu Feb 28 17:08:51 2013 -0800 Ira Weiny
+904a555396482fdfdf0253d4dd778093950c64d1
+
+	* opensm/perfmgr: fix access to shared sweep_state variable
+
+Thu Feb 28 17:08:49 2013 -0800 Ira Weiny
+1458263d0646045559a827e7ab40990658b3eeae
+
+	* opensm/perfmgr: don't clear data counters in PortCounters when ExtendedPortCounters is supported
+
+Thu Feb 28 17:08:07 2013 -0800 Ira Weiny
+b73c378e4003e095c6ac41ac2b545c315d1e7fdc
+
+	* opensm/perfmgr; add support for PortCountersExtended NOIETF
+
+Thu Feb 28 17:06:18 2013 -0800 Ira Weiny
+70f58208bcb021774a6d502643ca7cdc26a231e6
+
+	* opensm/perfmgr: Issue PortCountersExtended query when supported
+
+Thu Feb 28 17:05:26 2013 -0800 Ira Weiny
+d0a85322aa6a69d21e9538f03d1f8c30e1ea745a
+
+	* opensm/perfmgr: clean up: break out redirect processing from pc_recv_process
+
+Thu Feb 28 17:05:23 2013 -0800 Ira Weiny
+b6d0001f6918c6557980931c7487a5954559aa12
+
+	* opensm/perfmgr: issue ClassPortInfo as first query to each port.
+
+Thu Feb 28 17:31:19 2013 +0200 Hal Rosenstock
+e1af1ce730a419fe2210b5fa073f2fe84a7c8524
+
+	* opensm/osm_console.c: Use ib_port_info_get_link_speed_ext_enabled
+
+Tue Feb 26 13:54:42 2013 -0800 Albert Chu
+2ba9919a459129a055d97691af7d366e159cb8c2
+
+	* opensm/osm_console.c: Do not perform portstatus checks on down ports
+
+Tue Feb 26 13:54:40 2013 -0800 Albert Chu
+5c45f606fed1c6952863bec0de88215e908aeb6c
+
+	* opensm/osm_console.c: Support portstatus output for unenabled width/speed
+
+Mon Feb 25 08:30:54 2013 -0800 Ira Weiny
+ef32e127a9ea0d08af4133cc13c4002bfa86bcd6
+
+	* opensm: make osm_pr_rcv_get_end_points, osm_pr_rcv_process_pair, osm_pr_rcv_process_half public
+
+Mon Feb 25 08:30:10 2013 -0800 Ira Weiny
+7723c07d86d1ea62594c7d91cea16f78df030d25
+
+	* opensm: make osm_get_path_params public
+
+Mon Feb 25 18:43:54 2013 +0200 Hal Rosenstock
+7ac18bb72b1349e962c81e201bd87be6db81f6c2
+
+	* opensm/osm_perfmgr.c: Cosmetic changes
+
+Sat Feb 23 16:17:41 2013 -0800 Ira Weiny
+fe52571755d64248830dc4abdfb735128f8fd28f
+
+	* opensm/perfmgr: add failed port guid to error message
+
+Fri Feb 22 18:23:57 2013 +0200 Alex Netes
+8b67a1c803eee5a23eb5514510fef4a41f93bdec
+
+	* opensm/osm_req.c: Better implementation of req_determine_mkey
+
+Thu Feb 21 13:44:13 2013 -0800 Ira Weiny
+37eecc80c828ad12a8c346407e0fbd669f80afd7
+
+	* opensm/libibvendor: osm_vendor_get_all_port_attr include sm_sl value in port attribute struct
+
+Tue Feb 12 22:40:05 2013 +0200 Hal Rosenstock
+8ac930e1313a5dda6919d9986bb0ed588a12c45a
+
+	* osmtest/osmt_multicast.c: Fix IPoIB MC group recognition
+
+Thu Feb 21 17:40:47 2013 +0200 Hal Rosenstock
+5a33cc67319b0deab2294d936b014299cb1151b4
+
+	* osmtest/osmt_multicast.c: Fix commentary typo
+
+Tue Feb 12 08:56:39 2013 +0200 Dan Ben Yosef
+19476441c62b5cf5b6841fc6dbedbd3777e60d63
+
+	* opensm/osm_qos_policy.c: fix memory leak when parsing policy file
+
+Wed Feb 20 20:37:38 2013 +0200 Hal Rosenstock
+935816436789b998dcb9387ccc9037f6bce2341d
+
+	* opensm/osm_sa_multipath_record.c: Validate required components are indicated
+
+Wed Feb 20 20:35:15 2013 +0200 Hal Rosenstock
+fbe0d0275c926244bfef3d73c9fe74ebdfee57e6
+
+	* opensm/osm_sa_multipath_record.c: Make sure either none or both ServiceID parameters are supplied
+
+Wed Feb 20 20:31:25 2013 +0200 Hal Rosenstock
+f929ac163eb91fa1064d0b8d86005fd23e0955ae
+
+	* opensm/osm_sa_path_record.c: Make sure either none or both ServiceID parameters are supplied
+
+Wed Feb 20 20:29:20 2013 +0200 Hal Rosenstock
+43efbc20443288f539307147256ccc12365b20f5
+
+	* opensm/osm_sa_multipath_record.c: Fix seg fault in mpr_rcv_get_apm_paths
+
+Wed Feb 20 20:22:55 2013 +0200 Hal Rosenstock
+186a59884c1260286fc7512a134fa102ddf4e7f7
+
+	* opensm/osm_sa_multipath_record.c: Fix commentary typo
+
+Sun Nov 11 15:49:03 2012 +0200 Ilya Nelkenbaum
+4cb3751024ba9a45b2d305c06c907b5e95e38b3b
+
+	* osm_dump.c: Fix typo in dump_lid_matrix
+
+Wed Feb 20 20:04:29 2013 +0200 Hal Rosenstock
+a0deac6cdb3ea10a7970a41a5b3108d8299ba7fc
+
+	* opensm/osm_dump.c: Fix enhanced switch port 0 handling in print_node_report
+
+Wed Feb 20 19:48:14 2013 +0200 Hal Rosenstock
+250802dd5d5706e910c887d832091a962ae7edba
+
+	* opensm/osm_qos_policy.c: Fix source & destination GUID policy check
+
+Wed Feb 20 16:55:02 2013 +0200 Daniel Klein
+9f231a8e55f103db4e9808636afa799ead55e5ef
+
+	* libvendor/osm_vendor_ibumad.c: fix mad validation in case of multipath record response
+
+Wed Feb 20 13:58:27 2013 +0200 Hal Rosenstock
+abbbe8ae825054172614fc016024b019631fbf78
+
+	* opensm/ib_types.h: Add missing IB_MPR_COMPMASK_SERVICEID define
+
+Tue Feb 19 15:06:34 2013 -0800 Ira Weiny
+2be4e201b1c997321d11d8b5d0c5c0975472fa7b
+
+	* opensm/perfmgr: update node name when Node Description is received from node
+
+Wed Feb 13 13:52:03 2013 -0800 Ira Weiny
+f37bf3c615f230577408ad779c1dc6c6080e899f
+
+	* opensm/perfmgr: skip data counters when only printing errors
+
+Wed Feb 13 13:51:23 2013 -0800 Ira Weiny
+8412591dd0b83eb37d371c7b68e04caadd4ca98c
+
+	* opensm/perfmgr: mark/report time of last counter update
+
+Tue Feb 19 19:56:50 2013 +0200 Hal Rosenstock
+505d48b9b54dad9ffeab940dc257e53c0c499432
+
+	* opensm/osm_torus.c: Cosmetic formatting changes
+
+Fri Feb 15 21:21:07 2013 +0200 Hal Rosenstock
+dc44d485710cad711dfab653db2e728fc04a3952
+
+	* opensm/ib_types.h: Add missing IB_PR_COMPMASK_SERVICEID define
+
+** Version: opensm-3.3.16
+
+Tue Feb 5 19:11:07 2013 +0200 Alex Netes
+c7837ce677a7a719aa46565b83c87350ccceb8df
+
+	* opensm: packages versions update
+
+Tue Feb 5 18:12:49 2013 +0200 Alex Netes
+387f554a2867e6a1e2cc85789370e7e27a7c38e9
+
+	* opensm_release_notes-3.3: update
+
+Tue Feb 5 17:57:55 2013 +0200 Alex Netes
+c491dae684a2eb722b58d9f53a2ae4ee61701112
+
+	* opensm: update shared library versions
+
+Mon Jan 28 15:42:05 2013 +0200 Hal Rosenstock
+d7e4da1035ed409d9ac478da8e304eaaf7895856
+
+	* opensm: Use IB_PATH_SELECTOR_EXACTLY rather than harded coded constant
+
+Thu Jan 24 17:16:28 2013 +0200 Hal Rosenstock
+735c86d85ff4e818d9bc0d1202da2fe6fb414e6e
+
+	* opensm/osm_sa_informinfo.c: Fix infr_rcv_respond to only copy InformInfo
+
+Wed Jan 23 13:53:37 2013 +0200 Hal Rosenstock
+f1186689d416198cd84b2899cf619ad57a5df6a3
+
+	* opensm/osm_sa: Improve SA record response handling (osm_sa_respond)
+
+Wed Jul 25 06:40:06 2012 -0400 Hal Rosenstock
+b09ac65a7757711b5eaf56712df6b1c4afa773fb
+
+	* opensm/osm_sa_informinfo.c: Add trusted support for InformInfo/InformInfoRecord
+
+Tue Feb 5 17:29:48 2013 +0200 Alex Netes
+3a87fa2d6a3c81174198629295f9317a34544177
+
+	* opensm/osm_req.c: fix first sweep m_key search algorithm
+
+Tue Jan 29 19:18:50 2013 +0200 Alex Netes
+5fdb0b91601ff2506578b0dd7363ad6050c9e1b2
+
+	* opensm/configure.in: Remove Default-Start from opensmd init script
+
+Mon Feb 4 16:02:01 2013 +0200 Alex Netes
+b9661000fd939cf7ea67261398779626a7d4019a
+
+	* opensm/osm_sm_state_mgr.c: Start sweep immedeately when recieving HANDOVER in DISCOVERING state
+
+Sun Nov 25 18:19:44 2012 +0200 Alex Netes
+4349c07d15df9f59ca5c86228c08c6390e679151
+
+	* opensm: Add physp_p discovery count support
+
+Tue Dec 11 14:12:10 2012 +0200 Alex Netes
+d706cbf2ead6953151400faa7c808050bb8806cf
+
+	* opensm/osm_sm_mad_ctrl.c: Upon receiving trap repress we should decrease qp0_mads_outstanding_on_wire
+
+Thu May 10 09:33:31 2012 +0200 Vincent Ficet
+9cbb8af93ec4b67bfc2f7e20d516ec8172f9870f
+
+	* opensm/osm_ucast_ftree.c: fix opensm segfault in osm_ucast_ftree.c
+
+Mon Feb 4 12:24:39 2013 +0200 Alex Netes
+e1e470681f1beb26b86b73ed6bd7fb2fae386d19
+
+	* opensm: Revert "opensm/osm_ucast_ftree: When roots are not connected, update hop count but not lft"
+
+Wed Dec 19 15:39:01 2012 +0200 Alex Netes
+d2312af6e312dbd5ad10edeb0b7648bf45c21992
+
+	* opensm/osm_link_mgr.c: Fix sending PortInfo(Set) with AM SMSupportExtendedSpeeds bit set for switch base port 0
+
+Wed Dec 19 11:21:11 2012 +0200 Alex Netes
+06ae82c66fcdb50236987c07d13e1af3a2094c53
+
+	* opensm/osm_link_mgr.c: Set AM SMSupportExtendedSpeeds bit if port supports ExtPortInfo
+
+Thu Jan 3 15:33:58 2013 +0200 Shlomi Nimrodi
+b2cd2d7308a84e0c3dde2639c2f74b9127dca4f5
+
+	* opensm/osm_ucast_ftree.c: Fix unranked nodes bug in FTree
+
+Wed Jan 9 17:30:44 2013 +0200 Alex Netes
+7a49366ea2f08fbf01145853536925457bcd3c56
+
+	* opensm: Changed #if to #ifdef when using ENABLE_OSM_PERF_MGR_PROFILE
+
+Tue Jan 15 10:26:30 2013 +0200 Ilya Nelkenbaum
+1cf0bb972094c6e590ad9137a752f9576cd5a5b5
+
+	* opensm/osm_congestion_control.c: fix use-after-free found by coverity
+
+Wed Jan 16 11:06:44 2013 +0200 Shlomi Nimrodi
+edd0552d1d11ffe9d348327c340d2a8ce0102f9c
+
+	* opensm/osm_qos_policy.c: fix segmentation fault on osm_qos_policy_match_rule_destroy (osm_qos_policy.c)
+
+Wed Jan 16 21:54:57 2013 +0200 Hal Rosenstock
+34af1a57b472d76297289b2716a7ce43ee5ef3e2
+
+	* opensm/osm_torus.c: torus routing should fail with VLCap 1 on switch external ports
+
+Mon Jan 14 15:31:42 2013 +0200 Hal Rosenstock
+2b8940ba8c251b9055c4505a5638a295cff19f0f
+
+	* opensm/osm_torus.c: In dump_torus, make sure switch is present before dumping
+
+Fri Nov 9 13:55:24 2012 -0800 Albert Chu
+2364e8e185ab2814cb0c642994f9c490e271cfec
+
+	* opensm: Add better error output when parsing node name maps
+
+Fri Jan 25 08:07:34 2013 -0500 Hal Rosenstock
+7204287ed84bca90a4aebf67a87ddb6f1a2f6a90
+
+	* opensm/osm_sa_mcmember_record.c: Only use scope from MC group in copy_from_create_mc_rec
+
+Thu Jan 24 09:45:48 2013 -0500 Hal Rosenstock
+4eb0f694c7a68b08865e826f092137b5c2011d17
+
+	* opensm/osm_dump.c: Remove incorrect assert
+
+Wed Jan 23 01:42:04 2013 +0900 Jens Domke
+1ddb44b612cd29830e9589a5265801bdddb49cda
+
+	* OpenSM: dfsssp - moved paths from one to another VL might be counted multiple times
+
+Wed Jan 23 01:41:47 2013 +0900 Jens Domke
+a0a9eeafb11bb639696bd84f3fdd213e51b6ee2a
+
+	* OpenSM: DFSSSP does not find LIDs due to wrong byte order (v2)
+
+Wed Jan 23 01:41:31 2013 +0900 Jens Domke
+13fd9522bbc5f98e13b988ffddcf35d784dcbc2d
+
+	* OpenSM: dfsssp - avoid unnecessary nested loop in vltable_print for OSM_LOG_INFO
+
+Wed Jan 23 01:41:07 2013 +0900 Jens Domke
+1cbed64100d6382b08cc4a19ee1422d7bc524d77
+
+	* OpenSM: dfsssp - change the port traversal for sssp
+
+Wed Jan 23 01:40:49 2013 +0900 Jens Domke
+c2f0bb97afd0eef149e70ddf569a2788d43f33de
+
+	* OpenSM: dfsssp - add support for base/enhanced switch port
+
+Wed Jan 23 01:40:29 2013 +0900 Jens Domke
+64873fff7a9b28b1cfebd5872260d41899f7561e
+
+	* OpenSM: dfsssp ignores differences in the lmc value
+
+Wed Jan 23 01:40:07 2013 +0900 Dan Ben Yosef
+ab5af498c76f4dd38b0dbb3a0b469b72987a7c9a
+
+	* opensm/osm_ucast_dfsssp.c : fix dereference before null check
+
+Wed Jan 23 01:39:42 2013 +0900 Dan Ben Yosef
+b6a2f6aefbb1bce1b5365e01a2986c8a6b6e034a
+
+	* opensm/osm_ucast_dfsssp.c : fix dereference null return value
+
+Wed Jan 23 01:39:13 2013 +0900 Dan Ben Yosef
+e9cc52302a2475ab820cb2cf63bba4209fd96b45
+
+	* opensm/osm_ucast_dfsssp.c : Fix resource leak
+
+Wed Jan 23 01:38:18 2013 +0900 Jens Domke
+dec11095c30d082273a126cc73ef33f568aef4a2
+
+	* DFSSSP: fix a memory leak in dfsssp_build_graph
+
+Mon Nov 12 11:51:09 2012 -0800 Ira Weiny
+df66c1fa0783940fee61b2402038a5c755206689
+
+	* opensm: Fix incorrect use of sizeof
+
+Mon Dec 3 10:25:21 2012 -0500 Hal Rosenstock
+162493efd0bed6c3c9cb53bcf106525b2a4d9122
+
+	* opensm/osm_req.c: In req_determine_mkey, use osm_physp APIs
+
+Mon Dec 3 10:25:12 2012 -0500 Hal Rosenstock
+d5fe52812175f9dbbaf7608805142b5620418d62
+
+	* opensm/osm_req.c: In req_determine_mkey, fix DR algorithm
+
+Mon Jan 7 14:50:42 2013 -0500 Hal Rosenstock
+fc53bdc19b548912b4739fb2ab59e9ca5a931fbc
+
+	* opensm/osm_torus.c: Dump torus when OSM_LOG_ROUTING specified
+
+Mon Jan 7 14:50:31 2013 -0500 Hal Rosenstock
+434afa6505f608739be37d3e42c090e8d557297d
+
+	* opensm/torus: Add configuration for max_changes to report
+
+Mon Jan 7 14:50:23 2013 -0500 Hal Rosenstock
+35bcddf6f7ec80de40d850229efd3d4c8bb3088b
+
+	* opensm/osm_torus.c: Consolidate some parsing with parse_unsigned
+
+Wed Dec 19 14:16:47 2012 -0500 Hal Rosenstock
+3f3d26faf686535f0e8091502079c22e37348e46
+
+	* opensm/osm_prtn_config.c: Insert autogenerated pkey into MGID for IPoIB
+
+Mon Dec 17 11:55:31 2012 -0500 Hal Rosenstock
+c58a416ff1fd43cf3b06fc59384cc0973d7b7c6c
+
+	* opensm/osm_dump.c: Fix output port on SL2VL table for non switch nodes
+
+Mon Dec 17 11:55:27 2012 -0500 Hal Rosenstock
+8af5bce91b4692c0b7b2e4f8aff22e4d9de564d5
+
+	* opensm/osm_sa_slvl_record.c: Fix out port for CAs and routers
+
+Mon Dec 17 11:55:21 2012 -0500 Hal Rosenstock
+18a77f9efed31bb15e3a5a1644828d8e464e66c6
+
+	* opensm/osm_torus.c: Fix memory leak
+
+Sun Dec 9 02:54:57 2012 -0800 Garrett Cooper
+4ccbdc1901766509bfac3e4aa5c75065b5892687
+
+	* Fix -Wformat-security warnings with clang
+
+Sun Dec 9 12:14:12 2012 -0800 Garrett Cooper
+c7623891d879b37716d71e06364c872fd1ce09a7
+
+	* Fix -Wtautological-compare warnings with clang
+
+Tue Dec 11 02:09:13 2012 -0800 Garrett Cooper
+9e6dd8fc905917a10d43ec480def4dbec19e6bae
+
+	* Fix linker error with clang with -O < 2
+
+Mon Dec 3 16:26:08 2012 -0500 Hal Rosenstock
+d80ca1e892ef87bf11a410419995cc3433da30b0
+
+	* opensm/osm_port_info_rcv.c: Don't modify subnet minimal values when PortState DOWN
+
+Mon Dec 3 16:25:30 2012 -0500 Hal Rosenstock
+8384156f077c7d09d5864404e72cee547121a83b
+
+	* opensm/osm_torus.c: Fix crash in torus_update_osm_vlarb
+
+Mon Dec 3 10:26:07 2012 -0500 Hal Rosenstock
+f97a2e9873d1a3beb22a7206720ca36d19c3c4ff
+
+	* opensm/osm_ucast_ftree.c: Eliminate unneeded NULL pointer checks prior to calls to free
+
+Mon Dec 3 10:25:57 2012 -0500 Hal Rosenstock
+8a77f23540ff995a3193edceadc82688702b6c6e
+
+	* opensm/osm_ucast_ftree.c: Remove duplicate free in fabric_create_leaf_switch_array
+
+Mon Dec 3 10:25:39 2012 -0500 Hal Rosenstock
+338a67b4f7c3dde3b353f2d7b863e71dfbcec0df
+
+	* opensm/osm_subnet.c: Improve error messages in subn_validate_neighbor
+
+Mon Dec 3 10:25:04 2012 -0500 Hal Rosenstock
+0a1c9bf43745e390d7edf9e254efb932a3299bde
+
+	* opensm/osm_req.c: In req_determine_mkey, add more info when ERR 1107 occurs
+
+Thu Nov 29 14:11:42 2012 -0500 Hal Rosenstock
+b974ca301d960a2de7eb71a844823942eca8b306
+
+	* opensm/osm_torus.c: Improve some misconfiguration error messages
+
+Wed Nov 28 14:03:44 2012 -0500 Hal Rosenstock
+e986d57d58fcb7d58dde0df30cd1006e3fd4b799
+
+	* opensm/osm_torus.c: Minor simplification to check_qos_config
+
+Wed Nov 28 14:03:39 2012 -0500 Hal Rosenstock
+95b6f8345c1ac9aa4eb058dcb11c5960a91944ae
+
+	* opensm: Update doc for changes to torus routing for, endport support
+
+Wed Nov 28 14:03:33 2012 -0500 Hal Rosenstock
+998fb4383dc4c49b595545a2e54f35108e9d4fd7
+
+	* opensm/osm_torus.c: Add copyright
+
+Wed Nov 28 14:03:26 2012 -0500 Hal Rosenstock
+268d327559d5a7bdf235c463c8c4489e32867221
+
+	* opensm/osm_torus.c: Improve QoS configuration
+
+Wed Nov 28 14:03:19 2012 -0500 Hal Rosenstock
+d1d2de57c34997b8d29f069e4631a484ce371ea2
+
+	* opensm: Update doc for changes to torus routing for CA, support
+
+Wed Nov 28 14:03:11 2012 -0500 Hal Rosenstock
+a362b5bae31664b9d1bee8f8cc31276656ae4b3f
+
+	* opensm/osm_torus.c: Require only 2 data VLs supported (PortInfo.VLCap) and use VLs 0-1 on CA links
+
+Wed Nov 28 14:03:01 2012 -0500 Hal Rosenstock
+3f536aea6bb3645545b9c53b7381928b28d0e121
+
+	* opensm: Add routing specific update_vlarb hook routine
+
+Wed Nov 28 14:02:54 2012 -0500 Hal Rosenstock
+27da5eb71981c750ba4eabb0ce246b394597d52f
+
+	* opensm/include/osm_opensm.h: Fix commentary typo
+
+Fri Nov 9 08:36:46 2012 -0500 Hal Rosenstock
+a2415f37a18808ccab18e37c4285a1b972376b34
+
+	* Add Per Module Logging support for Congestion Manager
+
+Tue Jan 15 17:40:09 2013 -0800 Ira Weiny
+a6d36947064d775a0acf137346e75d3c08c86a21
+
+	* opensm: clean up error message, function name is printed by logging code
+
+Fri Jan 11 14:33:56 2013 -0500 Hal Rosenstock
+2cf80781aa91da7d119a6486d01a0656980fee8a
+
+	* opensm/osm_sa_mcmember_record.c: Return proper scope for query with valid SA key
+
+Mon Jan 7 14:50:53 2013 -0500 Hal Rosenstock
+b9067ba9cb90a6817e4929eca97f1a87f045af8b
+
+	* opensm/include/complib/cl_packon.h: Fix some commentary typos
+
+Thu Nov 8 10:32:59 2012 -0800 Albert Chu
+e522f749854d64dc2c95def7d90f6a8bb20b993c
+
+	* opensm/osm_perfmgr_db.c: Fix output error due to possible 32bit int overflow
+
+Thu Nov 8 08:22:37 2012 -0800 Ira Weiny
+c1a206e25351129e6ec014d872451f04c21b4a28
+
+	* opensm: update performance manager documentation
+
+Mon Oct 29 16:45:02 2012 -0700 Albert Chu
+f204e9c9e9843cf0a2ef98a294d506f5f1cead84
+
+	* opensm: Protect against spurious wakeups when calling cl_event_wait_on
+
+Mon Oct 29 16:44:59 2012 -0700 Albert Chu
+6f94c4c7bd0cfb16101c8680bcb515ac99839ff3
+
+	* opensm: Fix signed vs unsigned int comparison
+
+Wed Oct 24 18:26:27 2012 +0200 Alex Netes
+7db5c7521998f6d2f93986bcc245348d9886657d
+
+	* opensm/osm_subnet.c: Only parameters that marked with can_update flag should be updated during conf file rescan
+
+Thu Oct 25 11:59:38 2012 +0200 Bart Van Assche
+282714a6f3e0e48eede83e0922515df3fc9fb497
+
+	* /etc/init.d/opensmd: Improve systemd integration
+
+Wed Oct 24 09:42:24 2012 -0400 Hal Rosenstock
+2ea2cf366beac1592f35374ff2cfac58b7bba7c0
+
+	* opensm/osm_vl15intf.c: Fix commentary typo
+
+Wed Oct 24 09:42:11 2012 -0400 Hal Rosenstock
+8b116d7c67276e682071ab3117e7f4b2c753d54d
+
+	* opensm/osm_trap_rcv.c: Eliminate unneeded trap_rcv_process_response routine
+
+Wed Oct 24 09:42:01 2012 -0400 Hal Rosenstock
+f396936682083f351adc7812f42020106184ce30
+
+	* opensm/complib/cl_atomic_osd.h: Fix long standing bug in cl_atomic_sub
+
+Fri Sep 21 16:46:12 2012 +0200 Bart Van Assche
+4008c2fe8cf50931d69e5618358aa6537e9ddb8e
+
+	* opensm.spec.in: Improve portability
+
+Fri Sep 21 16:43:03 2012 +0200 Bart Van Assche
+01ab74450fd1227cf2dfb9219ffd697d3beb4a45
+
+	* Make it possible to enable opensm with chkconfig
+
+Fri Sep 21 16:42:04 2012 +0200 Bart Van Assche
+c68ae6319211d462734b5e5c88401768d02bddf0
+
+	* Add command-line option --pidfile
+
+Wed Oct 10 19:40:13 2012 -0400 Hal Rosenstock
+ffb9a8227ee2e98c16ca2d19d2c840a32c8dcaef
+
+	* opensm/osm_torus.c: Check fabric minimum data VLs on switch external ports
+
+Wed Oct 10 19:40:09 2012 -0400 Hal Rosenstock
+d0258f3cede60c321077697469bf247820e6087f
+
+	* opensm: Track minimum value in the fabric for data VLs supported on switch external ports
+
+Wed Oct 10 19:40:05 2012 -0400 Hal Rosenstock
+36159c2f925f52eee76cc568f1f11acf0808a3fc
+
+	* opensm/osm_torus.c: Cosmetic formatting change
+
+Wed Oct 3 19:57:54 2012 -0400 Hal Rosenstock
+dba3f9289d4277f67474e75cfe5979a6cc74487c
+
+	* opensm/osm_helper.c: Add some missing new lines to log message output
+
+Wed Oct 3 19:57:46 2012 -0400 Hal Rosenstock
+94468b5462b20f86e0e9e8cc62a7418aef7f5520
+
+	* opensm/osm_ucast_updn.c: Add error codes to a couple of log messages
+
+Thu Sep 20 18:27:57 2012 +0200 Bart Van Assche
+86a203b86dcc64c868f281cb45e5cb67c0fde17a
+
+	* Correct option names in opensm man page
+
+Thu Sep 20 15:01:04 2012 +0300 Yevgeny Kliteynik
+dae214fcb4429c05a50849d7a34f2afaaef3466b
+
+	* opensm/osm_log.h: fix function documentation
+
+Tue Sep 18 14:53:33 2012 -0400 Hal Rosenstock
+34824382bdf7242e95f02ca3647608d99960d3e6
+
+	* opensm/osm_sa.h: Cosmetic commentary change
+
+Tue Sep 18 14:53:28 2012 -0400 Hal Rosenstock
+824e1f0b05740ac80d324a25ab53b48e6a91b2fe
+
+	* opensm/ib_types.h: Commentary and cosmetic formatting change
+
+Tue Sep 18 14:53:21 2012 -0400 Hal Rosenstock
+3711e8a4a42b284cf1c517695526a3bbee026ced
+
+	* opensm/complib/cl_spinlock.h: Remove some unimplemented routines
+
+Tue Sep 18 14:53:10 2012 -0400 Hal Rosenstock
+0c3f57fe921159c88b760231ce8bca48578c4430
+
+	* opensm/osm_torus.c: Add error code to error log message
+
+Tue Sep 11 16:15:53 2012 +0200 Bart Van Assche
+8e6dfbd0b9284fe0083b3f378ec313c3acfb060c
+
+	* opensm: Add .gitignore
+
+Tue Sep 11 18:33:31 2012 +0300 Yevgeny Kliteynik
+62484956a890b81fc0de592e959e156f5067f0d1
+
+	* opensm/osm_port_info_rcv.c: use PF() hint on fatal conditions
+
+Tue Sep 11 18:32:11 2012 +0300 Yevgeny Kliteynik
+dff59276cdf1a6f158e4d2f6c277508cb1efda02
+
+	* opensm/osm_port_info_rcv.c: check received local_port_num
+
+Tue Sep 11 18:29:52 2012 +0300 Yevgeny Kliteynik
+b7b1505ddfae733cfc088d1cd4f49529666d17af
+
+	* opensm/libvendor/osm_vendor_ibumad.c: validate response MAD properties
+
+Tue Sep 11 18:29:07 2012 +0300 Yevgeny Kliteynik
+c215eea1235771ee50b0b9f65d988a9d8d5cdb1b
+
+	* opensm/libvendor/osm_vendor_ibumad.c:rename "mad" to "p_mad" to indicate pointer
+
+Tue Sep 11 18:28:23 2012 +0300 Yevgeny Kliteynik
+e00f67bc9fe79cce4c6c5be9701e284373071194
+
+	* opensm/libvendor/osm_vendor_ibumad_sa.c: use wrapper function instead of direct access
+
+Tue Sep 11 18:26:55 2012 +0300 Yevgeny Kliteynik
+ebc772c89f638c406a5a16915151845c38a0832c
+
+	* opensm/osm_node_info_rcv.c: using "PF" hint for all the fatal conditions
+
+Tue Sep 11 18:25:49 2012 +0300 Yevgeny Kliteynik
+e2f06cdde6a8ed3037c5740a4b0298c7d565589c
+
+	* opensm/complib: define macros for for "if" statements with branch prediction hints
+
+Tue Sep 11 18:24:30 2012 +0300 Yevgeny Kliteynik
+0e33c113f5980133f95cc86b16a18e1eb7ff120a
+
+	* opensm/configure.in: check that compiler supports __builtin_expect()
+
+Wed Sep 5 13:02:23 2012 -0400 Hal Rosenstock
+606157c06fae69dd7b63af36d5eb722ecb827ce9
+
+	* osmtest/osmt_multicast.c: Fix 02BF error
+
+Tue Sep 4 08:18:53 2012 -0400 Hal Rosenstock
+2cb1854f51015b929331c1608a2cc86ab868594b
+
+	* OpenSM: Add new Mellanox OUI
+
+Tue Sep 11 16:19:17 2012 +0200 Bart Van Assche
+8e5fc5770903ba12804831dad3e9bfdcfbd80531
+
+	* opensm: osm_pkey: Remove unused variables
+
+Wed Aug 29 10:40:32 2012 -0700 Albert Chu
+e96a9334c9d14261430b6fd93ce5c282bd21fd65
+
+	* opensm: Manage ports that do not support congestion control
+
+Wed Jul 18 17:07:59 2012 +0300 Daniel Klein
+fbb74cae98063d45473f00f053961ecf872ffac0
+
+	* opensm: improve search common pkeys.
+
+Tue Aug 28 14:10:18 2012 -0400 Hal Rosenstock
+03d55f611025ee933d8ef13f4ad2a57117a5a0dc
+
+	* opensm/osm_sw_info_rcv.c: Fixed locking issue on osm_get_node_by_guid error
+
+Sun Aug 26 15:19:10 2012 +0300 Alex Netes
+21084319505d8bd29f470407efe23961e2ff408c
+
+	* opensm: fix default cc_max_outstanding_mads assignment
+
+Thu Aug 9 02:27:51 2012 -0400 Hal Rosenstock
+db34e30a172de1e2c054b2fa4cca4d6d75e3840f
+
+	* opensm/osm_vendor_ibumad.c: Add management class to error log message
+
+Sun Aug 12 09:44:33 2012 +0300 Alex Netes
+a46b33e33cad38bec99d2faf63a765a9238413e9
+
+	* opensm: fix crash in DFSSSP routing engine on reroute
+
+Tue Jul 17 11:50:41 2012 -0700 Ira Weiny
+ba36f8156df2dc6396231ede9f3ae86c7455afa3
+
+	* opensm/perfmgr/console: add 'pm sweep'
+
 ** Version: opensm-3.3.15
 
 Thu Aug 2 11:56:48 2012 +0300 Alex Netes

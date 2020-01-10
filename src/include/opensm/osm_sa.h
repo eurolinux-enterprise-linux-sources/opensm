@@ -73,8 +73,8 @@ BEGIN_C_DECLS
 *
 * DESCRIPTION
 *	The SA object encapsulates the information needed by the
-*	OpenSM to instantiate a subnet administrator.  The OpenSM allocates
-*	one SA object per subnet manager.
+*	OpenSM to instantiate subnet administration.  The OpenSM
+*	allocates one SA object per subnet manager.
 *
 *	The SA object is thread safe.
 *
@@ -86,6 +86,7 @@ BEGIN_C_DECLS
 *	Anil Keshavamurthy, Intel
 *
 *********/
+
 /****d* OpenSM: SA/osm_sa_state_t
 * NAME
 *	osm_sa_state_t
@@ -100,6 +101,70 @@ typedef enum _osm_sa_state {
 	OSM_SA_STATE_READY
 } osm_sa_state_t;
 /***********/
+
+/****d* OpenSM: SA/osm_mpr_rec_t
+* NAME
+*	osm_mpr_rec_t
+*
+* DESCRIPTION
+*	SA MultiPathRecord response.
+*
+* SYNOPSIS
+*/
+typedef struct osm_mpr_rec {
+	ib_path_rec_t path_rec;
+	const osm_port_t *p_src_port;
+	const osm_port_t *p_dest_port;
+	int hops;
+} osm_mpr_rec_t;
+/***********/
+
+/****d* OpenSM: SA/osm_sa_item_t
+* NAME
+*	osm_sa_item_t
+*
+* DESCRIPTION
+*	SA response item.
+*
+* SYNOPSIS
+*/
+typedef struct osm_sa_item {
+	cl_list_item_t list_item;
+	union {
+		char data[0];
+		ib_guidinfo_record_t guid_rec;
+		ib_inform_info_t inform;
+		ib_inform_info_record_t inform_rec;
+		ib_lft_record_t lft_rec;
+		ib_link_record_t link_rec;
+		ib_member_rec_t mc_rec;
+		ib_mft_record_t mft_rec;
+		osm_mpr_rec_t mpr_rec;
+		ib_node_record_t node_rec;
+		ib_path_rec_t path_rec;
+		ib_pkey_table_record_t pkey_rec;
+		ib_portinfo_record_t port_rec;
+		ib_service_record_t service_rec;
+		ib_slvl_table_record_t slvl_rec;
+		ib_sminfo_record_t sminfo_rec;
+		ib_switch_info_record_t swinfo_rec;
+		ib_vl_arb_table_record_t vlarb_rec;
+	} resp;
+} osm_sa_item_t;
+/*
+* NOTES
+*	Actual structure allocated is based on SA attribute
+*	type. As such, it is variable sized. The allocation
+*	occurs in the SA attribute handling code.
+*	Note also that the size is specified external
+*	to this structure (It's passed as a parameter to
+*	osm_sa_respond). The SA_ITEM_RESP_SIZE macro
+*	facilitates determining the size required.
+*
+***********/
+
+#define SA_ITEM_RESP_SIZE(_m) offsetof(osm_sa_item_t, resp._m) + \
+			      sizeof(((osm_sa_item_t *)NULL)->resp._m)
 
 /****s* OpenSM: SM/osm_sa_t
 * NAME
@@ -489,6 +554,52 @@ osm_mgrp_t *osm_mcmr_rcv_find_or_create_new_mgrp(IN osm_sa_t * sa,
 *	The pointer to MC group object found or created, NULL in case of errors
 *
 *********/
+
+/**
+ * The following expose functionality of osm_sa_path_record.c for internal use
+ * by sub managers
+ */
+typedef struct osm_path_parms {
+	ib_net16_t pkey;
+	uint8_t mtu;
+	uint8_t rate;
+	uint8_t sl;
+	uint8_t pkt_life;
+	boolean_t reversible;
+	int hops;
+} osm_path_parms_t;
+
+ib_api_status_t osm_get_path_params(IN osm_sa_t * sa,
+				    IN const osm_port_t * p_src_port,
+				    IN const uint16_t slid_ho,
+				    IN const osm_port_t * p_dest_port,
+				    IN const uint16_t dlid_ho,
+				    OUT osm_path_parms_t * p_parms);
+
+ib_net16_t osm_pr_get_end_points(IN osm_sa_t * sa,
+					IN const ib_sa_mad_t *sa_mad,
+					OUT const osm_alias_guid_t ** pp_src_alias_guid,
+					OUT const osm_alias_guid_t ** pp_dest_alias_guid,
+					OUT const osm_port_t ** pp_src_port,
+					OUT const osm_port_t ** pp_dest_port,
+					OUT const ib_gid_t ** pp_sgid,
+					OUT const ib_gid_t ** pp_dgid);
+
+void osm_pr_process_pair(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
+				IN const osm_port_t * requester_port,
+				IN const osm_alias_guid_t * p_src_alias_guid,
+				IN const osm_alias_guid_t * p_dest_alias_guid,
+				IN const ib_gid_t * p_sgid,
+				IN const ib_gid_t * p_dgid,
+				IN cl_qlist_t * p_list);
+
+void osm_pr_process_half(IN osm_sa_t * sa, IN const ib_sa_mad_t * sa_mad,
+				IN const osm_port_t * requester_port,
+				IN const osm_alias_guid_t * p_src_alias_guid,
+				IN const osm_alias_guid_t * p_dest_alias_guid,
+				IN const ib_gid_t * p_sgid,
+				IN const ib_gid_t * p_dgid,
+				IN cl_qlist_t * p_list);
 
 END_C_DECLS
 #endif				/* _OSM_SA_H_ */

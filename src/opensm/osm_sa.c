@@ -49,6 +49,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <complib/cl_qmap.h>
@@ -382,10 +383,6 @@ Exit:
 void osm_sa_respond(osm_sa_t *sa, osm_madw_t *madw, size_t attr_size,
 		    cl_qlist_t *list)
 {
-	struct item_data {
-		cl_list_item_t list;
-		char data[0];
-	};
 	cl_list_item_t *item;
 	osm_madw_t *resp_madw;
 	ib_sa_mad_t *sa_mad, *resp_sa_mad;
@@ -478,7 +475,7 @@ void osm_sa_respond(osm_sa_t *sa, osm_madw_t *madw, size_t attr_size,
 
 	for (i = 0; i < num_rec; i++) {
 		item = cl_qlist_remove_head(list);
-		memcpy(p, ((struct item_data *)item)->data, attr_size);
+		memcpy(p, ((osm_sa_item_t *)item)->resp.data, attr_size);
 		p += attr_size;
 		free(item);
 	}
@@ -510,25 +507,54 @@ opensm_dump_to_file(osm_opensm_t * p_osm, const char *file_name,
 		    void (*dump_func) (osm_opensm_t * p_osm, FILE * file))
 {
 	char path[1024];
+	char path_tmp[1032];
 	FILE *file;
+	int fd, status = 0;
 
 	snprintf(path, sizeof(path), "%s/%s",
 		 p_osm->subn.opt.dump_files_dir, file_name);
 
-	file = fopen(path, "w");
+	snprintf(path_tmp, sizeof(path_tmp), "%s.tmp", path);
+
+	file = fopen(path_tmp, "w");
 	if (!file) {
 		OSM_LOG(&p_osm->log, OSM_LOG_ERROR, "ERR 4C01: "
 			"cannot open file \'%s\': %s\n",
-			file_name, strerror(errno));
+			path_tmp, strerror(errno));
 		return -1;
 	}
 
-	chmod(path, S_IRUSR | S_IWUSR);
+	chmod(path_tmp, S_IRUSR | S_IWUSR);
 
 	dump_func(p_osm, file);
 
+	if (p_osm->subn.opt.fsync_high_avail_files) {
+		if (fflush(file) == 0) {
+			fd = fileno(file);
+			if (fd != -1) {
+				if (fsync(fd) == -1)
+					OSM_LOG(&p_osm->log, OSM_LOG_ERROR,
+						"ERR 4C08: fsync() failed (%s) for %s\n",
+						strerror(errno), path_tmp);
+			} else
+				OSM_LOG(&p_osm->log, OSM_LOG_ERROR, "ERR 4C09: "
+					"fileno() failed for %s\n", path_tmp);
+		} else
+			OSM_LOG(&p_osm->log, OSM_LOG_ERROR, "ERR 4C0A: "
+				"fflush() failed (%s) for %s\n",
+				strerror(errno), path_tmp);
+	}
+
 	fclose(file);
-	return 0;
+
+	status = rename(path_tmp, path);
+	if (status) {
+		OSM_LOG(&p_osm->log, OSM_LOG_ERROR, "ERR 4C0B: "
+			"Failed to rename file:%s (err:%s)\n",
+			path_tmp, strerror(errno));
+	}
+
+	return status;
 }
 
 static void mcast_mgr_dump_one_port(cl_map_item_t * p_map_item, void *cxt)

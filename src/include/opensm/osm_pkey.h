@@ -82,7 +82,7 @@ struct osm_physp;
 * SYNOPSIS
 */
 typedef struct osm_pkeybl {
-	cl_ptr_vector_t accum_pkeys;
+	cl_map_t accum_pkeys;
 	cl_ptr_vector_t blocks;
 	cl_ptr_vector_t new_blocks;
 	cl_map_t keys;
@@ -90,6 +90,7 @@ typedef struct osm_pkeybl {
 	uint16_t last_pkey_idx;
 	uint16_t used_blocks;
 	uint16_t max_blocks;
+	uint16_t rcv_blocks_cnt;
 } osm_pkey_tbl_t;
 /*
 * FIELDS
@@ -118,6 +119,11 @@ typedef struct osm_pkeybl {
 *		this value is based on node_info (for port 0 or CA) or
 *		switch_info updated on receiving the node_info or switch_info
 *		GetResp
+*
+*	rcv_blocks_cnt
+*		Counter for the received GetPKeyTable mads.
+*		For every GetPKeyTable mad we send, increase the counter,
+*		and for every GetRespPKeyTable we decrease the counter.
 *
 * NOTES
 * 'blocks' vector should be used to store pkey values obtained from
@@ -294,6 +300,18 @@ static inline ib_pkey_table_t *osm_pkey_tbl_new_block_get(const osm_pkey_tbl_t *
 		&p_pkey_tbl->new_blocks, block) : NULL);
 };
 
+/****f* OpenSM: osm_pkey_find_last_accum_pkey_index
+ * NAME
+ *   osm_pkey_find_last_accum_pkey_index
+ *
+ * DESCRIPTION
+ *   Finds the next last accumulated pkey
+ *
+ * SYNOPSIS
+ */
+void osm_pkey_find_last_accum_pkey_index(IN osm_pkey_tbl_t * p_pkey_tbl);
+
+
 /****f* OpenSM: osm_pkey_tbl_set_accum_pkeys
 * NAME
 *  osm_pkey_tbl_set_accum_pkeys
@@ -319,29 +337,6 @@ osm_pkey_tbl_set_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
 * RETURN VALUES
 *   CL_SUCCESS if OK
 *   CL_INSUFFICIENT_MEMORY if failed
-*
-*********/
-
-/****f* OpenSM: osm_pkey_tbl_clear_accum_pkeys
-* NAME
-*  osm_pkey_tbl_clear_accum_pkeys
-*
-* DESCRIPTION
-*   Clears the given pkey in the "accum_pkeys" array
-*
-* SYNOPSIS
-*/
-void
-osm_pkey_tbl_clear_accum_pkeys(IN osm_pkey_tbl_t * p_pkey_tbl,
-			       IN uint16_t pkey);
-/*
-* p_pkey_tbl
-*   [in] Pointer to the PKey table
-*
-* pkey
-*   [in] PKey to clear
-*
-* NOTES
 *
 *********/
 

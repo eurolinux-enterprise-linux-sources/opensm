@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -73,19 +74,19 @@ void osm_report_sm_state(osm_sm_t * sm)
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE, buf);
 }
 
-static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
+static boolean_t sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm, uint8_t sm_state)
 {
 	osm_madw_context_t context;
 	const osm_port_t *p_port;
 	ib_api_status_t status;
 	osm_dr_path_t dr_path;
 	ib_net64_t guid;
+	boolean_t sent_req = FALSE;
 
 	OSM_LOG_ENTER(sm->p_log);
 
 	memset(&context, 0, sizeof(context));
-	CL_PLOCK_ACQUIRE(sm->p_lock);
-	if (sm->p_subn->sm_state == IB_SMINFO_STATE_STANDBY) {
+	if (sm_state == IB_SMINFO_STATE_STANDBY) {
 		/*
 		 * We are in STANDBY state - this means we need to poll the
 		 * master SM (according to master_guid).
@@ -103,13 +104,19 @@ static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
 		guid = sm->p_polling_sm->smi.guid;
 	}
 
+	/* Verify that SM is not polling itself */
+	if (guid == sm->p_subn->sm_port_guid) {
+		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
+			"OpenSM doesn't poll itself\n");
+		goto Exit;
+	}
+
 	p_port = osm_get_port_by_guid(sm->p_subn, guid);
 
 	if (p_port == NULL) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3203: "
 			"No port object for GUID 0x%016" PRIx64 "\n",
 			cl_ntoh64(guid));
-		CL_PLOCK_RELEASE(sm->p_lock);
 		goto Exit;
 	}
 
@@ -118,22 +125,26 @@ static void sm_state_mgr_send_master_sm_info_req(osm_sm_t * sm)
 	memcpy(&dr_path, osm_physp_get_dr_path_ptr(p_port->p_physp), sizeof(osm_dr_path_t));
 
 	status = osm_req_get(sm, &dr_path,
-			     IB_MAD_ATTR_SM_INFO, 0, CL_DISP_MSGID_NONE,
-			     &context);
-	CL_PLOCK_RELEASE(sm->p_lock);
+			     IB_MAD_ATTR_SM_INFO, 0, FALSE,
+			     ib_port_info_get_m_key(&p_port->p_physp->port_info),
+			     CL_DISP_MSGID_NONE, &context);
 
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3204: "
 			"Failure requesting SMInfo (%s)\n",
 			ib_get_err_str(status));
+	else
+		sent_req = TRUE;
 
 Exit:
 	OSM_LOG_EXIT(sm->p_log);
+
+	return (sent_req);
 }
 
 static void sm_state_mgr_start_polling(osm_sm_t * sm)
 {
-	uint32_t timeout = sm->p_subn->opt.sminfo_polling_timeout;
+	uint32_t timeout;
 	cl_status_t cl_status;
 
 	OSM_LOG_ENTER(sm->p_log);
@@ -146,7 +157,10 @@ static void sm_state_mgr_start_polling(osm_sm_t * sm)
 	/*
 	 * Send a SubnGet(SMInfo) query to the current (or new) master found.
 	 */
-	sm_state_mgr_send_master_sm_info_req(sm);
+	CL_PLOCK_ACQUIRE(sm->p_lock);
+	timeout = sm->p_subn->opt.sminfo_polling_timeout;
+	sm_state_mgr_send_master_sm_info_req(sm, sm->p_subn->sm_state);
+	CL_PLOCK_RELEASE(sm->p_lock);
 
 	/*
 	 * Start a timer that will wake up every sminfo_polling_timeout milliseconds.
@@ -156,7 +170,7 @@ static void sm_state_mgr_start_polling(osm_sm_t * sm)
 	cl_status = cl_timer_start(&sm->polling_timer, timeout);
 	if (cl_status != CL_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3210: "
-			"Failed to start timer\n");
+			"Failed to start polling timer\n");
 
 	OSM_LOG_EXIT(sm->p_log);
 }
@@ -164,10 +178,18 @@ static void sm_state_mgr_start_polling(osm_sm_t * sm)
 void osm_sm_state_mgr_polling_callback(IN void *context)
 {
 	osm_sm_t *sm = context;
-	uint32_t timeout = sm->p_subn->opt.sminfo_polling_timeout;
+	uint32_t timeout;
 	cl_status_t cl_status;
+	uint8_t sm_state;
 
 	OSM_LOG_ENTER(sm->p_log);
+
+	cl_spinlock_acquire(&sm->state_lock);
+	sm_state = sm->p_subn->sm_state;
+	cl_spinlock_release(&sm->state_lock);
+
+	CL_PLOCK_ACQUIRE(sm->p_lock);
+	timeout = sm->p_subn->opt.sminfo_polling_timeout;
 
 	/*
 	 * We can be here in one of two cases:
@@ -175,10 +197,12 @@ void osm_sm_state_mgr_polling_callback(IN void *context)
 	 * 2. We are a MASTER sm, waiting for a handover from a remote master sm.
 	 * If we are not in one of these cases - don't need to restart the poller.
 	 */
-	if (!((sm->p_subn->sm_state == IB_SMINFO_STATE_MASTER &&
+	if (!((sm_state == IB_SMINFO_STATE_MASTER &&
 	       sm->p_polling_sm != NULL) ||
-	      sm->p_subn->sm_state == IB_SMINFO_STATE_STANDBY))
+	      sm_state == IB_SMINFO_STATE_STANDBY)) {
+		CL_PLOCK_RELEASE(sm->p_lock);
 		goto Exit;
+	}
 
 	/*
 	 * If we are a STANDBY sm and the osm_exit_flag is set, then let's
@@ -187,7 +211,8 @@ void osm_sm_state_mgr_polling_callback(IN void *context)
 	 * received. In other cases - it is not relevant whether or not the
 	 * signal is on - since we are currently in exit flow
 	 */
-	if (sm->p_subn->sm_state == IB_SMINFO_STATE_STANDBY && osm_exit_flag) {
+	if (sm_state == IB_SMINFO_STATE_STANDBY && osm_exit_flag) {
+		CL_PLOCK_RELEASE(sm->p_lock);
 		OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 			"Signalling subnet_up_event\n");
 		cl_event_signal(&sm->subnet_up_event);
@@ -195,15 +220,15 @@ void osm_sm_state_mgr_polling_callback(IN void *context)
 	}
 
 	/*
-	 * Incr the retry number.
-	 * If it reached the max_retry_number in the subnet opt - call
+	 * If retry number reached the max_retry_number in the subnet opt - call
 	 * osm_sm_state_mgr_process with signal OSM_SM_SIGNAL_POLLING_TIMEOUT
 	 */
-	sm->retry_number++;
-	OSM_LOG(sm->p_log, OSM_LOG_VERBOSE, "Retry number:%d\n",
+	OSM_LOG(sm->p_log, OSM_LOG_VERBOSE, "SM State %d (%s), Retry number:%d\n",
+		sm->p_subn->sm_state,  osm_get_sm_mgr_state_str(sm->p_subn->sm_state),
 		sm->retry_number);
 
-	if (sm->retry_number >= sm->p_subn->opt.polling_retry_number) {
+	if (sm->retry_number > sm->p_subn->opt.polling_retry_number) {
+		CL_PLOCK_RELEASE(sm->p_lock);
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 			"Reached polling_retry_number value in retry_number. "
 			"Go to DISCOVERY state\n");
@@ -212,13 +237,18 @@ void osm_sm_state_mgr_polling_callback(IN void *context)
 	}
 
 	/* Send a SubnGet(SMInfo) request to the remote sm (depends on our state) */
-	sm_state_mgr_send_master_sm_info_req(sm);
+	if (sm_state_mgr_send_master_sm_info_req(sm, sm_state)) {
+		/* Request sent, increment the retry number */
+		sm->retry_number++;
+	}
+
+	CL_PLOCK_RELEASE(sm->p_lock);
 
 	/* restart the timer */
 	cl_status = cl_timer_start(&sm->polling_timer, timeout);
 	if (cl_status != CL_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3211: "
-			"Failed to restart timer\n");
+			"Failed to restart polling timer\n");
 
 Exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -294,11 +324,13 @@ ib_api_status_t osm_sm_state_mgr_process(osm_sm_t * sm,
 			break;
 		case OSM_SM_SIGNAL_HANDOVER:
 			/*
-			 * Do nothing. We will discover it later on. If we already discovered
-			 * this SM, and got the HANDOVER - this means the remote SM is of
-			 * lower priority. In this case we will stop polling it (since it is
-			 * a lower priority SM in STANDBY state).
+			 * Signal for a new sweep. We need to discover the other SM.
+			 * If we already discovered this SM, and got the
+			 * HANDOVER - this means the remote SM is of lower priority.
+			 * In this case we will stop polling it (since it is a lower
+			 * priority SM in STANDBY state).
 			 */
+			osm_sm_signal(sm, OSM_SIGNAL_SWEEP);
 			break;
 		default:
 			sm_state_mgr_signal_error(sm, signal);
@@ -328,7 +360,6 @@ ib_api_status_t osm_sm_state_mgr_process(osm_sm_t * sm,
 			 */
 			sm->p_subn->sm_state = IB_SMINFO_STATE_NOTACTIVE;
 			osm_report_sm_state(sm);
-			osm_vendor_set_sm(sm->mad_ctrl.h_bind, FALSE);
 			break;
 		case OSM_SM_SIGNAL_HANDOVER:
 			/*
@@ -412,8 +443,8 @@ ib_api_status_t osm_sm_state_mgr_process(osm_sm_t * sm,
 			 * handover from it.
 			 */
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
-				"Forcing heavy sweep. "
-				"Received OSM_SM_SIGNAL_HANDOVER or OSM_SM_SIGNAL_POLLING_TIMEOUT\n");
+				"Forcing heavy sweep. Received signal %s\n",
+				osm_get_sm_mgr_signal_str(signal));
 			/* Force set_client_rereg_on_sweep, we don't know what the other
 			 * SM may have configure/done on the fabric.
 			 */

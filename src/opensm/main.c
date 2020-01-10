@@ -68,6 +68,7 @@ volatile unsigned int osm_exit_flag = 0;
 
 static volatile unsigned int osm_hup_flag = 0;
 static volatile unsigned int osm_usr1_flag = 0;
+static char *pidfile;
 
 #define MAX_LOCAL_IBPORTS 64
 #define INVALID_GUID (0xFFFFFFFFFFFFFFFFULL)
@@ -212,7 +213,8 @@ static void show_usage(void)
 	       "          loaded.\n\n");
 	printf("--lfts_file, -U <file name>\n"
 	       "          This option specifies the name of the LFTs file\n"
-	       "          from where switch forwarding tables will be loaded.\n\n");
+	       "          from where switch forwarding tables will be loaded when using \"file\"\n"
+	       "          routing engine.\n\n");
 	printf("--sadb_file, -S <file name>\n"
 	       "          This option specifies the name of the SA DB dump file\n"
 	       "          from where SA database will be loaded.\n\n");
@@ -221,11 +223,11 @@ static void show_usage(void)
 	       "          algorithm to the guids provided in the given file (one\n"
 	       "          to a line)\n" "\n");
 	printf("--cn_guid_file, -u <path to file>\n"
-	       "          Set the compute nodes for the Fat-Tree routing algorithm\n"
-	       "          to the guids provided in the given file (one to a line)\n\n");
+	       "          Set the compute nodes for the Fat-Tree or DFSSSP/SSSP routing algorithms\n"
+	       "          to the port GUIDs provided in the given file (one to a line)\n\n");
 	printf("--io_guid_file, -G <path to file>\n"
-	       "          Set the I/O nodes for the Fat-Tree routing algorithm\n"
-	       "          to the guids provided in the given file (one to a line)\n\n");
+	       "          Set the I/O nodes for the Fat-Tree or DFSSSP/SSSP routing algorithms\n"
+	       "          to the port GUIDs provided in the given file (one to a line)\n\n");
 	printf("--port-shifting\n"
 	       "          Attempt to shift port routes around to remove alignment problems\n"
 	       "          in routing tables\n\n");
@@ -367,6 +369,8 @@ static void show_usage(void)
 	printf("--consolidate_ipv6_snm_req\n"
 	       "          Use shared MLID for IPv6 Solicited Node Multicast groups\n"
 	       "          per MGID scope and P_Key.\n\n");
+	printf("--guid_routing_order_no_scatter\n"
+	       "          Don't use scatter for ports defined in guid_routing_order file\n\n");
 	printf("--log_prefix <prefix text>\n"
 	       "          Prefix to syslog messages from OpenSM.\n\n");
 	printf("--verbose, -v\n"
@@ -430,6 +434,8 @@ static ib_net64_t get_port_guid(IN osm_opensm_t * p_osm, uint64_t port_guid)
 	for (i = 0; i < num_ports; i++) {
 		attr_array[i].num_pkeys = 0;
 		attr_array[i].p_pkey_table = NULL;
+		attr_array[i].num_gids = 0;
+		attr_array[i].p_gid_table = NULL;
 	}
 
 	/* Call the transport layer for a list of local port GUID values */
@@ -498,10 +504,17 @@ static ib_net64_t get_port_guid(IN osm_opensm_t * p_osm, uint64_t port_guid)
 	return attr_array[choice].port_guid;
 }
 
+static void remove_pidfile(void)
+{
+	if (pidfile)
+		unlink(pidfile);
+}
+
 static int daemonize(osm_opensm_t * osm)
 {
 	pid_t pid;
 	int fd;
+	FILE *f;
 
 	fd = open("/dev/null", O_WRONLY);
 	if (fd < 0) {
@@ -522,6 +535,18 @@ static int daemonize(osm_opensm_t * osm)
 		exit(-1);
 	} else if (pid > 0)
 		exit(0);
+
+	if (pidfile) {
+		remove_pidfile();
+		f = fopen(pidfile, "w");
+		if (f) {
+			fprintf(f, "%d\n", getpid());
+			fclose(f);
+		} else {
+			perror("fopen");
+			exit(1);
+		}
+	}
 
 	close(0);
 	close(1);
@@ -583,7 +608,8 @@ int main(int argc, char *argv[])
 	boolean_t run_once_flag = FALSE;
 	int32_t vendor_debug = 0;
 	int next_option;
-	char *conf_template = NULL, *config_file = NULL;
+	char *conf_template = NULL;
+	const char *config_file = NULL;
 	uint32_t val;
 	const char *const short_option =
 	    "F:c:i:w:O:f:ed:D:g:l:L:s:t:a:u:m:X:R:zM:U:S:P:Y:ANZ:WBIQvVhoryxp:n:q:k:C:G:H:";
@@ -649,6 +675,7 @@ int main(int argc, char *argv[])
 		{"console-port", 1, NULL, 'C'},
 #endif
 		{"daemon", 0, NULL, 'B'},
+		{"pidfile", 1, NULL, 'J'},
 		{"inactive", 0, NULL, 'I'},
 #ifdef ENABLE_OSM_PERF_MGR
 		{"perfmgr", 0, NULL, 1},
@@ -662,6 +689,7 @@ int main(int argc, char *argv[])
 		{"retries", 1, NULL, 8},
 		{"log_prefix", 1, NULL, 9},
 		{"torus_config", 1, NULL, 10},
+		{"guid_routing_order_no_scatter", 0, NULL, 13},
 		{NULL, 0, NULL, 0}	/* Required at the end of the array */
 	};
 
@@ -887,6 +915,10 @@ int main(int argc, char *argv[])
 			printf(" Creating new log file\n");
 			break;
 
+		case 'J':
+			pidfile = optarg;
+			break;
+
 		case 'P':
 			SET_STR_OPT(opt.partition_config_file, optarg);
 			break;
@@ -1104,6 +1136,9 @@ int main(int argc, char *argv[])
 			SET_STR_OPT(opt.torus_conf_file, optarg);
 			printf("Torus-2QoS config file = %s\n", opt.torus_conf_file);
 			break;
+		case 13:
+			opt.guid_routing_order_no_scatter = TRUE;
+			break;
 		case 'h':
 		case '?':
 		case ':':
@@ -1167,7 +1202,16 @@ int main(int argc, char *argv[])
 		opt.guid = get_port_guid(&osm, opt.guid);
 
 	if (opt.guid == 0)
-		goto Exit;
+		goto Exit2;
+
+	status = osm_opensm_init_finish(&osm, &opt);
+	if (status != IB_SUCCESS) {
+		const char *err_str = ib_get_err_str(status);
+		if (err_str == NULL)
+			err_str = "Unknown Error Type";
+		printf("\nError from osm_opensm_init_finish: %s.\n", err_str);
+		goto Exit2;
+	}
 
 	status = osm_opensm_bind(&osm, opt.guid);
 	if (status != IB_SUCCESS) {
@@ -1211,7 +1255,10 @@ int main(int argc, char *argv[])
 
 Exit:
 	osm_opensm_destroy(&osm);
+Exit2:
+	osm_opensm_destroy_finish(&osm);
 	complib_exit();
+	remove_pidfile();
 
 	exit(0);
 }

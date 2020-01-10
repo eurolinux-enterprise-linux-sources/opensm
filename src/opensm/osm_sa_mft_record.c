@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -56,10 +57,7 @@
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_sa.h>
 
-typedef struct osm_mftr_item {
-	cl_list_item_t list_item;
-	ib_mft_record_t rec;
-} osm_mftr_item_t;
+#define SA_MFTR_RESP_SIZE SA_ITEM_RESP_SIZE(mft_rec)
 
 typedef struct osm_mftr_search_ctxt {
 	const ib_mft_record_t *p_rcvd_rec;
@@ -75,13 +73,13 @@ static ib_api_status_t mftr_rcv_new_mftr(IN osm_sa_t * sa,
 					 IN ib_net16_t lid, IN uint16_t block,
 					 IN uint8_t position)
 {
-	osm_mftr_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	ib_api_status_t status = IB_SUCCESS;
 	uint16_t position_block_num;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_MFTR_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4A02: "
 			"rec_item alloc failed\n");
@@ -98,13 +96,13 @@ static ib_api_status_t mftr_rcv_new_mftr(IN osm_sa_t * sa,
 	position_block_num = ((uint16_t) position << 12) |
 	    (block & IB_MCAST_BLOCK_ID_MASK_HO);
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_MFTR_RESP_SIZE);
 
-	p_rec_item->rec.lid = lid;
-	p_rec_item->rec.position_block_num = cl_hton16(position_block_num);
+	p_rec_item->resp.mft_rec.lid = lid;
+	p_rec_item->resp.mft_rec.position_block_num = cl_hton16(position_block_num);
 
 	/* copy the mft block */
-	osm_switch_get_mft_block(p_sw, block, position, p_rec_item->rec.mft);
+	osm_switch_get_mft_block(p_sw, block, position, p_rec_item->resp.mft_rec.mft);
 
 	cl_qlist_insert_tail(p_list, &p_rec_item->list_item);
 
@@ -233,7 +231,7 @@ void osm_mftr_rcv_process(IN void *ctx, IN void *data)
 	if (p_rcvd_mad->method != IB_MAD_METHOD_GET &&
 	    p_rcvd_mad->method != IB_MAD_METHOD_GETTABLE) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4A08: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for MFTRecord request\n",
 			ib_get_sa_method_str(p_rcvd_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;

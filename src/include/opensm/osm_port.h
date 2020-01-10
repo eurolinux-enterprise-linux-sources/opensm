@@ -474,6 +474,36 @@ void osm_physp_set_port_info(IN osm_physp_t * p_physp,
 *	Port, Physical Port
 *********/
 
+/****f* OpenSM: Physical Port/osm_physp_set_base_lid
+* NAME
+*	osm_physp_set_base_lid
+*
+* DESCRIPTION
+*	Sets the base lid for this Physical Port.
+*
+* SYNOPSIS
+*/
+static inline void osm_physp_set_base_lid(IN osm_physp_t * p_physp,
+					  IN ib_net16_t base_lid)
+{
+	CL_ASSERT(p_physp);
+	CL_ASSERT(osm_physp_is_valid(p_physp));
+	p_physp->port_info.base_lid = base_lid;
+}
+
+/*
+* PARAMETERS
+*	p_physp
+*		[in] Pointer to an osm_physp_t object.
+*
+*	base_lid
+*		[in] Lid to set.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
 /****f* OpenSM: Physical Port/osm_physp_set_pkey_tbl
 * NAME
 *  osm_physp_set_pkey_tbl
@@ -486,7 +516,8 @@ void osm_physp_set_port_info(IN osm_physp_t * p_physp,
 void osm_physp_set_pkey_tbl(IN osm_log_t * p_log, IN const osm_subn_t * p_subn,
 			    IN osm_physp_t * p_physp,
 			    IN ib_pkey_table_t * p_pkey_tbl,
-			    IN uint16_t block_num);
+			    IN uint16_t block_num,
+			    IN boolean_t is_set);
 /*
 * PARAMETERS
 *	p_log
@@ -1163,7 +1194,11 @@ typedef struct osm_port {
 	osm_physp_t *p_physp;
 	cl_qlist_t mcm_list;
 	int flag;
+	int use_scatter;
+	unsigned int cc_timeout_count;
+	int cc_unavailable_flag;
 	void *priv;
+	ib_net16_t lid;
 } osm_port_t;
 /*
 * FIELDS
@@ -1194,6 +1229,12 @@ typedef struct osm_port {
 *
 *	flag
 *		Utility flag for port management
+*
+*	cc_timeout_count
+*		Count number of times congestion control config times out.
+*
+*	cc_unavailable_flag
+*		Flag indicating if congestion control is not supported.
 *
 * SEE ALSO
 *	Port, Physical Port, Physical Port Table

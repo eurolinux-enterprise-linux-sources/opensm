@@ -167,13 +167,12 @@ static void __cl_event_wheel_callback(IN void *context)
 
 		/* start the timer to the timeout [msec] */
 		new_timeout =
-		    (uint32_t) (((p_event->aging_time - current_time) / 1000) +
-				0.5);
+		    (uint32_t) ((p_event->aging_time - current_time + 500) / 1000);
 		CL_DBG("__cl_event_wheel_callback: Restart timer in: "
 		       "%u [msec]\n", new_timeout);
 		cl_status = cl_timer_start(&p_event_wheel->timer, new_timeout);
 		if (cl_status != CL_SUCCESS) {
-			CL_DBG("__cl_event_wheel_callback : ERR 6100: "
+			CL_DBG("__cl_event_wheel_callback : ERR 6200: "
 			       "Failed to start timer\n");
 		}
 	}
@@ -238,8 +237,8 @@ void cl_event_wheel_dump(IN cl_event_wheel_t * const p_event_wheel)
 		    PARENT_STRUCT(p_list_item, cl_event_wheel_reg_info_t,
 				  list_item);
 		CL_DBG("cl_event_wheel_dump: Found event key:<0x%"
-		       PRIx64 ">, aging time:%" PRIu64 "\n",
-		       p_event->key, p_event->aging_time);
+		       PRIx64 ">, num_regs:%d, aging time:%" PRIu64 "\n",
+		       p_event->key, p_event->num_regs, p_event->aging_time);
 		p_list_item = cl_qlist_next(p_list_item);
 	}
 }
@@ -371,7 +370,7 @@ cl_status_t cl_event_wheel_reg(IN cl_event_wheel_t * const p_event_wheel,
 		/* start the timer to the timeout [msec] */
 		cl_status = cl_timer_start(&p_event_wheel->timer, to);
 		if (cl_status != CL_SUCCESS) {
-			CL_DBG("cl_event_wheel_reg : ERR 6103: "
+			CL_DBG("cl_event_wheel_reg : ERR 6203: "
 			       "Failed to start timer\n");
 			goto Exit;
 		}
@@ -503,7 +502,7 @@ void __cl_event_wheel_dump(IN cl_event_wheel_t * const p_event_wheel)
 
 /* The callback for aging event */
 /* We assume we pass a text context */
-void __test_event_aging(uint64_t key, void *context)
+static uint64_t __test_event_aging(uint64_t key, uint32_t num_regs, void *context)
 {
 	printf("*****************************************************\n");
 	printf("Aged key: 0x%" PRIx64 " Context:%s\n", key, (char *)context);
@@ -513,6 +512,9 @@ int main()
 {
 	cl_event_wheel_t event_wheel;
 	/*  uint64_t key; */
+
+	/* init complib */
+	complib_init();
 
 	/* construct */
 	cl_event_wheel_construct(&event_wheel);
@@ -559,6 +561,8 @@ int main()
 	sleep(5);
 	/* destroy */
 	cl_event_wheel_destroy(&event_wheel);
+
+	complib_exit();
 
 	return (0);
 }

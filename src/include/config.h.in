@@ -18,6 +18,9 @@
 /* Define as 1 if you want to enable the performance manager profiling code */
 #undef ENABLE_OSM_PERF_MGR_PROFILE
 
+/* Define to 1 if the compiler supports __builtin_expect. */
+#undef HAVE_BUILTIN_EXPECT
+
 /* Define a default node name map file */
 #undef HAVE_DEFAULT_NODENAME_MAP
 

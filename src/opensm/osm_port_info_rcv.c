@@ -1,8 +1,9 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -69,7 +70,7 @@
 static void pi_rcv_check_and_fix_lid(osm_log_t * log, ib_port_info_t * pi,
 				     osm_physp_t * p)
 {
-	if (cl_ntoh16(pi->base_lid) > IB_LID_UCAST_END_HO) {
+	if (PF(cl_ntoh16(pi->base_lid) > IB_LID_UCAST_END_HO)) {
 		OSM_LOG(log, OSM_LOG_ERROR, "ERR 0F04: "
 			"Got invalid base LID %u from the network. "
 			"Corrected to %u\n", cl_ntoh16(pi->base_lid),
@@ -84,7 +85,7 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 	osm_madw_context_t context;
 	ib_api_status_t status;
 	ib_net64_t port_guid;
-	uint8_t rate, mtu;
+	uint8_t rate, mtu, mpb;
 	unsigned data_vls;
 	cl_qmap_t *p_sm_tbl;
 	osm_remote_sm_t *p_sm;
@@ -94,7 +95,8 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 	port_guid = osm_physp_get_port_guid(p_physp);
 
 	/* HACK extended port 0 should be handled too! */
-	if (osm_physp_get_port_num(p_physp) != 0) {
+	if (osm_physp_get_port_num(p_physp) != 0 &&
+	    ib_port_info_get_port_state(p_pi) != IB_LINK_DOWN) {
 		/* track the minimal endport MTU, rate, and operational VLs */
 		mtu = ib_port_info_get_mtu_cap(p_pi);
 		if (mtu < sm->p_subn->min_ca_mtu) {
@@ -124,6 +126,14 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 		}
 	}
 
+	/* Check M_Key vs M_Key protect, can we control the port ? */
+	mpb = ib_port_info_get_mpb(p_pi);
+	if (mpb > 0 && p_pi->m_key == 0) {
+		OSM_LOG(sm->p_log, OSM_LOG_INFO,
+			"Port 0x%" PRIx64 " has unknown M_Key, protection level %u\n",
+			cl_ntoh64(port_guid), mpb);
+	}
+
 	if (port_guid != sm->p_subn->sm_port_guid) {
 		p_sm_tbl = &sm->p_subn->sm_guid_tbl;
 		if (p_pi->capability_mask & IB_PORT_CAP_IS_SM) {
@@ -145,8 +155,8 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 					cl_ntoh64(port_guid));
 			else {
 				OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
-					"Detected another SM. Requesting SMInfo"
-					"\n\t\t\t\tPort 0x%" PRIx64 "\n",
+					"Detected another SM. Requesting SMInfo "
+					"from port 0x%" PRIx64 "\n",
 					cl_ntoh64(port_guid));
 
 				/*
@@ -161,14 +171,18 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 						     osm_physp_get_dr_path_ptr
 						     (p_physp),
 						     IB_MAD_ATTR_SM_INFO, 0,
+						     FALSE,
+						     ib_port_info_get_m_key(&p_physp->port_info),
 						     CL_DISP_MSGID_NONE,
 						     &context);
 
 				if (status != IB_SUCCESS)
 					OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 						"ERR 0F05: "
-						"Failure requesting SMInfo (%s)\n",
-						ib_get_err_str(status));
+						"Failure requesting SMInfo (%s) "
+						"from port 0x%" PRIx64 "\n",
+						ib_get_err_str(status),
+						cl_ntoh64(port_guid));
 			}
 		} else {
 			p_sm =
@@ -193,6 +207,7 @@ static void pi_rcv_process_switch_port(IN osm_sm_t * sm, IN osm_node_t * p_node,
 	osm_madw_context_t context;
 	osm_physp_t *p_remote_physp;
 	osm_node_t *p_remote_node;
+	unsigned data_vls;
 	uint8_t port_num;
 	uint8_t remote_port_num;
 	osm_dr_path_t path;
@@ -276,6 +291,7 @@ static void pi_rcv_process_switch_port(IN osm_sm_t * sm, IN osm_node_t * p_node,
 
 				status = osm_req_get(sm, &path,
 						     IB_MAD_ATTR_NODE_INFO, 0,
+						     TRUE, 0,
 						     CL_DISP_MSGID_NONE,
 						     &context);
 
@@ -321,8 +337,30 @@ static void pi_rcv_process_switch_port(IN osm_sm_t * sm, IN osm_node_t * p_node,
 			/* PortState is not used on BSP0 but just in case it is DOWN */
 			p_physp->port_info = *p_pi;
 		pi_rcv_process_endport(sm, p_physp, p_pi);
+	} else {
+		if (ib_port_info_get_port_state(p_pi) == IB_LINK_DOWN)
+			goto Exit;
+
+		p_remote_physp = osm_physp_get_remote(p_physp);
+		if (p_remote_physp) {
+			p_remote_node = osm_physp_get_node_ptr(p_remote_physp);
+			if (p_remote_node->sw) {
+				data_vls = 1U << (ib_port_info_get_op_vls(p_pi) - 1);
+				if (data_vls >= IB_MAX_NUM_VLS)
+					data_vls = IB_MAX_NUM_VLS - 1;
+				if ((uint8_t)data_vls < sm->p_subn->min_sw_data_vls) {
+					OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
+						"Setting switch port minimal data VLs to:%u defined by node:0x%"
+						PRIx64 ", port:%u\n", data_vls,
+						cl_ntoh64(osm_node_get_node_guid(p_node)),
+						port_num);
+					sm->p_subn->min_sw_data_vls = data_vls;
+				}
+			}
+		}
 	}
 
+Exit:
 	OSM_LOG_EXIT(sm->p_log);
 }
 
@@ -352,6 +390,8 @@ static void get_pkey_table(IN osm_log_t * p_log, IN osm_sm_t * sm,
 	osm_madw_context_t context;
 	ib_api_status_t status;
 	osm_dr_path_t path;
+	osm_physp_t *physp0;
+	ib_net64_t m_key;
 	uint8_t port_num;
 	uint16_t block_num, max_blocks;
 	uint32_t attr_mod_ho;
@@ -391,14 +431,20 @@ static void get_pkey_table(IN osm_log_t * p_log, IN osm_sm_t * sm,
 			      1) / IB_NUM_PKEY_ELEMENTS_IN_BLOCK;
 	}
 
+	p_physp->pkeys.rcv_blocks_cnt = max_blocks;
 	for (block_num = 0; block_num < max_blocks; block_num++) {
-		if (osm_node_get_type(p_node) != IB_NODE_TYPE_SWITCH)
+		if (osm_node_get_type(p_node) != IB_NODE_TYPE_SWITCH ||
+		    osm_physp_get_port_num(p_physp) == 0) {
 			attr_mod_ho = block_num;
-		else
+			m_key = ib_port_info_get_m_key(&p_physp->port_info);
+		} else {
 			attr_mod_ho = block_num | (port_num << 16);
+			physp0 = osm_node_get_physp_ptr(p_node, 0);
+			m_key = ib_port_info_get_m_key(&physp0->port_info);
+		}
 		status = osm_req_get(sm, &path, IB_MAD_ATTR_P_KEY_TABLE,
-				     cl_hton32(attr_mod_ho),
-				     CL_DISP_MSGID_NONE, &context);
+				     cl_hton32(attr_mod_ho), FALSE,
+				     m_key, CL_DISP_MSGID_NONE, &context);
 
 		if (status != IB_SUCCESS) {
 			OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0F12: "
@@ -505,6 +551,11 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 
 	CL_ASSERT(p_smp->attr_id == IB_MAD_ATTR_PORT_INFO);
 
+	/*
+	 * Attribute modifier has already been validated upon MAD receive,
+	 * which means that port_num has to be valid - it originated from
+	 * the request attribute modifier.
+	 */
 	port_num = (uint8_t) cl_ntoh32(p_smp->attr_mod);
 
 	port_guid = p_context->port_guid;
@@ -515,10 +566,12 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 
 	/* On receipt of client reregister, clear the reregister bit so
 	   reregistering won't be sent again and again */
-	if (ib_port_info_get_client_rereg(p_pi)) {
+	if (p_context->set_method &&
+	    (ib_port_info_get_client_rereg(p_pi) || p_context->client_rereg)) {
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 			"Client reregister received on response\n");
 		ib_port_info_set_client_rereg(p_pi, 0);
+		p_context->client_rereg = FALSE;
 	}
 
 	/*
@@ -540,7 +593,7 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 
 	CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
 	p_port = osm_get_port_by_guid(sm->p_subn, port_guid);
-	if (!p_port) {
+	if (PF(!p_port)) {
 		CL_PLOCK_RELEASE(sm->p_lock);
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0F06: "
 			"No port object for port with GUID 0x%" PRIx64
@@ -553,6 +606,17 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 
 	p_node = p_port->p_node;
 	CL_ASSERT(p_node);
+
+	if (PF(p_pi->local_port_num > p_node->node_info.num_ports)) {
+		CL_PLOCK_RELEASE(sm->p_lock);
+		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0F15: "
+			"Received PortInfo for port GUID 0x%" PRIx64 " is "
+			"non-compliant and is being ignored since the "
+			"local port num %u > num ports %u\n",
+			cl_ntoh64(port_guid), p_pi->local_port_num,
+			p_node->node_info.num_ports);
+		goto Exit;
+	}
 
 	/*
 	   If we were setting the PortInfo, then receiving
@@ -599,13 +663,18 @@ void osm_pi_rcv_process(IN void *context, IN void *data)
 		switch (osm_node_get_type(p_node)) {
 		case IB_NODE_TYPE_CA:
 		case IB_NODE_TYPE_ROUTER:
-			p_port->discovery_count++;
+			if (!p_node->physp_discovered[port_num]) {
+				p_port->discovery_count++;
+				p_node->physp_discovered[port_num] = 1;
+			}
 			pi_rcv_process_ca_or_router_port(sm, p_node, p_physp,
 							 p_pi);
 			break;
 		case IB_NODE_TYPE_SWITCH:
-			if (port_num == 0)
+			if (!p_node->physp_discovered[port_num]) {
 				p_port->discovery_count++;
+				p_node->physp_discovered[port_num] = 1;
+			}
 			pi_rcv_process_switch_port(sm, p_node, p_physp, p_pi);
 			break;
 		default:

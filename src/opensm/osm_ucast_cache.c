@@ -114,13 +114,19 @@ static cache_switch_t *cache_sw_new(uint16_t lid_ho, unsigned num_ports)
 
 static void cache_sw_destroy(cache_switch_t * p_sw)
 {
+	unsigned i;
+
 	if (!p_sw)
 		return;
 
 	if (p_sw->lft)
 		free(p_sw->lft);
-	if (p_sw->hops)
+	if (p_sw->hops) {
+		for (i = 0; i < p_sw->num_hops; i++)
+			if (p_sw->hops[i])
+				free(p_sw->hops[i]);
 		free(p_sw->hops);
+	}
 	free(p_sw);
 }
 
@@ -559,6 +565,17 @@ static void ucast_cache_validate(osm_ucast_mgr_t * p_mgr)
 					    osm_get_port_by_guid(p_mgr->p_subn,
 								 osm_physp_get_port_guid
 								 (p_remote_physp));
+					if (!p_remote_port) {
+						OSM_LOG(p_mgr->p_log,
+							OSM_LOG_ERROR,
+							"ERR AD04: No port was found for "
+							"port GUID 0x%" PRIx64 "\n",
+							cl_ntoh64(osm_physp_get_port_guid
+								      (p_remote_physp)));
+						osm_ucast_cache_invalidate
+						    (p_mgr);
+						goto Exit;
+					}
 					if (p_remote_port->is_new) {
 						OSM_LOG(p_mgr->p_log,
 							OSM_LOG_DEBUG,

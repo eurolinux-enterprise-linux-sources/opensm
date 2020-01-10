@@ -1,8 +1,10 @@
-/* A Bison parser, made by GNU Bison 2.5.  */
 
-/* Bison implementation for Yacc-like parsers in C
+/* A Bison parser, made by GNU Bison 2.4.1.  */
+
+/* Skeleton implementation for Bison's Yacc-like parsers in C
    
-      Copyright (C) 1984, 1989-1990, 2000-2011 Free Software Foundation, Inc.
+      Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Free Software Foundation, Inc.
    
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -44,7 +46,7 @@
 #define YYBISON 1
 
 /* Bison version.  */
-#define YYBISON_VERSION "2.5"
+#define YYBISON_VERSION "2.4.1"
 
 /* Skeleton name.  */
 #define YYSKELETON_NAME "yacc.c"
@@ -65,7 +67,7 @@
 
 /* Copy the first part of user declarations.  */
 
-/* Line 268 of yacc.c  */
+/* Line 189 of yacc.c  */
 #line 1 "osm_qos_parser_y.y"
 
 /*
@@ -256,8 +258,8 @@ static cl_list_t __ulp_match_rules;
 
 
 
-/* Line 268 of yacc.c  */
-#line 261 "osm_qos_parser_y.c"
+/* Line 189 of yacc.c  */
+#line 263 "osm_qos_parser_y.c"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -456,8 +458,8 @@ typedef int YYSTYPE;
 /* Copy the second part of user declarations.  */
 
 
-/* Line 343 of yacc.c  */
-#line 461 "osm_qos_parser_y.c"
+/* Line 264 of yacc.c  */
+#line 463 "osm_qos_parser_y.c"
 
 #ifdef short
 # undef short
@@ -507,7 +509,7 @@ typedef short int yytype_int16;
 #define YYSIZE_MAXIMUM ((YYSIZE_T) -1)
 
 #ifndef YY_
-# if defined YYENABLE_NLS && YYENABLE_NLS
+# if YYENABLE_NLS
 #  if ENABLE_NLS
 #   include <libintl.h> /* INFRINGES ON USER NAME SPACE */
 #   define YY_(msgid) dgettext ("bison-runtime", msgid)
@@ -560,11 +562,11 @@ YYID (yyi)
 #    define alloca _alloca
 #   else
 #    define YYSTACK_ALLOC alloca
-#    if ! defined _ALLOCA_H && ! defined EXIT_SUCCESS && (defined __STDC__ || defined __C99__FUNC__ \
+#    if ! defined _ALLOCA_H && ! defined _STDLIB_H && (defined __STDC__ || defined __C99__FUNC__ \
      || defined __cplusplus || defined _MSC_VER)
 #     include <stdlib.h> /* INFRINGES ON USER NAME SPACE */
-#     ifndef EXIT_SUCCESS
-#      define EXIT_SUCCESS 0
+#     ifndef _STDLIB_H
+#      define _STDLIB_H 1
 #     endif
 #    endif
 #   endif
@@ -587,24 +589,24 @@ YYID (yyi)
 #  ifndef YYSTACK_ALLOC_MAXIMUM
 #   define YYSTACK_ALLOC_MAXIMUM YYSIZE_MAXIMUM
 #  endif
-#  if (defined __cplusplus && ! defined EXIT_SUCCESS \
+#  if (defined __cplusplus && ! defined _STDLIB_H \
        && ! ((defined YYMALLOC || defined malloc) \
 	     && (defined YYFREE || defined free)))
 #   include <stdlib.h> /* INFRINGES ON USER NAME SPACE */
-#   ifndef EXIT_SUCCESS
-#    define EXIT_SUCCESS 0
+#   ifndef _STDLIB_H
+#    define _STDLIB_H 1
 #   endif
 #  endif
 #  ifndef YYMALLOC
 #   define YYMALLOC malloc
-#   if ! defined malloc && ! defined EXIT_SUCCESS && (defined __STDC__ || defined __C99__FUNC__ \
+#   if ! defined malloc && ! defined _STDLIB_H && (defined __STDC__ || defined __C99__FUNC__ \
      || defined __cplusplus || defined _MSC_VER)
 void *malloc (YYSIZE_T); /* INFRINGES ON USER NAME SPACE */
 #   endif
 #  endif
 #  ifndef YYFREE
 #   define YYFREE free
-#   if ! defined free && ! defined EXIT_SUCCESS && (defined __STDC__ || defined __C99__FUNC__ \
+#   if ! defined free && ! defined _STDLIB_H && (defined __STDC__ || defined __C99__FUNC__ \
      || defined __cplusplus || defined _MSC_VER)
 void free (void *); /* INFRINGES ON USER NAME SPACE */
 #   endif
@@ -633,7 +635,23 @@ union yyalloc
      ((N) * (sizeof (yytype_int16) + sizeof (YYSTYPE)) \
       + YYSTACK_GAP_MAXIMUM)
 
-# define YYCOPY_NEEDED 1
+/* Copy COUNT objects from FROM to TO.  The source and destination do
+   not overlap.  */
+# ifndef YYCOPY
+#  if defined __GNUC__ && 1 < __GNUC__
+#   define YYCOPY(To, From, Count) \
+      __builtin_memcpy (To, From, (Count) * sizeof (*(From)))
+#  else
+#   define YYCOPY(To, From, Count)		\
+      do					\
+	{					\
+	  YYSIZE_T yyi;				\
+	  for (yyi = 0; yyi < (Count); yyi++)	\
+	    (To)[yyi] = (From)[yyi];		\
+	}					\
+      while (YYID (0))
+#  endif
+# endif
 
 /* Relocate STACK from its old location to the new one.  The
    local variables YYSIZE and YYSTACKSIZE give the old and new number of
@@ -652,26 +670,6 @@ union yyalloc
     while (YYID (0))
 
 #endif
-
-#if defined YYCOPY_NEEDED && YYCOPY_NEEDED
-/* Copy COUNT objects from FROM to TO.  The source and destination do
-   not overlap.  */
-# ifndef YYCOPY
-#  if defined __GNUC__ && 1 < __GNUC__
-#   define YYCOPY(To, From, Count) \
-      __builtin_memcpy (To, From, (Count) * sizeof (*(From)))
-#  else
-#   define YYCOPY(To, From, Count)		\
-      do					\
-	{					\
-	  YYSIZE_T yyi;				\
-	  for (yyi = 0; yyi < (Count); yyi++)	\
-	    (To)[yyi] = (From)[yyi];		\
-	}					\
-      while (YYID (0))
-#  endif
-# endif
-#endif /* !YYCOPY_NEEDED */
 
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
@@ -853,12 +851,12 @@ static const yytype_uint16 yyrline[] =
     1362,  1384,  1401,  1406,  1423,  1428,  1446,  1451,  1468,  1473,
     1490,  1506,  1523,  1528,  1547,  1552,  1569,  1574,  1592,  1597,
     1602,  1607,  1612,  1617,  1618,  1621,  1628,  1629,  1632,  1639,
-    1671,  1704,  1747,  1764,  1787,  1792,  1815,  1820,  1840,  1845,
-    1865,  1871,  1891,  1897,  1917,  1923,  1958,  1963,  1996,  2013,
-    2036,  2041,  2075,  2080,  2097,  2102,  2119,  2124,  2147,  2152,
-    2185,  2190,  2223,  2234,  2241,  2242,  2245,  2252,  2253,  2258,
-    2261,  2262,  2265,  2273,  2279,  2287,  2293,  2299,  2302,  2308,
-    2320,  2332,  2340,  2347,  2353
+    1670,  1702,  1745,  1762,  1785,  1790,  1813,  1818,  1838,  1843,
+    1863,  1869,  1889,  1895,  1915,  1921,  1956,  1961,  1994,  2011,
+    2034,  2039,  2073,  2078,  2095,  2100,  2117,  2122,  2145,  2150,
+    2183,  2188,  2221,  2232,  2239,  2240,  2243,  2250,  2251,  2256,
+    2259,  2260,  2263,  2271,  2277,  2285,  2291,  2297,  2300,  2306,
+    2318,  2330,  2338,  2345,  2351
 };
 #endif
 
@@ -1031,8 +1029,8 @@ static const yytype_uint8 yyr2[] =
        5,     3,     1,     1,     1
 };
 
-/* YYDEFACT[STATE-NAME] -- Default reduction number in state STATE-NUM.
-   Performed when YYTABLE doesn't specify something else to do.  Zero
+/* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
+   STATE-NUM when YYTABLE doesn't specify something else to do.  Zero
    means the default is an error.  */
 static const yytype_uint8 yydefact[] =
 {
@@ -1159,7 +1157,8 @@ static const yytype_int16 yypgoto[] =
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
    positive, shift that token.  If negative, reduce the rule which
-   number is the opposite.  If YYTABLE_NINF, syntax error.  */
+   number is the opposite.  If zero, do what YYDEFACT says.
+   If YYTABLE_NINF, syntax error.  */
 #define YYTABLE_NINF -244
 static const yytype_int16 yytable[] =
 {
@@ -1192,12 +1191,6 @@ static const yytype_int16 yytable[] =
        0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
      323,     0,   328,     0,     0,   310
 };
-
-#define yypact_value_is_default(yystate) \
-  ((yystate) == (-294))
-
-#define yytable_value_is_error(yytable_value) \
-  YYID (0)
 
 static const yytype_int16 yycheck[] =
 {
@@ -1283,18 +1276,9 @@ static const yytype_uint8 yystos[] =
 
 /* Like YYERROR except do call yyerror.  This remains here temporarily
    to ease the transition to the new meaning of YYERROR, for GCC.
-   Once GCC version 2 has supplanted version 1, this can go.  However,
-   YYFAIL appears to be in use.  Nevertheless, it is formally deprecated
-   in Bison 2.4.2's NEWS entry, where a plan to phase it out is
-   discussed.  */
+   Once GCC version 2 has supplanted version 1, this can go.  */
 
 #define YYFAIL		goto yyerrlab
-#if defined YYFAIL
-  /* This is here to suppress warnings from the GCC cpp's
-     -Wunused-macros.  Normally we don't worry about that warning, but
-     some users do, and we want to make it easy for users to remove
-     YYFAIL uses, which will produce warnings from Bison 2.5.  */
-#endif
 
 #define YYRECOVERING()  (!!yyerrstatus)
 
@@ -1304,6 +1288,7 @@ do								\
     {								\
       yychar = (Token);						\
       yylval = (Value);						\
+      yytoken = YYTRANSLATE (yychar);				\
       YYPOPSTACK (1);						\
       goto yybackup;						\
     }								\
@@ -1345,10 +1330,19 @@ while (YYID (0))
 #endif
 
 
-/* This macro is provided for backward compatibility. */
+/* YY_LOCATION_PRINT -- Print the location on the stream.
+   This macro was not mandated originally: define only if we know
+   we won't break user code: when these are the locations we know.  */
 
 #ifndef YY_LOCATION_PRINT
-# define YY_LOCATION_PRINT(File, Loc) ((void) 0)
+# if YYLTYPE_IS_TRIVIAL
+#  define YY_LOCATION_PRINT(File, Loc)			\
+     fprintf (File, "%d.%d-%d.%d",			\
+	      (Loc).first_line, (Loc).first_column,	\
+	      (Loc).last_line,  (Loc).last_column)
+# else
+#  define YY_LOCATION_PRINT(File, Loc) ((void) 0)
+# endif
 #endif
 
 
@@ -1540,6 +1534,7 @@ int yydebug;
 # define YYMAXDEPTH 10000
 #endif
 
+
 
 #if YYERROR_VERBOSE
 
@@ -1642,142 +1637,115 @@ yytnamerr (char *yyres, const char *yystr)
 }
 # endif
 
-/* Copy into *YYMSG, which is of size *YYMSG_ALLOC, an error message
-   about the unexpected token YYTOKEN for the state stack whose top is
-   YYSSP.
-
-   Return 0 if *YYMSG was successfully written.  Return 1 if *YYMSG is
-   not large enough to hold the message.  In that case, also set
-   *YYMSG_ALLOC to the required number of bytes.  Return 2 if the
-   required number of bytes is too large to store.  */
-static int
-yysyntax_error (YYSIZE_T *yymsg_alloc, char **yymsg,
-                yytype_int16 *yyssp, int yytoken)
+/* Copy into YYRESULT an error message about the unexpected token
+   YYCHAR while in state YYSTATE.  Return the number of bytes copied,
+   including the terminating null byte.  If YYRESULT is null, do not
+   copy anything; just return the number of bytes that would be
+   copied.  As a special case, return 0 if an ordinary "syntax error"
+   message will do.  Return YYSIZE_MAXIMUM if overflow occurs during
+   size calculation.  */
+static YYSIZE_T
+yysyntax_error (char *yyresult, int yystate, int yychar)
 {
-  YYSIZE_T yysize0 = yytnamerr (0, yytname[yytoken]);
-  YYSIZE_T yysize = yysize0;
-  YYSIZE_T yysize1;
-  enum { YYERROR_VERBOSE_ARGS_MAXIMUM = 5 };
-  /* Internationalized format string. */
-  const char *yyformat = 0;
-  /* Arguments of yyformat. */
-  char const *yyarg[YYERROR_VERBOSE_ARGS_MAXIMUM];
-  /* Number of reported tokens (one for the "unexpected", one per
-     "expected"). */
-  int yycount = 0;
+  int yyn = yypact[yystate];
 
-  /* There are many possibilities here to consider:
-     - Assume YYFAIL is not used.  It's too flawed to consider.  See
-       <http://lists.gnu.org/archive/html/bison-patches/2009-12/msg00024.html>
-       for details.  YYERROR is fine as it does not invoke this
-       function.
-     - If this state is a consistent state with a default action, then
-       the only way this function was invoked is if the default action
-       is an error action.  In that case, don't check for expected
-       tokens because there are none.
-     - The only way there can be no lookahead present (in yychar) is if
-       this state is a consistent state with a default action.  Thus,
-       detecting the absence of a lookahead is sufficient to determine
-       that there is no unexpected or expected token to report.  In that
-       case, just report a simple "syntax error".
-     - Don't assume there isn't a lookahead just because this state is a
-       consistent state with a default action.  There might have been a
-       previous inconsistent state, consistent state with a non-default
-       action, or user semantic action that manipulated yychar.
-     - Of course, the expected token list depends on states to have
-       correct lookahead information, and it depends on the parser not
-       to perform extra reductions after fetching a lookahead from the
-       scanner and before detecting a syntax error.  Thus, state merging
-       (from LALR or IELR) and default reductions corrupt the expected
-       token list.  However, the list is correct for canonical LR with
-       one exception: it will still contain any token that will not be
-       accepted due to an error action in a later state.
-  */
-  if (yytoken != YYEMPTY)
+  if (! (YYPACT_NINF < yyn && yyn <= YYLAST))
+    return 0;
+  else
     {
-      int yyn = yypact[*yyssp];
-      yyarg[yycount++] = yytname[yytoken];
-      if (!yypact_value_is_default (yyn))
-        {
-          /* Start YYX at -YYN if negative to avoid negative indexes in
-             YYCHECK.  In other words, skip the first -YYN actions for
-             this state because they are default actions.  */
-          int yyxbegin = yyn < 0 ? -yyn : 0;
-          /* Stay within bounds of both yycheck and yytname.  */
-          int yychecklim = YYLAST - yyn + 1;
-          int yyxend = yychecklim < YYNTOKENS ? yychecklim : YYNTOKENS;
-          int yyx;
+      int yytype = YYTRANSLATE (yychar);
+      YYSIZE_T yysize0 = yytnamerr (0, yytname[yytype]);
+      YYSIZE_T yysize = yysize0;
+      YYSIZE_T yysize1;
+      int yysize_overflow = 0;
+      enum { YYERROR_VERBOSE_ARGS_MAXIMUM = 5 };
+      char const *yyarg[YYERROR_VERBOSE_ARGS_MAXIMUM];
+      int yyx;
 
-          for (yyx = yyxbegin; yyx < yyxend; ++yyx)
-            if (yycheck[yyx + yyn] == yyx && yyx != YYTERROR
-                && !yytable_value_is_error (yytable[yyx + yyn]))
-              {
-                if (yycount == YYERROR_VERBOSE_ARGS_MAXIMUM)
-                  {
-                    yycount = 1;
-                    yysize = yysize0;
-                    break;
-                  }
-                yyarg[yycount++] = yytname[yyx];
-                yysize1 = yysize + yytnamerr (0, yytname[yyx]);
-                if (! (yysize <= yysize1
-                       && yysize1 <= YYSTACK_ALLOC_MAXIMUM))
-                  return 2;
-                yysize = yysize1;
-              }
-        }
+# if 0
+      /* This is so xgettext sees the translatable formats that are
+	 constructed on the fly.  */
+      YY_("syntax error, unexpected %s");
+      YY_("syntax error, unexpected %s, expecting %s");
+      YY_("syntax error, unexpected %s, expecting %s or %s");
+      YY_("syntax error, unexpected %s, expecting %s or %s or %s");
+      YY_("syntax error, unexpected %s, expecting %s or %s or %s or %s");
+# endif
+      char *yyfmt;
+      char const *yyf;
+      static char const yyunexpected[] = "syntax error, unexpected %s";
+      static char const yyexpecting[] = ", expecting %s";
+      static char const yyor[] = " or %s";
+      char yyformat[sizeof yyunexpected
+		    + sizeof yyexpecting - 1
+		    + ((YYERROR_VERBOSE_ARGS_MAXIMUM - 2)
+		       * (sizeof yyor - 1))];
+      char const *yyprefix = yyexpecting;
+
+      /* Start YYX at -YYN if negative to avoid negative indexes in
+	 YYCHECK.  */
+      int yyxbegin = yyn < 0 ? -yyn : 0;
+
+      /* Stay within bounds of both yycheck and yytname.  */
+      int yychecklim = YYLAST - yyn + 1;
+      int yyxend = yychecklim < YYNTOKENS ? yychecklim : YYNTOKENS;
+      int yycount = 1;
+
+      yyarg[0] = yytname[yytype];
+      yyfmt = yystpcpy (yyformat, yyunexpected);
+
+      for (yyx = yyxbegin; yyx < yyxend; ++yyx)
+	if (yycheck[yyx + yyn] == yyx && yyx != YYTERROR)
+	  {
+	    if (yycount == YYERROR_VERBOSE_ARGS_MAXIMUM)
+	      {
+		yycount = 1;
+		yysize = yysize0;
+		yyformat[sizeof yyunexpected - 1] = '\0';
+		break;
+	      }
+	    yyarg[yycount++] = yytname[yyx];
+	    yysize1 = yysize + yytnamerr (0, yytname[yyx]);
+	    yysize_overflow |= (yysize1 < yysize);
+	    yysize = yysize1;
+	    yyfmt = yystpcpy (yyfmt, yyprefix);
+	    yyprefix = yyor;
+	  }
+
+      yyf = YY_(yyformat);
+      yysize1 = yysize + yystrlen (yyf);
+      yysize_overflow |= (yysize1 < yysize);
+      yysize = yysize1;
+
+      if (yysize_overflow)
+	return YYSIZE_MAXIMUM;
+
+      if (yyresult)
+	{
+	  /* Avoid sprintf, as that infringes on the user's name space.
+	     Don't have undefined behavior even if the translation
+	     produced a string with the wrong number of "%s"s.  */
+	  char *yyp = yyresult;
+	  int yyi = 0;
+	  while ((*yyp = *yyf) != '\0')
+	    {
+	      if (*yyp == '%' && yyf[1] == 's' && yyi < yycount)
+		{
+		  yyp += yytnamerr (yyp, yyarg[yyi++]);
+		  yyf += 2;
+		}
+	      else
+		{
+		  yyp++;
+		  yyf++;
+		}
+	    }
+	}
+      return yysize;
     }
-
-  switch (yycount)
-    {
-# define YYCASE_(N, S)                      \
-      case N:                               \
-        yyformat = S;                       \
-      break
-      YYCASE_(0, YY_("syntax error"));
-      YYCASE_(1, YY_("syntax error, unexpected %s"));
-      YYCASE_(2, YY_("syntax error, unexpected %s, expecting %s"));
-      YYCASE_(3, YY_("syntax error, unexpected %s, expecting %s or %s"));
-      YYCASE_(4, YY_("syntax error, unexpected %s, expecting %s or %s or %s"));
-      YYCASE_(5, YY_("syntax error, unexpected %s, expecting %s or %s or %s or %s"));
-# undef YYCASE_
-    }
-
-  yysize1 = yysize + yystrlen (yyformat);
-  if (! (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM))
-    return 2;
-  yysize = yysize1;
-
-  if (*yymsg_alloc < yysize)
-    {
-      *yymsg_alloc = 2 * yysize;
-      if (! (yysize <= *yymsg_alloc
-             && *yymsg_alloc <= YYSTACK_ALLOC_MAXIMUM))
-        *yymsg_alloc = YYSTACK_ALLOC_MAXIMUM;
-      return 1;
-    }
-
-  /* Avoid sprintf, as that infringes on the user's name space.
-     Don't have undefined behavior even if the translation
-     produced a string with the wrong number of "%s"s.  */
-  {
-    char *yyp = *yymsg;
-    int yyi = 0;
-    while ((*yyp = *yyformat) != '\0')
-      if (*yyp == '%' && yyformat[1] == 's' && yyi < yycount)
-        {
-          yyp += yytnamerr (yyp, yyarg[yyi++]);
-          yyformat += 2;
-        }
-      else
-        {
-          yyp++;
-          yyformat++;
-        }
-  }
-  return 0;
 }
 #endif /* YYERROR_VERBOSE */
+
 
 /*-----------------------------------------------.
 | Release the memory associated to this symbol.  |
@@ -1810,7 +1778,6 @@ yydestruct (yymsg, yytype, yyvaluep)
     }
 }
 
-
 /* Prevent warnings from -Wmissing-prototypes.  */
 #ifdef YYPARSE_PARAM
 #if defined __STDC__ || defined __cplusplus
@@ -1837,9 +1804,10 @@ YYSTYPE yylval;
 int yynerrs;
 
 
-/*----------.
-| yyparse.  |
-`----------*/
+
+/*-------------------------.
+| yyparse or yypush_parse.  |
+`-------------------------*/
 
 #ifdef YYPARSE_PARAM
 #if (defined __STDC__ || defined __C99__FUNC__ \
@@ -1863,6 +1831,8 @@ yyparse ()
 #endif
 #endif
 {
+
+
     int yystate;
     /* Number of tokens to shift before error messages enabled.  */
     int yyerrstatus;
@@ -2017,7 +1987,7 @@ yybackup:
 
   /* First try to decide what to do without reference to lookahead token.  */
   yyn = yypact[yystate];
-  if (yypact_value_is_default (yyn))
+  if (yyn == YYPACT_NINF)
     goto yydefault;
 
   /* Not known => get a lookahead token if don't already have one.  */
@@ -2048,8 +2018,8 @@ yybackup:
   yyn = yytable[yyn];
   if (yyn <= 0)
     {
-      if (yytable_value_is_error (yyn))
-        goto yyerrlab;
+      if (yyn == 0 || yyn == YYTABLE_NINF)
+	goto yyerrlab;
       yyn = -yyn;
       goto yyreduce;
     }
@@ -2104,7 +2074,7 @@ yyreduce:
     {
         case 17:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 361 "osm_qos_parser_y.y"
     {
                         __parser_port_group_start();
@@ -2113,7 +2083,7 @@ yyreduce:
 
   case 18:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 366 "osm_qos_parser_y.y"
     {
                         if ( __parser_port_group_end() )
@@ -2123,7 +2093,7 @@ yyreduce:
 
   case 36:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 429 "osm_qos_parser_y.y"
     {
                         __parser_vlarb_scope_start();
@@ -2132,7 +2102,7 @@ yyreduce:
 
   case 37:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 434 "osm_qos_parser_y.y"
     {
                         if ( __parser_vlarb_scope_end() )
@@ -2142,7 +2112,7 @@ yyreduce:
 
   case 49:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 475 "osm_qos_parser_y.y"
     {
                         __parser_sl2vl_scope_start();
@@ -2151,7 +2121,7 @@ yyreduce:
 
   case 50:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 480 "osm_qos_parser_y.y"
     {
                         if ( __parser_sl2vl_scope_end() )
@@ -2161,7 +2131,7 @@ yyreduce:
 
   case 64:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 546 "osm_qos_parser_y.y"
     {
                         __parser_qos_level_start();
@@ -2170,7 +2140,7 @@ yyreduce:
 
   case 65:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 551 "osm_qos_parser_y.y"
     {
                         if ( __parser_qos_level_end() )
@@ -2180,7 +2150,7 @@ yyreduce:
 
   case 80:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 600 "osm_qos_parser_y.y"
     {
                         __parser_match_rule_start();
@@ -2189,7 +2159,7 @@ yyreduce:
 
   case 81:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 605 "osm_qos_parser_y.y"
     {
                         if ( __parser_match_rule_end() )
@@ -2199,7 +2169,7 @@ yyreduce:
 
   case 91:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 645 "osm_qos_parser_y.y"
     {
                         /* parsing default ulp rule: "default: num" */
@@ -2222,7 +2192,7 @@ yyreduce:
 
   case 92:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 663 "osm_qos_parser_y.y"
     {
                         /* "any, service-id ... : sl" - one instance of list of ranges */
@@ -2248,7 +2218,7 @@ yyreduce:
 
   case 94:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 684 "osm_qos_parser_y.y"
     {
                         /* "any, pkey ... : sl" - one instance of list of ranges */
@@ -2274,7 +2244,7 @@ yyreduce:
 
   case 96:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 705 "osm_qos_parser_y.y"
     {
                         /* any, target-port-guid ... : sl */
@@ -2314,7 +2284,7 @@ yyreduce:
 
   case 98:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 740 "osm_qos_parser_y.y"
     {
 			/* any, source-port-guid ... : sl */
@@ -2354,7 +2324,7 @@ yyreduce:
 
   case 100:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 775 "osm_qos_parser_y.y"
     {
 			/* any, source-target-port-guid ... : sl */
@@ -2397,7 +2367,7 @@ yyreduce:
 
   case 102:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 813 "osm_qos_parser_y.y"
     {
                         /* "sdp : sl" - default SL for SDP */
@@ -2415,7 +2385,7 @@ yyreduce:
 
   case 104:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 826 "osm_qos_parser_y.y"
     {
                         /* sdp with port numbers */
@@ -2454,7 +2424,7 @@ yyreduce:
 
   case 106:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 860 "osm_qos_parser_y.y"
     {
                         /* "rds : sl" - default SL for RDS */
@@ -2472,7 +2442,7 @@ yyreduce:
 
   case 108:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 873 "osm_qos_parser_y.y"
     {
                         /* rds with port numbers */
@@ -2511,7 +2481,7 @@ yyreduce:
 
   case 110:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 907 "osm_qos_parser_y.y"
     {
                         /* "iSER : sl" - default SL for iSER */
@@ -2529,7 +2499,7 @@ yyreduce:
 
   case 112:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 920 "osm_qos_parser_y.y"
     {
                         /* iser with port numbers */
@@ -2568,7 +2538,7 @@ yyreduce:
 
   case 114:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 954 "osm_qos_parser_y.y"
     {
                         /* srp with target guids - this rule is similar
@@ -2609,7 +2579,7 @@ yyreduce:
 
   case 116:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 990 "osm_qos_parser_y.y"
     {
                         /* ipoib w/o any pkeys (default pkey) */
@@ -2634,7 +2604,7 @@ yyreduce:
 
   case 118:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1010 "osm_qos_parser_y.y"
     {
                         /* ipoib with pkeys */
@@ -2671,105 +2641,105 @@ yyreduce:
 
   case 120:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1044 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 121:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1047 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 122:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1050 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 123:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1053 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 124:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1056 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 125:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1059 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 126:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1062 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 127:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1065 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 128:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1068 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 129:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1071 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 130:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1074 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 131:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1077 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 132:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1080 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 133:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1083 "osm_qos_parser_y.y"
     { __parser_ulp_match_rule_start(); }
     break;
 
   case 134:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1086 "osm_qos_parser_y.y"
     {
                         /* get the SL for ULP rules */
@@ -2801,7 +2771,7 @@ yyreduce:
 
   case 135:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1125 "osm_qos_parser_y.y"
     {
                             /* 'name' of 'port-group' - one instance */
@@ -2828,7 +2798,7 @@ yyreduce:
 
   case 136:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1148 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -2837,7 +2807,7 @@ yyreduce:
 
   case 137:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1153 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'port-group' - one instance */
@@ -2864,7 +2834,7 @@ yyreduce:
 
   case 138:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1176 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -2873,7 +2843,7 @@ yyreduce:
 
   case 139:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1181 "osm_qos_parser_y.y"
     {
                             /* 'port-name' in 'port-group' - any num of instances */
@@ -2943,7 +2913,7 @@ yyreduce:
 
   case 140:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1247 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -2952,7 +2922,7 @@ yyreduce:
 
   case 141:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1252 "osm_qos_parser_y.y"
     {
                             /* 'port-guid' in 'port-group' - any num of instances */
@@ -2976,7 +2946,7 @@ yyreduce:
 
   case 142:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1272 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -2985,7 +2955,7 @@ yyreduce:
 
   case 143:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1277 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'port-group' - any num of instances */
@@ -3009,7 +2979,7 @@ yyreduce:
 
   case 144:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1297 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3018,7 +2988,7 @@ yyreduce:
 
   case 145:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1302 "osm_qos_parser_y.y"
     {
                             /* 'partition' in 'port-group' - any num of instances */
@@ -3030,7 +3000,7 @@ yyreduce:
 
   case 146:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1310 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3039,7 +3009,7 @@ yyreduce:
 
   case 147:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1315 "osm_qos_parser_y.y"
     {
                             /* 'node-type' in 'port-group' - any num of instances */
@@ -3048,7 +3018,7 @@ yyreduce:
 
   case 148:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1320 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3057,7 +3027,7 @@ yyreduce:
 
   case 156:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1336 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
@@ -3067,7 +3037,7 @@ yyreduce:
 
   case 157:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1342 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
@@ -3077,7 +3047,7 @@ yyreduce:
 
   case 158:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1348 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
@@ -3087,7 +3057,7 @@ yyreduce:
 
   case 159:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1354 "osm_qos_parser_y.y"
     {
                             p_current_port_group->node_types |=
@@ -3099,7 +3069,7 @@ yyreduce:
 
   case 160:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1362 "osm_qos_parser_y.y"
     {
                             osm_port_t * p_osm_port =
@@ -3114,7 +3084,7 @@ yyreduce:
 
   case 161:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1384 "osm_qos_parser_y.y"
     {
                             /* 'group' in 'vlarb-scope' - any num of instances */
@@ -3135,7 +3105,7 @@ yyreduce:
 
   case 162:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1401 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3144,7 +3114,7 @@ yyreduce:
 
   case 163:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1406 "osm_qos_parser_y.y"
     {
                             /* 'across' in 'vlarb-scope' - any num of instances */
@@ -3165,7 +3135,7 @@ yyreduce:
 
   case 164:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1423 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3174,7 +3144,7 @@ yyreduce:
 
   case 165:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1428 "osm_qos_parser_y.y"
     {
                             /* 'vl-high-limit' in 'vlarb-scope' - one instance of one number */
@@ -3196,7 +3166,7 @@ yyreduce:
 
   case 166:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1446 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3205,7 +3175,7 @@ yyreduce:
 
   case 167:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1451 "osm_qos_parser_y.y"
     {
                             /* 'vlarb-high' in 'vlarb-scope' - list of pairs of numbers with ':' and ',' */
@@ -3226,7 +3196,7 @@ yyreduce:
 
   case 168:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1468 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3235,7 +3205,7 @@ yyreduce:
 
   case 169:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1473 "osm_qos_parser_y.y"
     {
                             /* 'vlarb-low' in 'vlarb-scope' - list of pairs of numbers with ':' and ',' */
@@ -3256,7 +3226,7 @@ yyreduce:
 
   case 170:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1490 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3265,7 +3235,7 @@ yyreduce:
 
   case 171:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1506 "osm_qos_parser_y.y"
     {
                             /* 'group' in 'sl2vl-scope' - any num of instances */
@@ -3286,7 +3256,7 @@ yyreduce:
 
   case 172:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1523 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3295,7 +3265,7 @@ yyreduce:
 
   case 173:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1528 "osm_qos_parser_y.y"
     {
                             /* 'across' in 'sl2vl-scope' - any num of instances */
@@ -3318,7 +3288,7 @@ yyreduce:
 
   case 174:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1547 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3327,7 +3297,7 @@ yyreduce:
 
   case 175:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1552 "osm_qos_parser_y.y"
     {
                             /* 'across-from' in 'sl2vl-scope' - any num of instances */
@@ -3348,7 +3318,7 @@ yyreduce:
 
   case 176:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1569 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3357,7 +3327,7 @@ yyreduce:
 
   case 177:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1574 "osm_qos_parser_y.y"
     {
                             /* 'across-to' in 'sl2vl-scope' - any num of instances */
@@ -3379,7 +3349,7 @@ yyreduce:
 
   case 178:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1592 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3388,7 +3358,7 @@ yyreduce:
 
   case 179:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1597 "osm_qos_parser_y.y"
     {
                             /* 'from' in 'sl2vl-scope' - any num of instances */
@@ -3397,7 +3367,7 @@ yyreduce:
 
   case 180:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1602 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3406,7 +3376,7 @@ yyreduce:
 
   case 181:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1607 "osm_qos_parser_y.y"
     {
                             /* 'to' in 'sl2vl-scope' - any num of instances */
@@ -3415,7 +3385,7 @@ yyreduce:
 
   case 182:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1612 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
@@ -3424,7 +3394,7 @@ yyreduce:
 
   case 185:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1621 "osm_qos_parser_y.y"
     {
                             int i;
@@ -3435,7 +3405,7 @@ yyreduce:
 
   case 188:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1632 "osm_qos_parser_y.y"
     {
                             int i;
@@ -3446,7 +3416,7 @@ yyreduce:
 
   case 189:
 
-/* Line 1806 of yacc.c  */
+/* Line 1455 of yacc.c  */
 #line 1639 "osm_qos_parser_y.y"
     {
                             int i;
@@ -3460,8 +3430,7 @@ yyreduce:
                                 num_pair = (uint64_t*)cl_list_obj(list_iterator);
                                 if (num_pair)
                                 {
-                                    if ( num_pair[0] < 0 ||
-                                         num_pair[1] >= OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH )
+                                    if ( num_pair[1] >= OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH )
                                     {
                                         yyerror("port number out of range 'from' list");
                                         free(num_pair);
@@ -3482,8 +3451,8 @@ yyreduce:
 
   case 190:
 
-/* Line 1806 of yacc.c  */
-#line 1671 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1670 "osm_qos_parser_y.y"
     {
                             int i;
                             cl_list_iterator_t    list_iterator;
@@ -3496,8 +3465,7 @@ yyreduce:
                                 num_pair = (uint64_t*)cl_list_obj(list_iterator);
                                 if (num_pair)
                                 {
-                                    if ( num_pair[0] < 0 ||
-                                         num_pair[1] >= OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH )
+                                    if ( num_pair[1] >= OSM_QOS_POLICY_MAX_PORTS_ON_SWITCH )
                                     {
                                         yyerror("port number out of range 'to' list");
                                         free(num_pair);
@@ -3518,8 +3486,8 @@ yyreduce:
 
   case 191:
 
-/* Line 1806 of yacc.c  */
-#line 1704 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1702 "osm_qos_parser_y.y"
     {
                             /* 'sl2vl-table' - one instance of exactly
                                OSM_QOS_POLICY_SL2VL_TABLE_LEN numbers */
@@ -3565,8 +3533,8 @@ yyreduce:
 
   case 192:
 
-/* Line 1806 of yacc.c  */
-#line 1747 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1745 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3574,8 +3542,8 @@ yyreduce:
 
   case 193:
 
-/* Line 1806 of yacc.c  */
-#line 1764 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1762 "osm_qos_parser_y.y"
     {
                             /* 'name' of 'qos-level' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3601,8 +3569,8 @@ yyreduce:
 
   case 194:
 
-/* Line 1806 of yacc.c  */
-#line 1787 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1785 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3610,8 +3578,8 @@ yyreduce:
 
   case 195:
 
-/* Line 1806 of yacc.c  */
-#line 1792 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1790 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'qos-level' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3637,8 +3605,8 @@ yyreduce:
 
   case 196:
 
-/* Line 1806 of yacc.c  */
-#line 1815 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1813 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3646,8 +3614,8 @@ yyreduce:
 
   case 197:
 
-/* Line 1806 of yacc.c  */
-#line 1820 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1818 "osm_qos_parser_y.y"
     {
                             /* 'sl' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3670,8 +3638,8 @@ yyreduce:
 
   case 198:
 
-/* Line 1806 of yacc.c  */
-#line 1840 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1838 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3679,8 +3647,8 @@ yyreduce:
 
   case 199:
 
-/* Line 1806 of yacc.c  */
-#line 1845 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1843 "osm_qos_parser_y.y"
     {
                             /* 'mtu-limit' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3703,8 +3671,8 @@ yyreduce:
 
   case 200:
 
-/* Line 1806 of yacc.c  */
-#line 1865 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1863 "osm_qos_parser_y.y"
     {
                             /* 'mtu-limit' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3713,8 +3681,8 @@ yyreduce:
 
   case 201:
 
-/* Line 1806 of yacc.c  */
-#line 1871 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1869 "osm_qos_parser_y.y"
     {
                             /* 'rate-limit' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3737,8 +3705,8 @@ yyreduce:
 
   case 202:
 
-/* Line 1806 of yacc.c  */
-#line 1891 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1889 "osm_qos_parser_y.y"
     {
                             /* 'rate-limit' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3747,8 +3715,8 @@ yyreduce:
 
   case 203:
 
-/* Line 1806 of yacc.c  */
-#line 1897 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1895 "osm_qos_parser_y.y"
     {
                             /* 'packet-life' in 'qos-level' - one instance */
                             cl_list_iterator_t   list_iterator;
@@ -3771,8 +3739,8 @@ yyreduce:
 
   case 204:
 
-/* Line 1806 of yacc.c  */
-#line 1917 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1915 "osm_qos_parser_y.y"
     {
                             /* 'packet-life' in 'qos-level' - one instance */
                             RESET_BUFFER;
@@ -3781,8 +3749,8 @@ yyreduce:
 
   case 205:
 
-/* Line 1806 of yacc.c  */
-#line 1923 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1921 "osm_qos_parser_y.y"
     {
                             /* 'path-bits' in 'qos-level' - any num of instances */
                             /* list of path bit ranges */
@@ -3820,8 +3788,8 @@ yyreduce:
 
   case 206:
 
-/* Line 1806 of yacc.c  */
-#line 1958 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1956 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3829,8 +3797,8 @@ yyreduce:
 
   case 207:
 
-/* Line 1806 of yacc.c  */
-#line 1963 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1961 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'qos-level' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -3866,8 +3834,8 @@ yyreduce:
 
   case 208:
 
-/* Line 1806 of yacc.c  */
-#line 1996 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 1994 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3875,8 +3843,8 @@ yyreduce:
 
   case 209:
 
-/* Line 1806 of yacc.c  */
-#line 2013 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2011 "osm_qos_parser_y.y"
     {
                             /* 'use' of 'qos-match-rule' - one instance */
                             cl_list_iterator_t    list_iterator;
@@ -3902,8 +3870,8 @@ yyreduce:
 
   case 210:
 
-/* Line 1806 of yacc.c  */
-#line 2036 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2034 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3911,8 +3879,8 @@ yyreduce:
 
   case 211:
 
-/* Line 1806 of yacc.c  */
-#line 2041 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2039 "osm_qos_parser_y.y"
     {
                             /* 'qos-class' in 'qos-match-rule' - num of instances of list of ranges */
                             /* list of class ranges (QoS Class is 12-bit value) */
@@ -3949,8 +3917,8 @@ yyreduce:
 
   case 212:
 
-/* Line 1806 of yacc.c  */
-#line 2075 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2073 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3958,8 +3926,8 @@ yyreduce:
 
   case 213:
 
-/* Line 1806 of yacc.c  */
-#line 2080 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2078 "osm_qos_parser_y.y"
     {
                             /* 'source' in 'qos-match-rule' - text */
                             cl_list_iterator_t    list_iterator;
@@ -3979,8 +3947,8 @@ yyreduce:
 
   case 214:
 
-/* Line 1806 of yacc.c  */
-#line 2097 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2095 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -3988,8 +3956,8 @@ yyreduce:
 
   case 215:
 
-/* Line 1806 of yacc.c  */
-#line 2102 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2100 "osm_qos_parser_y.y"
     {
                             /* 'destination' in 'qos-match-rule' - text */
                             cl_list_iterator_t    list_iterator;
@@ -4009,8 +3977,8 @@ yyreduce:
 
   case 216:
 
-/* Line 1806 of yacc.c  */
-#line 2119 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2117 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4018,8 +3986,8 @@ yyreduce:
 
   case 217:
 
-/* Line 1806 of yacc.c  */
-#line 2124 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2122 "osm_qos_parser_y.y"
     {
                             /* 'qos-level-name' in 'qos-match-rule' - single string */
                             cl_list_iterator_t   list_iterator;
@@ -4045,8 +4013,8 @@ yyreduce:
 
   case 218:
 
-/* Line 1806 of yacc.c  */
-#line 2147 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2145 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4054,8 +4022,8 @@ yyreduce:
 
   case 219:
 
-/* Line 1806 of yacc.c  */
-#line 2152 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2150 "osm_qos_parser_y.y"
     {
                             /* 'service-id' in 'qos-match-rule' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -4091,8 +4059,8 @@ yyreduce:
 
   case 220:
 
-/* Line 1806 of yacc.c  */
-#line 2185 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2183 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4100,8 +4068,8 @@ yyreduce:
 
   case 221:
 
-/* Line 1806 of yacc.c  */
-#line 2190 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2188 "osm_qos_parser_y.y"
     {
                             /* 'pkey' in 'qos-match-rule' - num of instances of list of ranges */
                             if (cl_list_count(&tmp_parser_struct.num_pair_list))
@@ -4137,8 +4105,8 @@ yyreduce:
 
   case 222:
 
-/* Line 1806 of yacc.c  */
-#line 2223 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2221 "osm_qos_parser_y.y"
     {
                             RESET_BUFFER;
                         }
@@ -4146,8 +4114,8 @@ yyreduce:
 
   case 223:
 
-/* Line 1806 of yacc.c  */
-#line 2234 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2232 "osm_qos_parser_y.y"
     {
                         cl_list_insert_tail(&tmp_parser_struct.str_list,
                                             strdup(__parser_strip_white(tmp_parser_struct.str)));
@@ -4157,8 +4125,8 @@ yyreduce:
 
   case 226:
 
-/* Line 1806 of yacc.c  */
-#line 2245 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2243 "osm_qos_parser_y.y"
     {
                         strcat(tmp_parser_struct.str,(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4167,8 +4135,8 @@ yyreduce:
 
   case 232:
 
-/* Line 1806 of yacc.c  */
-#line 2265 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2263 "osm_qos_parser_y.y"
     {
                         uint64_t * p_num = (uint64_t*)malloc(sizeof(uint64_t));
                         __parser_str2uint64(p_num,(yyvsp[(1) - (1)]));
@@ -4179,8 +4147,8 @@ yyreduce:
 
   case 233:
 
-/* Line 1806 of yacc.c  */
-#line 2273 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2271 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4191,8 +4159,8 @@ yyreduce:
 
   case 234:
 
-/* Line 1806 of yacc.c  */
-#line 2279 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2277 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4203,8 +4171,8 @@ yyreduce:
 
   case 235:
 
-/* Line 1806 of yacc.c  */
-#line 2287 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2285 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4213,8 +4181,8 @@ yyreduce:
 
   case 236:
 
-/* Line 1806 of yacc.c  */
-#line 2293 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2291 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4223,8 +4191,8 @@ yyreduce:
 
   case 238:
 
-/* Line 1806 of yacc.c  */
-#line 2302 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2300 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4235,8 +4203,8 @@ yyreduce:
 
   case 239:
 
-/* Line 1806 of yacc.c  */
-#line 2308 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2306 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         if (tmp_parser_struct.num_pair[0] <= tmp_parser_struct.num_pair[1]) {
@@ -4253,8 +4221,8 @@ yyreduce:
 
   case 240:
 
-/* Line 1806 of yacc.c  */
-#line 2320 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2318 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         if (tmp_parser_struct.num_pair[0] <= tmp_parser_struct.num_pair[1]) {
@@ -4271,8 +4239,8 @@ yyreduce:
 
   case 241:
 
-/* Line 1806 of yacc.c  */
-#line 2332 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2330 "osm_qos_parser_y.y"
     {
                         uint64_t * num_pair = (uint64_t*)malloc(sizeof(uint64_t)*2);
                         num_pair[0] = tmp_parser_struct.num_pair[0];
@@ -4283,8 +4251,8 @@ yyreduce:
 
   case 242:
 
-/* Line 1806 of yacc.c  */
-#line 2340 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2338 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
@@ -4294,8 +4262,8 @@ yyreduce:
 
   case 243:
 
-/* Line 1806 of yacc.c  */
-#line 2347 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2345 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[0],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4304,8 +4272,8 @@ yyreduce:
 
   case 244:
 
-/* Line 1806 of yacc.c  */
-#line 2353 "osm_qos_parser_y.y"
+/* Line 1455 of yacc.c  */
+#line 2351 "osm_qos_parser_y.y"
     {
                         __parser_str2uint64(&tmp_parser_struct.num_pair[1],(yyvsp[(1) - (1)]));
                         free((yyvsp[(1) - (1)]));
@@ -4314,21 +4282,10 @@ yyreduce:
 
 
 
-/* Line 1806 of yacc.c  */
-#line 4319 "osm_qos_parser_y.c"
+/* Line 1455 of yacc.c  */
+#line 4287 "osm_qos_parser_y.c"
       default: break;
     }
-  /* User semantic actions sometimes alter yychar, and that requires
-     that yytoken be updated with the new translation.  We take the
-     approach of translating immediately before every use of yytoken.
-     One alternative is translating here after every semantic action,
-     but that translation would be missed if the semantic action invokes
-     YYABORT, YYACCEPT, or YYERROR immediately after altering yychar or
-     if it invokes YYBACKUP.  In the case of YYABORT or YYACCEPT, an
-     incorrect destructor might then be invoked immediately.  In the
-     case of YYERROR or YYBACKUP, subsequent parser actions might lead
-     to an incorrect destructor call or verbose syntax error message
-     before the lookahead is translated.  */
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
 
   YYPOPSTACK (yylen);
@@ -4356,10 +4313,6 @@ yyreduce:
 | yyerrlab -- here on detecting error |
 `------------------------------------*/
 yyerrlab:
-  /* Make sure we have latest lookahead translation.  See comments at
-     user semantic actions for why this is necessary.  */
-  yytoken = yychar == YYEMPTY ? YYEMPTY : YYTRANSLATE (yychar);
-
   /* If not already recovering from an error, report this error.  */
   if (!yyerrstatus)
     {
@@ -4367,36 +4320,37 @@ yyerrlab:
 #if ! YYERROR_VERBOSE
       yyerror (YY_("syntax error"));
 #else
-# define YYSYNTAX_ERROR yysyntax_error (&yymsg_alloc, &yymsg, \
-                                        yyssp, yytoken)
       {
-        char const *yymsgp = YY_("syntax error");
-        int yysyntax_error_status;
-        yysyntax_error_status = YYSYNTAX_ERROR;
-        if (yysyntax_error_status == 0)
-          yymsgp = yymsg;
-        else if (yysyntax_error_status == 1)
-          {
-            if (yymsg != yymsgbuf)
-              YYSTACK_FREE (yymsg);
-            yymsg = (char *) YYSTACK_ALLOC (yymsg_alloc);
-            if (!yymsg)
-              {
-                yymsg = yymsgbuf;
-                yymsg_alloc = sizeof yymsgbuf;
-                yysyntax_error_status = 2;
-              }
-            else
-              {
-                yysyntax_error_status = YYSYNTAX_ERROR;
-                yymsgp = yymsg;
-              }
-          }
-        yyerror (yymsgp);
-        if (yysyntax_error_status == 2)
-          goto yyexhaustedlab;
+	YYSIZE_T yysize = yysyntax_error (0, yystate, yychar);
+	if (yymsg_alloc < yysize && yymsg_alloc < YYSTACK_ALLOC_MAXIMUM)
+	  {
+	    YYSIZE_T yyalloc = 2 * yysize;
+	    if (! (yysize <= yyalloc && yyalloc <= YYSTACK_ALLOC_MAXIMUM))
+	      yyalloc = YYSTACK_ALLOC_MAXIMUM;
+	    if (yymsg != yymsgbuf)
+	      YYSTACK_FREE (yymsg);
+	    yymsg = (char *) YYSTACK_ALLOC (yyalloc);
+	    if (yymsg)
+	      yymsg_alloc = yyalloc;
+	    else
+	      {
+		yymsg = yymsgbuf;
+		yymsg_alloc = sizeof yymsgbuf;
+	      }
+	  }
+
+	if (0 < yysize && yysize <= yymsg_alloc)
+	  {
+	    (void) yysyntax_error (yymsg, yystate, yychar);
+	    yyerror (yymsg);
+	  }
+	else
+	  {
+	    yyerror (YY_("syntax error"));
+	    if (yysize != 0)
+	      goto yyexhaustedlab;
+	  }
       }
-# undef YYSYNTAX_ERROR
 #endif
     }
 
@@ -4455,7 +4409,7 @@ yyerrlab1:
   for (;;)
     {
       yyn = yypact[yystate];
-      if (!yypact_value_is_default (yyn))
+      if (yyn != YYPACT_NINF)
 	{
 	  yyn += YYTERROR;
 	  if (0 <= yyn && yyn <= YYLAST && yycheck[yyn] == YYTERROR)
@@ -4514,13 +4468,8 @@ yyexhaustedlab:
 
 yyreturn:
   if (yychar != YYEMPTY)
-    {
-      /* Make sure we have latest lookahead translation.  See comments at
-         user semantic actions for why this is necessary.  */
-      yytoken = YYTRANSLATE (yychar);
-      yydestruct ("Cleanup: discarding lookahead",
-                  yytoken, &yylval);
-    }
+     yydestruct ("Cleanup: discarding lookahead",
+		 yytoken, &yylval);
   /* Do not reclaim the symbols of the rule which action triggered
      this YYABORT or YYACCEPT.  */
   YYPOPSTACK (yylen);
@@ -4545,8 +4494,8 @@ yyreturn:
 
 
 
-/* Line 2067 of yacc.c  */
-#line 2359 "osm_qos_parser_y.y"
+/* Line 1675 of yacc.c  */
+#line 2357 "osm_qos_parser_y.y"
 
 
 /***************************************************

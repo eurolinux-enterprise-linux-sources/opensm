@@ -888,7 +888,7 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 		osm_dump_port_info_to_buf(node_guid, port_guid,
 					  port_num, p_pi, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -910,7 +910,7 @@ void osm_dump_port_info_v2(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 		osm_dump_port_info_to_buf(node_guid, port_guid,
 					  port_num, p_pi, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -955,7 +955,7 @@ void osm_dump_mlnx_ext_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 		osm_dump_mlnx_ext_port_info_to_buf(node_guid, port_guid,
 						   port_num, p_pi, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -970,7 +970,7 @@ void osm_dump_mlnx_ext_port_info_v2(IN osm_log_t * p_log, IN ib_net64_t node_gui
 		osm_dump_mlnx_ext_port_info_to_buf(node_guid, port_guid,
 						   port_num, p_pi, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
         }
 }
 
@@ -1072,7 +1072,7 @@ void osm_dump_portinfo_record(IN osm_log_t * p_log,
 
 		osm_dump_portinfo_record_to_buf(p_pir, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -1094,7 +1094,7 @@ void osm_dump_portinfo_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_portinfo_record_to_buf(p_pir, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 
 		/*  show the capabilities mask */
 		if (p_pi->capability_mask) {
@@ -1146,7 +1146,7 @@ void osm_dump_guid_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 		osm_dump_guid_info_to_buf(node_guid, port_guid,
 					  block_num, p_gi, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1162,7 +1162,7 @@ void osm_dump_guid_info_v2(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 		osm_dump_guid_info_to_buf(node_guid, port_guid,
 					  block_num, p_gi, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1207,7 +1207,7 @@ void osm_dump_guidinfo_record(IN osm_log_t * p_log,
 
 		osm_dump_guidinfo_record_to_buf(p_gir, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1221,7 +1221,7 @@ void osm_dump_guidinfo_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_guidinfo_record_to_buf(p_gir, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1264,7 +1264,7 @@ void osm_dump_node_info(IN osm_log_t * p_log, IN const ib_node_info_t * p_ni,
 
 		osm_dump_node_info_to_buf(p_ni, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1276,7 +1276,7 @@ void osm_dump_node_info_v2(IN osm_log_t * p_log, IN const ib_node_info_t * p_ni,
 
 		osm_dump_node_info_to_buf(p_ni, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1333,7 +1333,7 @@ void osm_dump_node_record(IN osm_log_t * p_log,
 
 		osm_dump_node_record_to_buf(p_nr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1347,7 +1347,7 @@ void osm_dump_node_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_node_record_to_buf(p_nr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1401,7 +1401,7 @@ void osm_dump_path_record(IN osm_log_t * p_log, IN const ib_path_rec_t * p_pr,
 
 		osm_dump_path_record_to_buf(p_pr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1413,7 +1413,7 @@ void osm_dump_path_record_v2(IN osm_log_t * p_log, IN const ib_path_rec_t * p_pr
 
 		osm_dump_path_record_to_buf(p_pr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1486,7 +1486,7 @@ void osm_dump_multipath_record(IN osm_log_t * p_log,
 
 		osm_dump_multipath_record_to_buf(p_mpr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1500,7 +1500,7 @@ void osm_dump_multipath_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_multipath_record_to_buf(p_mpr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1547,7 +1547,7 @@ void osm_dump_mc_record(IN osm_log_t * p_log, IN const ib_member_rec_t * p_mcmr,
 
 		osm_dump_mc_record_to_buf(p_mcmr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1559,7 +1559,7 @@ void osm_dump_mc_record_v2(IN osm_log_t * p_log, IN const ib_member_rec_t * p_mc
 
 		osm_dump_mc_record_to_buf(p_mcmr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1664,7 +1664,7 @@ void osm_dump_service_record(IN osm_log_t * p_log,
 
 		osm_dump_service_record_to_buf(p_sr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1678,7 +1678,7 @@ void osm_dump_service_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_service_record_to_buf(p_sr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1768,7 +1768,7 @@ void osm_dump_inform_info(IN osm_log_t * p_log,
 		else
 			osm_dump_inform_info_to_buf(p_ii, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1785,7 +1785,7 @@ void osm_dump_inform_info_v2(IN osm_log_t * p_log,
 		else
 			osm_dump_inform_info_to_buf(p_ii, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1897,7 +1897,7 @@ void osm_dump_inform_info_record(IN osm_log_t * p_log,
 		else
 			osm_dump_inform_info_record_to_buf(p_iir, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1914,7 +1914,7 @@ void osm_dump_inform_info_record_v2(IN osm_log_t * p_log,
 		else
 			osm_dump_inform_info_record_to_buf(p_iir, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -1945,7 +1945,7 @@ void osm_dump_link_record(IN osm_log_t * p_log,
 
 		osm_dump_link_record_to_buf(p_lr, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -1959,7 +1959,7 @@ void osm_dump_link_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_link_record_to_buf(p_lr, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2002,7 +2002,7 @@ void osm_dump_switch_info(IN osm_log_t * p_log,
 
 		osm_dump_switch_info_to_buf(p_si, buf);
 
-		osm_log(p_log, OSM_LOG_VERBOSE, buf);
+		osm_log(p_log, OSM_LOG_VERBOSE, "%s", buf);
 	}
 }
 
@@ -2016,7 +2016,7 @@ void osm_dump_switch_info_v2(IN osm_log_t * p_log,
 
 		osm_dump_switch_info_to_buf(p_si, buf);
 
-		osm_log_v2(p_log, OSM_LOG_VERBOSE, file_id, buf);
+		osm_log_v2(p_log, OSM_LOG_VERBOSE, file_id, "%s", buf);
 	}
 }
 
@@ -2066,7 +2066,7 @@ void osm_dump_switch_info_record(IN osm_log_t * p_log,
 
 		osm_dump_switch_info_record_to_buf(p_sir, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2080,7 +2080,7 @@ void osm_dump_switch_info_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_switch_info_record_to_buf(p_sir, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2120,7 +2120,7 @@ void osm_dump_pkey_block(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_pkey_block_to_buf(port_guid, block_num, port_num,
 					   p_pkey_tbl, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2136,7 +2136,7 @@ void osm_dump_pkey_block_v2(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_pkey_block_to_buf(port_guid, block_num,
 					   port_num, p_pkey_tbl, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2179,7 +2179,7 @@ void osm_dump_slvl_map_table(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_slvl_map_table_to_buf(port_guid, in_port_num,
 					       out_port_num, p_slvl_tbl, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2195,7 +2195,7 @@ void osm_dump_slvl_map_table_v2(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_slvl_map_table_to_buf(port_guid, in_port_num,
 					       out_port_num, p_slvl_tbl, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2237,7 +2237,7 @@ void osm_dump_vl_arb_table(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_vl_arb_table_to_buf(port_guid, block_num,
 					     port_num, p_vla_tbl, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2253,7 +2253,7 @@ void osm_dump_vl_arb_table_v2(IN osm_log_t * p_log, IN uint64_t port_guid,
 		osm_dump_vl_arb_table_to_buf(port_guid, block_num,
 					     port_num, p_vla_tbl, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2285,7 +2285,7 @@ void osm_dump_sm_info(IN osm_log_t * p_log, IN const ib_sm_info_t * p_smi,
 
 		osm_dump_sm_info_to_buf(p_smi, buf);
 
-		osm_log(p_log, OSM_LOG_DEBUG, buf);
+		osm_log(p_log, OSM_LOG_DEBUG, "%s", buf);
 	}
 }
 
@@ -2297,7 +2297,7 @@ void osm_dump_sm_info_v2(IN osm_log_t * p_log, IN const ib_sm_info_t * p_smi,
 
 		osm_dump_sm_info_to_buf(p_smi, buf);
 
-		osm_log_v2(p_log, OSM_LOG_DEBUG, file_id, buf);
+		osm_log_v2(p_log, OSM_LOG_DEBUG, file_id, "%s", buf);
 	}
 }
 
@@ -2336,7 +2336,7 @@ void osm_dump_sm_info_record(IN osm_log_t * p_log,
 
 		osm_dump_sm_info_record_to_buf(p_smir, buf);
 
-		osm_log(p_log, OSM_LOG_DEBUG, buf);
+		osm_log(p_log, OSM_LOG_DEBUG, "%s", buf);
 	}
 }
 
@@ -2350,7 +2350,7 @@ void osm_dump_sm_info_record_v2(IN osm_log_t * p_log,
 
 		osm_dump_sm_info_record_to_buf(p_smir, buf);
 
-		osm_log_v2(p_log, OSM_LOG_DEBUG, file_id, buf);
+		osm_log_v2(p_log, OSM_LOG_DEBUG, file_id, "%s", buf);
 	}
 }
 
@@ -2569,7 +2569,7 @@ void osm_dump_notice(IN osm_log_t * p_log,
 		else
 			osm_dump_notice_to_buf(p_ntci, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2585,11 +2585,12 @@ void osm_dump_notice_v2(IN osm_log_t * p_log,
 		else
 			osm_dump_notice_to_buf(p_ntci, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
-static void osm_dump_dr_smp_to_buf(IN const ib_smp_t * p_smp, OUT char * buf)
+static void osm_dump_dr_smp_to_buf(IN const ib_smp_t * p_smp, OUT char * buf,
+				   IN size_t buf_size)
 {
 	if (!buf || !p_smp)
 		return;
@@ -2607,18 +2608,18 @@ static void osm_dump_dr_smp_to_buf(IN const ib_smp_t * p_smp, OUT char * buf)
 			    ib_get_sm_method_str(p_smp->method));
 
 		if (p_smp->mgmt_class == IB_MCLASS_SUBN_DIR) {
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\t\t\t\tD bit...................0x%X\n"
 				      "\t\t\t\tstatus..................0x%X\n",
 				      ib_smp_is_d(p_smp),
 				      cl_ntoh16(ib_smp_get_status(p_smp)));
 		} else {
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\t\t\t\tstatus..................0x%X\n",
 				      cl_ntoh16(p_smp->status));
 		}
 
-		n += snprintf(buf + n, sizeof(buf) - n,
+		n += snprintf(buf + n, buf_size - n,
 			      "\t\t\t\thop_ptr.................0x%X\n"
 			      "\t\t\t\thop_count...............0x%X\n"
 			      "\t\t\t\ttrans_id................0x%" PRIx64 "\n"
@@ -2636,34 +2637,34 @@ static void osm_dump_dr_smp_to_buf(IN const ib_smp_t * p_smp, OUT char * buf)
 
 		if (p_smp->mgmt_class == IB_MCLASS_SUBN_DIR) {
 			uint32_t i;
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\t\t\t\tdr_slid.................%u\n"
 				      "\t\t\t\tdr_dlid.................%u\n",
 				      cl_ntoh16(p_smp->dr_slid),
 				      cl_ntoh16(p_smp->dr_dlid));
 
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\n\t\t\t\tInitial path: ");
-			n += sprint_uint8_arr(buf + n, sizeof(buf) - n,
+			n += sprint_uint8_arr(buf + n, buf_size - n,
 					      p_smp->initial_path,
 					      p_smp->hop_count + 1);
 
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\n\t\t\t\tReturn path:  ");
-			n += sprint_uint8_arr(buf + n, sizeof(buf) - n,
+			n += sprint_uint8_arr(buf + n, buf_size - n,
 					      p_smp->return_path,
 					      p_smp->hop_count + 1);
 
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\n\t\t\t\tReserved:     ");
 			for (i = 0; i < 7; i++) {
-				n += snprintf(buf + n, sizeof(buf) - n,
+				n += snprintf(buf + n, buf_size - n,
 					      "[%0X]", p_smp->resv1[i]);
 			}
-			n += snprintf(buf + n, sizeof(buf) - n, "\n");
+			n += snprintf(buf + n, buf_size - n, "\n");
 
 			for (i = 0; i < 64; i += 16) {
-				n += snprintf(buf + n, sizeof(buf) - n,
+				n += snprintf(buf + n, buf_size - n,
 					      "\n\t\t\t\t%02X %02X %02X %02X "
 					      "%02X %02X %02X %02X"
 					      "   %02X %02X %02X %02X %02X %02X %02X %02X\n",
@@ -2686,7 +2687,7 @@ static void osm_dump_dr_smp_to_buf(IN const ib_smp_t * p_smp, OUT char * buf)
 			}
 		} else {
 			/* not a Direct Route so provide source and destination lids */
-			n += snprintf(buf + n, sizeof(buf) - n,
+			n += snprintf(buf + n, buf_size - n,
 				      "\t\t\t\tMAD IS LID ROUTED\n");
 		}
 	}
@@ -2698,9 +2699,9 @@ void osm_dump_dr_smp(IN osm_log_t * p_log, IN const ib_smp_t * p_smp,
 	if (osm_log_is_active(p_log, log_level)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_dr_smp_to_buf(p_smp, buf);
+		osm_dump_dr_smp_to_buf(p_smp, buf, BUF_SIZE);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s", buf);
 	}
 }
 
@@ -2710,9 +2711,9 @@ void osm_dump_dr_smp_v2(IN osm_log_t * p_log, IN const ib_smp_t * p_smp,
 	if (osm_log_is_active_v2(p_log, log_level, file_id)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_dr_smp_to_buf(p_smp, buf);
+		osm_dump_dr_smp_to_buf(p_smp, buf, BUF_SIZE);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
@@ -2774,7 +2775,7 @@ void osm_dump_sa_mad(IN osm_log_t * p_log, IN const ib_sa_mad_t * p_mad,
 
 		osm_dump_sa_mad_to_buf(p_mad, buf);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s\n", buf);
 	}
 }
 
@@ -2786,12 +2787,12 @@ void osm_dump_sa_mad_v2(IN osm_log_t * p_log, IN const ib_sa_mad_t * p_mad,
 
 		osm_dump_sa_mad_to_buf(p_mad, buf);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 	}
 }
 
 static void osm_dump_dr_path_to_buf(IN const osm_dr_path_t * p_path,
-				    OUT char * buf)
+				    OUT char * buf, IN size_t buf_size)
 {
 	if (!buf || !p_path)
 		return;
@@ -2801,7 +2802,7 @@ static void osm_dump_dr_path_to_buf(IN const osm_dr_path_t * p_path,
 		n = sprintf(buf, "Directed Path Dump of %u hop path: "
 			    "Path = ", p_path->hop_count);
 
-		sprint_uint8_arr(buf + n, sizeof(buf) - n, p_path->path,
+		sprint_uint8_arr(buf + n, buf_size - n, p_path->path,
 				 p_path->hop_count + 1);
 	}
 }
@@ -2812,9 +2813,9 @@ void osm_dump_dr_path(IN osm_log_t * p_log, IN const osm_dr_path_t * p_path,
 	if (osm_log_is_active(p_log, log_level)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_dr_path_to_buf(p_path, buf);
+		osm_dump_dr_path_to_buf(p_path, buf, BUF_SIZE);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s\n", buf);
 	}
 }
 
@@ -2824,14 +2825,14 @@ void osm_dump_dr_path_v2(IN osm_log_t * p_log, IN const osm_dr_path_t * p_path,
 	if (osm_log_is_active_v2(p_log, log_level, file_id)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_dr_path_to_buf(p_path, buf);
+		osm_dump_dr_path_to_buf(p_path, buf, BUF_SIZE);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s\n", buf);
 	}
 }
 
 static void osm_dump_smp_dr_path_to_buf(IN const ib_smp_t * p_smp,
-					OUT char * buf)
+					OUT char * buf, IN size_t buf_size)
 {
 	if (!buf || !p_smp)
 		return;
@@ -2840,12 +2841,12 @@ static void osm_dump_smp_dr_path_to_buf(IN const ib_smp_t * p_smp,
 
 		n = sprintf(buf, "Received SMP on a %u hop path: "
 			    "Initial path = ", p_smp->hop_count);
-		n += sprint_uint8_arr(buf + n, sizeof(buf) - n,
+		n += sprint_uint8_arr(buf + n, buf_size - n,
 				      p_smp->initial_path,
 				      p_smp->hop_count + 1);
 
-		n += sprintf(buf + n, ", Return path  = ");
-		n += sprint_uint8_arr(buf + n, sizeof(buf) - n,
+		n += snprintf(buf + n, buf_size - n, ", Return path  = ");
+		n += sprint_uint8_arr(buf + n, buf_size - n,
 				      p_smp->return_path, p_smp->hop_count + 1);
 	}
 }
@@ -2856,9 +2857,9 @@ void osm_dump_smp_dr_path(IN osm_log_t * p_log, IN const ib_smp_t * p_smp,
 	if (osm_log_is_active(p_log, log_level)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_smp_dr_path_to_buf(p_smp, buf);
+		osm_dump_smp_dr_path_to_buf(p_smp, buf, BUF_SIZE);
 
-		osm_log(p_log, log_level, buf);
+		osm_log(p_log, log_level, "%s\n", buf);
 	}
 }
 
@@ -2868,10 +2869,17 @@ void osm_dump_smp_dr_path_v2(IN osm_log_t * p_log, IN const ib_smp_t * p_smp,
 	if (osm_log_is_active_v2(p_log, log_level, file_id)) {
 		char buf[BUF_SIZE];
 
-		osm_dump_smp_dr_path_to_buf(p_smp, buf);
+		osm_dump_smp_dr_path_to_buf(p_smp, buf, BUF_SIZE);
 
-		osm_log_v2(p_log, log_level, file_id, buf);
+		osm_log_v2(p_log, log_level, file_id, "%s\n", buf);
 	}
+}
+
+void osm_dump_dr_path_as_buf(IN size_t max_len,
+			     IN const osm_dr_path_t * p_path,
+			     OUT char* buf)
+{
+	sprint_uint8_arr(buf, max_len, p_path->path, p_path->hop_count + 1);
 }
 
 static const char *sm_signal_str[] = {
@@ -2932,8 +2940,8 @@ static const char *disp_msg_str[] = {
 
 const char *osm_get_disp_msg_str(IN cl_disp_msgid_t msg)
 {
-	if (msg > OSM_MSG_MAX)
-		msg = OSM_MSG_MAX;
+	if (msg >= OSM_MSG_MAX)
+		msg = OSM_MSG_MAX-1;
 	return disp_msg_str[msg];
 }
 
@@ -3002,6 +3010,7 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 	case OSM_VENDOR_ID_INTEL:
 		return intel_str;
 	case OSM_VENDOR_ID_MELLANOX:
+	case OSM_VENDOR_ID_MELLANOX2:
 		return mellanox_str;
 	case OSM_VENDOR_ID_REDSWITCH:
 		return redswitch_str;

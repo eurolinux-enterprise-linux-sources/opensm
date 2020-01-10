@@ -3,6 +3,7 @@
  * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -66,6 +67,8 @@
 #include <opensm/osm_inform.h>
 #include <opensm/osm_sa.h>
 
+#define SA_MCM_RESP_SIZE SA_ITEM_RESP_SIZE(mc_rec)
+
 #define JOIN_MC_COMP_MASK (IB_MCR_COMPMASK_MGID | \
 				IB_MCR_COMPMASK_PORT_GID | \
 				IB_MCR_COMPMASK_JOIN_STATE)
@@ -78,11 +81,6 @@
 					IB_MCR_COMPMASK_PKEY | \
 					IB_MCR_COMPMASK_FLOW | \
 					IB_MCR_COMPMASK_SL)
-
-typedef struct osm_mcmr_item {
-	cl_list_item_t list_item;
-	ib_member_rec_t rec;
-} osm_mcmr_item_t;
 
 /*********************************************************************
  Copy certain fields between two mcmember records
@@ -97,6 +95,8 @@ static void copy_from_create_mc_rec(IN ib_member_rec_t * dest,
 	dest->tclass = src->tclass;
 	dest->pkey = src->pkey;
 	dest->sl_flow_hop = src->sl_flow_hop;
+	dest->scope_state = ib_member_set_scope_state(src->scope_state >> 4,
+						      dest->scope_state & 0x0F);
 	dest->mtu = src->mtu;
 	dest->rate = src->rate;
 	dest->pkt_life = src->pkt_life;
@@ -127,7 +127,7 @@ static void free_mlid(IN osm_sa_t * sa, IN uint16_t mlid)
 
 static int compare_ipv6_snm_mgids(const void *m1, const void *m2)
 {
-	return memcmp(m1, m2, sizeof(ib_gid_t) - 6);
+	return memcmp(m1, m2, sizeof(ib_gid_t) - 3);
 }
 
 static ib_net16_t find_ipv6_snm_mlid(osm_subn_t *subn, ib_gid_t *mgid)
@@ -193,26 +193,26 @@ static void mcmr_rcv_respond(IN osm_sa_t * sa, IN osm_madw_t * p_madw,
 			     IN ib_member_rec_t * p_mcmember_rec)
 {
 	cl_qlist_t rec_list;
-	osm_mcmr_item_t *item;
+	osm_sa_item_t *item;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	item = malloc(sizeof(*item));
+	item = malloc(SA_MCM_RESP_SIZE);
 	if (!item) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B16: "
 			"rec_item alloc failed\n");
 		goto Exit;
 	}
 
-	item->rec = *p_mcmember_rec;
+	item->resp.mc_rec = *p_mcmember_rec;
 
 	/* Fill in the mtu, rate, and packet lifetime selectors */
-	item->rec.mtu &= 0x3f;
-	item->rec.mtu |= 2 << 6;	/* exactly */
-	item->rec.rate &= 0x3f;
-	item->rec.rate |= 2 << 6;	/* exactly */
-	item->rec.pkt_life &= 0x3f;
-	item->rec.pkt_life |= 2 << 6;	/* exactly */
+	item->resp.mc_rec.mtu &= 0x3f;
+	item->resp.mc_rec.mtu |= IB_PATH_SELECTOR_EXACTLY << 6;
+	item->resp.mc_rec.rate &= 0x3f;
+	item->resp.mc_rec.rate |= IB_PATH_SELECTOR_EXACTLY << 6;
+	item->resp.mc_rec.pkt_life &= 0x3f;
+	item->resp.mc_rec.pkt_life |= IB_PATH_SELECTOR_EXACTLY << 6;
 
 	cl_qlist_init(&rec_list);
 	cl_qlist_insert_tail(&rec_list, &item->list_item);
@@ -407,11 +407,19 @@ static boolean_t validate_modify(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
 		    request_gid.unicast.interface_id ||
 		    (*pp_mcm_alias_guid)->port_gid.unicast.prefix !=
 		    request_gid.unicast.prefix) {
+			ib_gid_t base_port_gid;
+			char gid_str[INET6_ADDRSTRLEN];
+			char gid_str2[INET6_ADDRSTRLEN];
+
+			base_port_gid.unicast.prefix = (*pp_mcm_alias_guid)->port_gid.unicast.prefix;
+			base_port_gid.unicast.interface_id = (*pp_mcm_alias_guid)->p_base_mcm_port->port->guid;
 			OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 				"No ProxyJoin but different ports: stored:"
-				"0x%016" PRIx64 " request:0x%016" PRIx64 "\n",
-				cl_ntoh64((*pp_mcm_alias_guid)->p_base_mcm_port->port->guid),
-				cl_ntoh64(request_gid.unicast.interface_id));
+				"%s request:%s\n",
+				inet_ntop(AF_INET6, base_port_gid.raw, gid_str,
+					  sizeof gid_str),
+				inet_ntop(AF_INET6, request_gid.raw, gid_str2,
+					  sizeof gid_str2));
 			return FALSE;
 		}
 	} else {
@@ -546,9 +554,8 @@ static boolean_t validate_delete(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
  *    scope bits set. (EZ: the idea here is that SA created MGIDs are the
  *    only source for this signature with link-local scope)
  */
-static ib_api_status_t validate_requested_mgid(IN osm_sa_t * sa,
-					       IN const ib_member_rec_t *
-					       p_mcm_rec)
+static boolean_t validate_requested_mgid(IN osm_sa_t * sa,
+					 IN const ib_member_rec_t * p_mcm_rec)
 {
 	uint16_t signature;
 	boolean_t valid = TRUE;
@@ -558,7 +565,8 @@ static ib_api_status_t validate_requested_mgid(IN osm_sa_t * sa,
 	/* 14-a: mcast GID must start with 0xFF */
 	if (p_mcm_rec->mgid.multicast.header[0] != 0xFF) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B01: "
-			"Wrong MGID Prefix 0x%02X must be 0xFF\n",
+			"Invalid prefix 0x%02X in requested MGID, "
+			"must be 0xFF\n",
 			cl_ntoh16(p_mcm_rec->mgid.multicast.header[0]));
 		valid = FALSE;
 		goto Exit;
@@ -599,7 +607,7 @@ static ib_api_status_t validate_requested_mgid(IN osm_sa_t * sa,
 	/* 14-b: the 3 upper bits in the "flags" should be zero: */
 	if (p_mcm_rec->mgid.multicast.header[1] & 0xE0) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B28: "
-			"MGID uses Reserved Flags: flags=0x%X\n",
+			"Requested MGID invalid, uses Reserved Flags: flags=0x%X\n",
 			(p_mcm_rec->mgid.multicast.header[1] & 0xE0) >> 4);
 		valid = FALSE;
 		goto Exit;
@@ -611,7 +619,8 @@ static ib_api_status_t validate_requested_mgid(IN osm_sa_t * sa,
 	    (p_mcm_rec->mgid.multicast.header[1] & 0x0F) ==
 	    IB_MC_SCOPE_LINK_LOCAL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B24: "
-			"MGID uses 0xA01B signature but with link-local scope\n");
+			"Requested MGID invalid, "
+			"uses 0xA01B signature but with link-local scope\n");
 		valid = FALSE;
 		goto Exit;
 	}
@@ -823,8 +832,6 @@ static ib_api_status_t mcmr_rcv_create_new_mgrp(IN osm_sa_t * sa,
 				  sizeof gid_str));
 	} else if (!validate_requested_mgid(sa, &mcm_rec)) {
 		/* a specific MGID was requested so validate the resulting MGID */
-		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B22: "
-			"Invalid requested MGID\n");
 		status = IB_SA_MAD_STATUS_REQ_INVALID;
 		goto Exit;
 	}
@@ -863,11 +870,11 @@ static ib_api_status_t mcmr_rcv_create_new_mgrp(IN osm_sa_t * sa,
 
 	/* the mcmember_record should have mtu_sel, rate_sel, and pkt_lifetime_sel = 2 */
 	(*pp_mgrp)->mcmember_rec.mtu &= 0x3f;
-	(*pp_mgrp)->mcmember_rec.mtu |= 2 << 6;	/* exactly */
+	(*pp_mgrp)->mcmember_rec.mtu |= IB_PATH_SELECTOR_EXACTLY << 6;
 	(*pp_mgrp)->mcmember_rec.rate &= 0x3f;
-	(*pp_mgrp)->mcmember_rec.rate |= 2 << 6;	/* exactly */
+	(*pp_mgrp)->mcmember_rec.rate |= IB_PATH_SELECTOR_EXACTLY << 6;
 	(*pp_mgrp)->mcmember_rec.pkt_life &= 0x3f;
-	(*pp_mgrp)->mcmember_rec.pkt_life |= 2 << 6;	/* exactly */
+	(*pp_mgrp)->mcmember_rec.pkt_life |= IB_PATH_SELECTOR_EXACTLY << 6;
 
 Exit:
 	OSM_LOG_EXIT(sa->p_log);
@@ -911,6 +918,18 @@ static void mcmr_rcv_leave_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	    (ib_member_rec_t *) ib_sa_mad_get_payload_ptr(p_sa_mad);
 
 	mcmember_rec = *p_recvd_mcmember_rec;
+
+	/* Validate the subnet prefix in the PortGID */
+	if (p_recvd_mcmember_rec->port_gid.unicast.prefix !=
+	    sa->p_subn->opt.subnet_prefix) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"PortGID subnet prefix 0x%" PRIx64
+			" does not match configured prefix 0x%" PRIx64 "\n",
+			cl_ntoh64(p_recvd_mcmember_rec->port_gid.unicast.prefix),
+			cl_ntoh64(sa->p_subn->opt.subnet_prefix));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_INVALID_GID);
+		goto Exit;
+	}
 
 	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
 		osm_physp_t *p_req_physp;
@@ -999,6 +1018,18 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 
 	mcmember_rec = *p_recvd_mcmember_rec;
 
+        /* Validate the subnet prefix in the PortGID */
+	if (p_recvd_mcmember_rec->port_gid.unicast.prefix !=
+	    sa->p_subn->opt.subnet_prefix) {
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"PortGID subnet prefix 0x%" PRIx64
+			" does not match configured prefix 0x%" PRIx64 "\n",
+			cl_ntoh64(p_recvd_mcmember_rec->port_gid.unicast.prefix),
+			cl_ntoh64(sa->p_subn->opt.subnet_prefix));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_INVALID_GID);
+		goto Exit;
+	}
+
 	if (OSM_LOG_IS_ACTIVE_V2(sa->p_log, OSM_LOG_DEBUG)) {
 		osm_physp_t *p_req_physp;
 
@@ -1071,8 +1102,8 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 			char gid_str[INET6_ADDRSTRLEN];
 			CL_PLOCK_RELEASE(sa->p_lock);
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B10: "
-				"Provided Join State != FullMember - "
-				"required for create, "
+				"Failed to create multicast group "
+				"because Join State != FullMember, "
 				"MGID: %s from port 0x%016" PRIx64 " (%s)\n",
 				inet_ntop(AF_INET6,
 					  p_recvd_mcmember_rec->mgid.raw,
@@ -1090,19 +1121,15 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 			char gid_str[INET6_ADDRSTRLEN];
 			CL_PLOCK_RELEASE(sa->p_lock);
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B11: "
-				"method = %s, scope_state = 0x%x, "
-				"component mask = 0x%016" PRIx64 ", "
-				"expected comp mask = 0x%016" PRIx64 ", "
-				"MGID: %s from port 0x%016" PRIx64 " (%s)\n",
-				ib_get_sa_method_str(p_sa_mad->method),
-				p_recvd_mcmember_rec->scope_state,
-				cl_ntoh64(p_sa_mad->comp_mask),
-				CL_NTOH64(REQUIRED_MC_CREATE_COMP_MASK),
+				"Port 0x%016" PRIx64 " (%s) failed to join "
+				"non-existing multicast group with MGID %s, "
+				"insufficient components specified for "
+				"implicit create (comp_mask 0x%" PRIx64 ")\n",
+				cl_ntoh64(portguid), p_port->p_node->print_desc,
 				inet_ntop(AF_INET6,
 					  p_recvd_mcmember_rec->mgid.raw,
 					  gid_str, sizeof gid_str),
-				cl_ntoh64(portguid),
-				p_port->p_node->print_desc);
+				cl_ntoh64(p_sa_mad->comp_mask));
 			osm_sa_send_error(sa, p_madw,
 					  IB_SA_MAD_STATUS_INSUF_COMPS);
 			goto Exit;
@@ -1155,7 +1182,7 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B12: "
 			"validate_more_comp_fields, validate_port_caps, "
 			"or JoinState = 0 failed for MGID: %s port 0x%016" PRIx64
-			" (%s), " "sending IB_SA_MAD_STATUS_REQ_INVALID\n",
+			" (%s), sending IB_SA_MAD_STATUS_REQ_INVALID\n",
 			   inet_ntop(AF_INET6, p_mgrp->mcmember_rec.mgid.raw,
 				     gid_str, sizeof gid_str),
 			cl_ntoh64(portguid), p_port->p_node->print_desc);
@@ -1214,12 +1241,12 @@ static ib_api_status_t mcmr_rcv_new_mcmr(IN osm_sa_t * sa,
 					 IN const ib_member_rec_t * p_rcvd_rec,
 					 IN cl_qlist_t * p_list)
 {
-	osm_mcmr_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	ib_api_status_t status = IB_SUCCESS;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_MCM_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B15: "
 			"rec_item alloc failed\n");
@@ -1227,11 +1254,11 @@ static ib_api_status_t mcmr_rcv_new_mcmr(IN osm_sa_t * sa,
 		goto Exit;
 	}
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_MCM_RESP_SIZE);
 
 	/* HACK: Untrusted requesters should result with 0 Join
 	   State, Port Guid, and Proxy */
-	p_rec_item->rec = *p_rcvd_rec;
+	p_rec_item->resp.mc_rec = *p_rcvd_rec;
 	cl_qlist_insert_tail(p_list, &p_rec_item->list_item);
 
 Exit:
@@ -1462,14 +1489,14 @@ static void mcmr_query_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	 */
 
 	if (!p_rcvd_mad->sm_key) {
-		osm_mcmr_item_t *item;
-		for (item = (osm_mcmr_item_t *) cl_qlist_head(&rec_list);
-		     item != (osm_mcmr_item_t *) cl_qlist_end(&rec_list);
+		osm_sa_item_t *item;
+		for (item = (osm_sa_item_t *) cl_qlist_head(&rec_list);
+		     item != (osm_sa_item_t *) cl_qlist_end(&rec_list);
 		     item =
-		     (osm_mcmr_item_t *) cl_qlist_next(&item->list_item)) {
-			memset(&item->rec.port_gid, 0, sizeof(ib_gid_t));
-			ib_member_set_join_state(&item->rec, 0);
-			item->rec.proxy_join = 0;
+		     (osm_sa_item_t *) cl_qlist_next(&item->list_item)) {
+			memset(&item->resp.mc_rec.port_gid, 0, sizeof(ib_gid_t));
+			ib_member_set_join_state(&item->resp.mc_rec, 0);
+			item->resp.mc_rec.proxy_join = 0;
 		}
 	}
 
@@ -1598,7 +1625,7 @@ void osm_mcmr_rcv_process(IN void *context, IN void *data)
 		break;
 	default:
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B21: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for MCMemberRecord request\n",
 			ib_get_sa_method_str(p_sa_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		break;

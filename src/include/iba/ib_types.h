@@ -3,6 +3,7 @@
  * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -212,6 +213,7 @@ BEGIN_C_DECLS
 * SOURCE
 */
 #define IB_DEFAULT_SUBNET_PREFIX			(CL_HTON64(0xFE80000000000000ULL))
+#define IB_DEFAULT_SUBNET_PREFIX_HO			(0xFE80000000000000ULL)
 /**********/
 /****d* IBA Base: Constants/IB_NODE_NUM_PORTS_MAX
 * NAME
@@ -2586,6 +2588,9 @@ typedef struct _ib_path_rec {
 #define  IB_PR_COMPMASK_PKTLIFETIMESELEC  (CL_HTON64(((uint64_t)1)<<20))
 #define  IB_PR_COMPMASK_PKTLIFETIME       (CL_HTON64(((uint64_t)1)<<21))
 
+#define  IB_PR_COMPMASK_SERVICEID (IB_PR_COMPMASK_SERVICEID_MSB | \
+				   IB_PR_COMPMASK_SERVICEID_LSB)
+
 /* Link Record Component Masks */
 #define IB_LR_COMPMASK_FROM_LID           (CL_HTON64(((uint64_t)1)<<0))
 #define IB_LR_COMPMASK_FROM_PORT          (CL_HTON64(((uint64_t)1)<<1))
@@ -2796,6 +2801,9 @@ typedef struct _ib_path_rec {
 #define IB_MPR_COMPMASK_SGIDCOUNT	(CL_HTON64(((uint64_t)1)<<19))
 #define IB_MPR_COMPMASK_DGIDCOUNT	(CL_HTON64(((uint64_t)1)<<20))
 #define IB_MPR_COMPMASK_SERVICEID_LSB	(CL_HTON64(((uint64_t)1)<<21))
+
+#define IB_MPR_COMPMASK_SERVICEID (IB_MPR_COMPMASK_SERVICEID_MSB | \
+				   IB_MPR_COMPMASK_SERVICEID_LSB)
 
 /* SMInfo Record Component Masks */
 #define IB_SMIR_COMPMASK_LID		(CL_HTON64(((uint64_t)1)<<0))
@@ -3400,7 +3408,7 @@ ib_path_rec_hop_limit(IN const ib_path_rec_t * const p_rec)
 *
 * DESCRIPTION
 *	ClassPortInfo CapabilityMask bits.
-*	Switch only: This bit will be set if the EnhacedPort0
+*	Switch only: This bit will be set if the EnhancedPort0
 *	supports CA Congestion Control (A10.4.3.1).
 *
 * SEE ALSO
@@ -6235,6 +6243,65 @@ ib_port_info_set_phy_and_overrun_err_thd(IN ib_port_info_t * const p_pi,
 * SEE ALSO
 *********/
 
+/****f* IBA Base: Types/ib_port_info_get_m_key
+* NAME
+*	ib_port_info_get_m_key
+*
+* DESCRIPTION
+*	Gets the M_Key
+*
+* SYNOPSIS
+*/
+static inline ib_net64_t OSM_API
+ib_port_info_get_m_key(IN const ib_port_info_t * const p_pi)
+{
+	return p_pi->m_key;
+}
+
+/*
+* PARAMETERS
+*	p_pi
+*		[in] Pointer to a PortInfo attribute.
+*
+* RETURN VALUES
+*	M_Key.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_port_info_set_m_key
+* NAME
+*	ib_port_info_set_m_key
+*
+* DESCRIPTION
+*	Sets the M_Key value
+*
+* SYNOPSIS
+*/
+static inline void OSM_API
+ib_port_info_set_m_key(IN ib_port_info_t * const p_pi, IN ib_net64_t m_key)
+{
+	p_pi->m_key = m_key;
+}
+
+/*
+* PARAMETERS
+*	p_pi
+*		[in] Pointer to a PortInfo attribute.
+*	m_key
+*		[in] M_Key value.
+*
+* RETURN VALUES
+*	None.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+
 /****s* IBA Base: Types/ib_mlnx_ext_port_info_t
 * NAME
 *	ib_mlnx_ext_port_info_t
@@ -7613,6 +7680,23 @@ ib_member_set_join_state(IN OUT ib_member_rec_t * p_mc_rec,
 #define IB_NOTICE_TYPE_INFO				0x04
 #define IB_NOTICE_TYPE_EMPTY				0x7F
 
+#define SM_GID_IN_SERVICE_TRAP				64
+#define SM_GID_OUT_OF_SERVICE_TRAP			65
+#define SM_MGID_CREATED_TRAP				66
+#define SM_MGID_DESTROYED_TRAP				67
+#define SM_UNPATH_TRAP					68
+#define SM_REPATH_TRAP					69
+#define SM_LINK_STATE_CHANGED_TRAP			128
+#define SM_LINK_INTEGRITY_THRESHOLD_TRAP		129
+#define SM_BUFFER_OVERRUN_THRESHOLD_TRAP		130
+#define SM_WATCHDOG_TIMER_EXPIRED_TRAP			131
+#define SM_LOCAL_CHANGES_TRAP				144
+#define SM_SYS_IMG_GUID_CHANGED_TRAP			145
+#define SM_BAD_MKEY_TRAP				256
+#define SM_BAD_PKEY_TRAP				257
+#define SM_BAD_QKEY_TRAP				258
+#define SM_BAD_SWITCH_PKEY_TRAP				259
+
 #include <complib/cl_packon.h>
 typedef struct _ib_mad_notice_attr	// Total Size calc  Accumulated
 {
@@ -7740,7 +7824,7 @@ typedef struct _ib_mad_notice_attr	// Total Size calc  Accumulated
  * Trap 144 masks
  */
 #define TRAP_144_MASK_OTHER_LOCAL_CHANGES      0x01
-#define TRAP_144_MASK_LINK_SPEED_EXT_ENABLE_CHG (CL_HTON16(0x0020))
+#define TRAP_144_MASK_CAPABILITY_MASK2_CHANGE  (CL_HTON16(0x0020))
 #define TRAP_144_MASK_HIERARCHY_INFO_CHANGE    (CL_HTON16(0x0010))
 #define TRAP_144_MASK_SM_PRIORITY_CHANGE       (CL_HTON16(0x0008))
 #define TRAP_144_MASK_LINK_SPEED_ENABLE_CHANGE (CL_HTON16(0x0004))
@@ -7765,10 +7849,10 @@ ib_notice_is_generic(IN const ib_mad_notice_attr_t * p_ntc)
 /*
 * PARAMETERS
 *	p_ntc
-*		[in] Pointer to  the notice MAD attribute
+*		[in] Pointer to the notice MAD attribute
 *
 * RETURN VALUES
-*	TRUE if mad is generic
+*	TRUE if notice MAD is generic
 *
 * SEE ALSO
 *	ib_mad_notice_attr_t

@@ -47,7 +47,7 @@
  * ALGORITHM:
  *
  * 0. we define a function to obtain the correct port lid:
- *    lid_mgr_get_port_lid( p_mgr, port, &min_lid ):
+ *    lid_mgr_get_port_lid( p_mgr, port, &min_lid, &max_lid ):
  *    0.1 if the port info lid matches the guid2lid return 0
  *    0.2 if the port info has a lid and that range is empty in
  *        port_lid_tbl, return 0 and update the port_lid_tbl and
@@ -64,12 +64,12 @@
  * 2. During SM port lid assignment:
  *   2.1 if reassign_lids is set, make it 2^lmc
  *   2.2 cleanup all port_lid_tbl and re-fill it according to guid2lid
- *   2.3 call lid_mgr_get_port_lid the SM port
+ *   2.3 call lid_mgr_get_port_lid for the SM port
  *   2.4 set the port info
  *
  * 3. During all other ports lid assignment:
  *   3.1 go through all ports in the subnet
- *   3.1.1 call lid_mgr_get_port_min_lid
+ *   3.1.1 call lid_mgr_get_port_lid
  *   3.1.2 if a change required send the port info
  *   3.2 if any change send the signal PENDING...
  *
@@ -302,11 +302,17 @@ static int lid_mgr_init_sweep(IN osm_lid_mgr_t * p_mgr)
 
 	lmc_mask = ~((1 << p_mgr->p_subn->opt.lmc) - 1);
 
-	/* if we came out of standby we need to discard any previous guid2lid
-	   info we might have.
-	   Do this only if the honor_guid2lid_file option is FALSE. If not, then
-	   need to honor this file. */
-	if (p_mgr->p_subn->coming_out_of_standby == TRUE) {
+	/* We must discard previous guid2lid db if this is the first master
+	 * sweep and reassign_lids option is TRUE.
+	 * If we came out of standby and honor_guid2lid_file option is TRUE, we
+	 * must restore guid2lid db. Otherwise if honor_guid2lid_file option is
+	 * FALSE we must discard previous guid2lid db.
+	 */
+	if (p_mgr->p_subn->first_time_master_sweep == TRUE &&
+	    p_mgr->p_subn->opt.reassign_lids == TRUE) {
+		osm_db_clear(p_mgr->p_g2l);
+		memset(p_mgr->used_lids, 0, sizeof(p_mgr->used_lids));
+	} else if (p_mgr->p_subn->coming_out_of_standby == TRUE) {
 		osm_db_clear(p_mgr->p_g2l);
 		memset(p_mgr->used_lids, 0, sizeof(p_mgr->used_lids));
 		if (p_mgr->p_subn->opt.honor_guid2lid_file == FALSE)
@@ -436,7 +442,7 @@ static int lid_mgr_init_sweep(IN osm_lid_mgr_t * p_mgr)
 			   1. The port has a (legal) persistency entry. Then the
 			   local lid is free (we will use the persistency value).
 			   2. Can the port keep its local assignment?
-			   a. Make sure the lid a aligned.
+			   a. Make sure the lid is aligned.
 			   b. Make sure all needed lids (for the lmc) are free
 			   according to persistency table.
 			 */
@@ -716,7 +722,7 @@ static int lid_mgr_get_port_lid(IN osm_lid_mgr_t * p_mgr,
 			guid);
 
 	/* if the port info carries a lid it must be lmc aligned and not mapped
-	   by the pesistent storage  */
+	   by the persistent storage  */
 	min_lid = cl_ntoh16(osm_port_get_base_lid(p_port));
 
 	/* we want to ignore the discovered lid if we are also on first sweep of
@@ -873,10 +879,17 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 		   sizeof(p_pi->subnet_prefix)))
 		send_set = TRUE;
 
+	p_port->lid = lid;
 	p_pi->base_lid = lid;
 	if (memcmp(&p_pi->base_lid, &p_old_pi->base_lid,
-		   sizeof(p_pi->base_lid)))
+		   sizeof(p_pi->base_lid))) {
+		/*
+		 * Reset stored base_lid.
+		 * On successful send, we'll update it when we'll get a reply.
+		 */
+		osm_physp_set_base_lid(p_physp, 0);
 		send_set = TRUE;
+	}
 
 	/* we are updating the ports with our local sm_base_lid */
 	p_pi->master_sm_base_lid = p_mgr->p_subn->sm_base_lid;
@@ -979,10 +992,11 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 			    ib_port_info_get_port_state(p_old_pi))
 				send_set = TRUE;
 		}
-	} else {
+	} else if (ib_switch_info_is_enhanced_port0(&p_node->sw->switch_info)) {
 		/*
-		   For Port 0, NeighborMTU is relevant only for Enh. SP0.
-		   In this case, we'll set the MTU according to the mtu_cap
+		 * Configure Enh. SP0:
+		 * Set MTU according to the mtu_cap.
+		 * Set LMC if lmc_esp0 is defined.
 		 */
 		ib_port_info_set_neighbor_mtu(p_pi,
 					      ib_port_info_get_mtu_cap
@@ -997,8 +1011,8 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 			cl_ntoh64(osm_physp_get_port_guid(p_physp)),
 			ib_port_info_get_neighbor_mtu(p_pi));
 
-		/* Determine if enhanced switch port 0 and if so set LMC */
-		if (osm_switch_sp0_is_lmc_capable(p_node->sw, p_mgr->p_subn)) {
+		/* Configure LMC on enhanced SP0 */
+		if (p_mgr->p_subn->opt.lmc_esp0) {
 			/* p_pi->mkey_lmc is initialized earlier */
 			ib_port_info_set_lmc(p_pi, p_mgr->p_subn->opt.lmc);
 			if (ib_port_info_get_lmc(p_pi) !=
@@ -1029,9 +1043,12 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 			"Setting client rereg on %s, port %d\n",
 			p_port->p_node->print_desc, p_port->p_physp->port_num);
 		ib_port_info_set_client_rereg(p_pi, 1);
+		context.pi_context.client_rereg = TRUE;
 		send_set = TRUE;
-	} else
+	} else {
 		ib_port_info_set_client_rereg(p_pi, 0);
+		context.pi_context.client_rereg = FALSE;
+	}
 
 	/* We need to send the PortInfo Set request with the new sm_lid
 	   in the following cases:
@@ -1054,6 +1071,7 @@ static int lid_mgr_set_physp_pi(IN osm_lid_mgr_t * p_mgr,
 	status = osm_req_set(p_mgr->sm, osm_physp_get_dr_path_ptr(p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
 			     cl_hton32(osm_physp_get_port_num(p_physp)),
+			     FALSE, ib_port_info_get_m_key(&p_physp->port_info),
 			     CL_DISP_MSGID_NONE, &context);
 	if (status != IB_SUCCESS)
 		ret = -1;
@@ -1153,7 +1171,7 @@ int osm_lid_mgr_process_sm(IN osm_lid_mgr_t * p_mgr)
 
 /**********************************************************************
  1 go through all ports in the subnet.
- 1.1 call lid_mgr_get_port_min_lid
+ 1.1 call lid_mgr_get_port_lid
  1.2 if a change is required send the port info
  2 if any change send the signal PENDING...
 **********************************************************************/
@@ -1218,7 +1236,7 @@ int osm_lid_mgr_process_subnet(IN osm_lid_mgr_t * p_mgr)
 	}			/* all ports */
 
 	/* store the guid to lid table in persistent db */
-	osm_db_store(p_mgr->p_g2l);
+	osm_db_store(p_mgr->p_g2l, p_mgr->p_subn->opt.fsync_high_avail_files);
 
 	CL_PLOCK_RELEASE(p_mgr->p_lock);
 

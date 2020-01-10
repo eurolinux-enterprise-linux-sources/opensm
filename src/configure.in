@@ -1,7 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.57)
-AC_INIT(opensm, 3.3.15, linux-rdma@vger.kernel.org)
+AC_INIT(opensm, 3.3.17, linux-rdma@vger.kernel.org)
 AC_CONFIG_SRCDIR([opensm/osm_opensm.c])
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -10,6 +10,23 @@ AM_INIT_AUTOMAKE
 
 AC_SUBST(RELEASE, ${RELEASE:-unknown})
 AC_SUBST(TARBALL, ${TARBALL:-${PACKAGE}-${VERSION}.tar.gz})
+
+default_rdma_service=openibd
+AC_ARG_WITH([rdma_service],
+    AC_HELP_STRING([--with-rdma-service=name],
+                   [name of the RDMA service: "rdma" when using /etc/init.d/rdma to start RDMA services; "openibd" when using /etc/init.d/openibd to start RDMA services [default=${default_rdma_service}]]))
+AC_SUBST(RDMA_SERVICE, ${with_rdma_service:-${default_rdma_service}})
+
+if { rpm -q sles-release || rpm -q openSUSE-release; } >/dev/null 2>&1; then
+   default_stop="0 1 4 6"
+else
+   default_stop="0 1 6"
+fi
+
+default_start="null"
+
+AC_SUBST(DEFAULT_START, $default_start)
+AC_SUBST(DEFAULT_STOP, $default_stop)
 
 dnl NOTE: AC_DEFINE's and AC_DEFINE_UNQUOTED's which are used in header files
 dnl       MUST have a corresponding entry in include/opensm/osm_config.h.in to
@@ -55,6 +72,17 @@ AC_TYPE_SIZE_T
 AC_HEADER_TIME
 AC_STRUCT_TM
 AC_C_VOLATILE
+
+dnl See if we have __builtin_expect
+AC_MSG_CHECKING([if the compiler supports __builtin_expect])
+AC_TRY_COMPILE(, [ return __builtin_expect(1, 1) ? 1 : 0],
+		 [ have_builtin_expect=yes
+		   AC_MSG_RESULT([yes]) ],
+		 [ have_builtin_expect=no
+		   AC_MSG_RESULT([no])  ])
+if test "x_$have_builtin_expect" = "x_yes" ; then
+	AC_DEFINE([HAVE_BUILTIN_EXPECT], [1], [Define to 1 if the compiler supports __builtin_expect.])
+fi
 
 dnl We use --version-script with ld if possible
 AC_CACHE_CHECK(whether ld accepts --version-script, ac_cv_version_script,

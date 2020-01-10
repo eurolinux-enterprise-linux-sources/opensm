@@ -3,6 +3,7 @@
  * Copyright (c) 2002-2006 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -63,10 +64,8 @@
 #include <opensm/osm_inform.h>
 #include <opensm/osm_pkey.h>
 
-typedef struct osm_iir_item {
-	cl_list_item_t list_item;
-	ib_inform_info_record_t rec;
-} osm_iir_item_t;
+#define SA_IIR_RESP_SIZE SA_ITEM_RESP_SIZE(inform_rec)
+#define SA_II_RESP_SIZE SA_ITEM_RESP_SIZE(inform)
 
 typedef struct osm_iir_search_ctxt {
 	const ib_inform_info_record_t *p_rcvd_rec;
@@ -76,6 +75,7 @@ typedef struct osm_iir_search_ctxt {
 	ib_net16_t subscriber_enum;
 	osm_sa_t *sa;
 	osm_physp_t *p_req_physp;
+	ib_net64_t sm_key;
 } osm_iir_search_ctxt_t;
 
 /**********************************************************************
@@ -208,23 +208,23 @@ Set(InformInfo) request.
 static void infr_rcv_respond(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 {
 	cl_qlist_t rec_list;
-	osm_iir_item_t *item;
+	osm_sa_item_t *item;
 
 	OSM_LOG_ENTER(sa->p_log);
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 		"Generating successful InformInfo response\n");
 
-	item = malloc(sizeof(*item));
+	item = malloc(SA_II_RESP_SIZE);
 	if (!item) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4303: "
 			"rec_item alloc failed\n");
 		goto Exit;
 	}
 
-	memcpy(&item->rec,
+	memcpy(&item->resp.inform,
 	       ib_sa_mad_get_payload_ptr(osm_madw_get_sa_mad_ptr(p_madw)),
-	       sizeof(item->rec));
+	       sizeof(ib_inform_info_t));
 
 	cl_qlist_init(&rec_list);
 	cl_qlist_insert_tail(&rec_list, &item->list_item);
@@ -244,7 +244,7 @@ static void sa_inform_info_rec_by_comp_mask(IN osm_sa_t * sa,
 	osm_port_t *p_subscriber_port;
 	osm_physp_t *p_subscriber_physp;
 	const osm_physp_t *p_req_physp;
-	osm_iir_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -284,15 +284,25 @@ static void sa_inform_info_rec_by_comp_mask(IN osm_sa_t * sa,
 		goto Exit;
 	}
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_IIR_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 430E: "
 			"rec_item alloc failed\n");
 		goto Exit;
 	}
 
-	memcpy(&p_rec_item->rec, &p_infr->inform_record,
+	memcpy(&p_rec_item->resp.inform_rec, &p_infr->inform_record,
 	       sizeof(ib_inform_info_record_t));
+
+	/*
+	 * Per C15-0.2-1.16, InformInfoRecords shall always be
+	 * provided with the QPN set to 0, except for the case
+	 * of a trusted request, in which case the actual
+	 * subscriber QPN shall be returned.
+	 */
+	if (p_ctxt->sm_key == 0)
+		ib_inform_info_set_qpn(&p_rec_item->resp.inform_rec.inform_info, 0);
+
 	cl_qlist_insert_tail(p_ctxt->p_list, &p_rec_item->list_item);
 
 Exit:
@@ -319,7 +329,7 @@ static void infr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	cl_qlist_t rec_list;
 	osm_iir_search_ctxt_t context;
 	osm_physp_t *p_req_physp;
-	osm_iir_item_t *item;
+	osm_sa_item_t *item;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -355,6 +365,7 @@ static void infr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	context.subscriber_enum = p_rcvd_rec->subscriber_enum;
 	context.sa = sa;
 	context.p_req_physp = p_req_physp;
+	context.sm_key = p_rcvd_mad->sm_key;
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 		"Query Subscriber GID:%s(%02X) Enum:0x%X(%02X)\n",
@@ -372,11 +383,11 @@ static void infr_rcv_process_get_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	cl_plock_release(sa->p_lock);
 
 	/* clear reserved and pad fields in InformInfoRecord */
-	for (item = (osm_iir_item_t *) cl_qlist_head(&rec_list);
-	     item != (osm_iir_item_t *) cl_qlist_end(&rec_list);
-	     item = (osm_iir_item_t *) cl_qlist_next(&item->list_item)) {
-		memset(item->rec.reserved, 0, sizeof(item->rec.reserved));
-		memset(item->rec.pad, 0, sizeof(item->rec.pad));
+	for (item = (osm_sa_item_t *) cl_qlist_head(&rec_list);
+	     item != (osm_sa_item_t *) cl_qlist_end(&rec_list);
+	     item = (osm_sa_item_t *) cl_qlist_next(&item->list_item)) {
+		memset(item->resp.inform_rec.reserved, 0, sizeof(item->resp.inform_rec.reserved));
+		memset(item->resp.inform_rec.pad, 0, sizeof(item->resp.inform_rec.pad));
 	}
 
 	osm_sa_respond(sa, p_madw, sizeof(ib_inform_info_record_t), &rec_list);
@@ -454,6 +465,24 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 	}
 
 	/*
+	 * Per C15-0.2-1.16, SubnAdmSet(InformInfo) subscriptions for
+	 * SM security traps shall be provided only if they come from a
+	 * trusted source.
+	 */
+	if ((p_sa_mad->sm_key == 0) && p_recvd_inform_info->is_generic &&
+	    ((cl_ntoh16(p_recvd_inform_info->g_or_v.generic.trap_num) >= 256) &&
+	     (cl_ntoh16(p_recvd_inform_info->g_or_v.generic.trap_num) <= 259))) {
+		cl_plock_release(sa->p_lock);
+
+		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 430B "
+			"Request for security trap from non-trusted requester: "
+			"Given SM_Key:0x%016" PRIx64 "\n",
+			cl_ntoh64(p_sa_mad->sm_key));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
+		goto Exit;
+	}
+
+	/*
 	 * MODIFICATIONS DONE ON INCOMING REQUEST:
 	 *
 	 * QPN:
@@ -516,6 +545,10 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 				goto Exit;
 			}
 
+			OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+				"Adding event subscription for port 0x%" PRIx64 "\n",
+				cl_ntoh64(inform_info_rec.inform_record.subscriber_gid.unicast.interface_id));
+
 			/* Add this new osm_infr_t object to subnet object */
 			osm_infr_insert_to_db(sa->p_subn, sa->p_log, p_infr);
 		} else
@@ -533,9 +566,13 @@ static void infr_rcv_process_set_method(osm_sa_t * sa, IN osm_madw_t * p_madw)
 		p_recvd_inform_info->subscribe = 0;
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
-	} else
+	} else {
 		/* Delete this object from the subnet list of informs */
+		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+			"Removing event subscription for port 0x%" PRIx64 "\n",
+			cl_ntoh64(inform_info_rec.inform_record.subscriber_gid.unicast.interface_id));
 		osm_infr_remove_from_db(sa->p_subn, sa->p_log, p_infr);
+	}
 
 	cl_plock_release(sa->p_lock);
 
@@ -561,7 +598,8 @@ void osm_infr_rcv_process(IN void *context, IN void *data)
 	CL_ASSERT(p_sa_mad->attr_id == IB_MAD_ATTR_INFORM_INFO);
 
 	if (p_sa_mad->method != IB_MAD_METHOD_SET) {
-		OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Unsupported Method (%s)\n",
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Unsupported Method (%s) for InformInfo\n",
 			ib_get_sa_method_str(p_sa_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;
@@ -589,7 +627,8 @@ void osm_infir_rcv_process(IN void *context, IN void *data)
 
 	if (p_sa_mad->method != IB_MAD_METHOD_GET &&
 	    p_sa_mad->method != IB_MAD_METHOD_GETTABLE) {
-		OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Unsupported Method (%s)\n",
+		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
+			"Unsupported Method (%s) for InformInfoRecord\n",
 			ib_get_sa_method_str(p_sa_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;

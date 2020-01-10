@@ -378,7 +378,7 @@ void osmt_init_mc_query_rec(IN osmtest_t * const p_osmt,
 	       sizeof(p_osmt->local_port.port_guid));
 
 	/*  use our own subnet prefix: */
-	p_mc_req->port_gid.unicast.prefix = CL_HTON64(0xFE80000000000000ULL);
+	p_mc_req->port_gid.unicast.prefix = cl_hton64(p_osmt->local_port_gid.unicast.prefix);
 
 	/*  ib_net32_t  qkey; */
 	/*  ib_net16_t  mlid; - we keep it zero for upper level to decide. */
@@ -435,10 +435,23 @@ void osmt_init_mc_query_rec(IN osmtest_t * const p_osmt,
  * - Try GetTable with PortGUID wildcarded and get back some groups.
  ***********************************************************************/
 
+#define PREFIX_MASK CL_HTON64(0xff10ffff00000000ULL)
+#define PREFIX_SIGNATURE CL_HTON64(0xff10601b00000000ULL)
+#define IPV4_PREFIX_MASK CL_HTON64(0xff10ffff00000000ULL)
+#define PREFIX_SIGNATURE_IPV4 CL_HTON64(0xff10401b00000000ULL)
+
+static unsigned is_ipv4_mgid(ib_gid_t * mgid)
+{
+	return ((mgid->unicast.prefix & IPV4_PREFIX_MASK) == PREFIX_SIGNATURE_IPV4);
+}
+
+static unsigned is_ipv6_mgid(ib_gid_t * mgid)
+{
+	return ((mgid->unicast.prefix & PREFIX_MASK) == PREFIX_SIGNATURE);
+}
+
 /* The following macro can be used only within the osmt_run_mcast_flow() function */
-#define IS_IPOIB_MGID(p_mgid) \
-           ( !memcmp(&osm_ipoib_good_mgid,    (p_mgid), sizeof(osm_ipoib_good_mgid)) || \
-             !memcmp(&osm_ts_ipoib_good_mgid, (p_mgid), sizeof(osm_ts_ipoib_good_mgid)) )
+#define IS_IPOIB_MGID(p_mgid) (is_ipv4_mgid(p_mgid) || is_ipv6_mgid(p_mgid))
 
 ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 {
@@ -486,6 +499,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		 0xff, 0xff, 0xff, 0xee,	/* 32 bit IPv4 broadcast address */
 		 },
 	};
+#if 0
 	static ib_gid_t osm_ts_ipoib_good_mgid = {
 		{
 		 0xff,		/* multicast field */
@@ -496,6 +510,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		 0x00, 0x00, 0x00, 0x01,	/* 32 bit IPv4 broadcast address */
 		 },
 	};
+#endif
 	static ib_gid_t osm_ipoib_good_mgid = {
 		{
 		 0xff,		/* multicast field */
@@ -2096,9 +2111,9 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
 		"Validating Join State update remove (o15.0.1.14)...\n");
 
-	if (p_mc_res->scope_state != 0x25) {	/* scope is MSB - now only 0x0 so port is removed from MCG */
+	if (p_mc_res->scope_state != 0x20) {	/* scope is MSB - now only 0x0 so port is removed from MCG */
 		OSM_LOG(&p_osmt->log, OSM_LOG_ERROR, "ERR 02BF: "
-			"Validating JoinState update failed. Expected 0x25 got: 0x%02X\n",
+			"Validating JoinState update failed. Expected 0x20 got: 0x%02X\n",
 			p_mc_res->scope_state);
 		status = IB_ERROR;
 		goto Exit;
@@ -2157,7 +2172,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 	mc_req_rec.mgid = good_mgid;
 	mc_req_rec.mgid.raw[12] = 0xAA;
 	mc_req_rec.pkt_life = 0 | IB_PATH_SELECTOR_GREATER_THAN << 6;
-	mc_req_rec.scope_state = 0x21;	/* Full memeber */
+	mc_req_rec.scope_state = 0x21;	/* Full member */
 	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_LIFE | IB_MCR_COMPMASK_LIFE_SEL;
 

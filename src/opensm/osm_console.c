@@ -62,7 +62,7 @@
 extern void osm_update_node_desc(IN osm_opensm_t *osm);
 
 struct command {
-	char *name;
+	const char *name;
 	void (*help_function) (FILE * out, int detail);
 	void (*parse_function) (char **p_last, osm_opensm_t * p_osm,
 				FILE * out);
@@ -178,7 +178,7 @@ static void help_status(FILE * out, int detail)
 
 static void help_logflush(FILE * out, int detail)
 {
-	fprintf(out, "logflush -- flush the opensm.log file\n");
+	fprintf(out, "logflush [on|off] -- toggle opensm.log file flushing\n");
 }
 
 static void help_querylid(FILE * out, int detail)
@@ -242,12 +242,16 @@ static void help_perfmgr(FILE * out, int detail)
 		"perfmgr(pm) [enable|disable\n"
 		"             |clear_counters|dump_counters|print_counters(pc)|print_errors(pe)\n"
 		"             |set_rm_nodes|clear_rm_nodes|clear_inactive\n"
-		"             |dump_redir|clear_redir|sweep_time[seconds]]\n");
+		"             |set_query_cpi|clear_query_cpi\n"
+		"             |dump_redir|clear_redir\n"
+		"             |sweep|sweep_time[seconds]]\n");
 	if (detail) {
 		fprintf(out,
 			"perfmgr -- print the performance manager state\n");
 		fprintf(out,
 			"   [enable|disable] -- change the perfmgr state\n");
+		fprintf(out,
+			"   [sweep] -- Initiate a sweep of the fabric\n");
 		fprintf(out,
 			"   [sweep_time] -- change the perfmgr sweep time (requires [seconds] option)\n");
 		fprintf(out,
@@ -271,6 +275,9 @@ static void help_perfmgr(FILE * out, int detail)
 		fprintf(out,
 			"   [[set|clear]_rm_nodes] -- enable/disable the removal of \"inactive\" nodes from the DB\n"
 			"                             Inactive nodes are those which no longer appear on the fabric\n");
+		fprintf(out,
+			"   [[set|clear]_query_cpi] -- enable/disable PerfMgrGet(ClassPortInfo)\n"
+			"                             ClassPortInfo indicates hardware support for extended attributes such as PortCountersExtended\n");
 		fprintf(out,
 			"   [clear_inactive] -- Delete inactive nodes from the DB\n");
 	}
@@ -592,7 +599,20 @@ static void sweep_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 
 static void logflush_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 {
-	fflush(p_osm->log.out_port);
+	char *p_cmd;
+
+	p_cmd = next_token(p_last);
+	if (!p_cmd ||
+	    (strcmp(p_cmd, "on") != 0 && strcmp(p_cmd, "off") != 0)) {
+		fprintf(out, "Invalid logflush command\n");
+		help_sweep(out, 1);
+	} else {
+		if (strcmp(p_cmd, "on") == 0) {
+			p_osm->log.flush = TRUE;
+	                fflush(p_osm->log.out_port);
+		} else
+			p_osm->log.flush = FALSE;
+	}
 }
 
 static void querylid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
@@ -700,6 +720,8 @@ typedef struct {
 	uint64_t ports_8X;
 	uint64_t ports_12X;
 	uint64_t ports_unknown_width;
+	uint64_t ports_unenabled_width;
+	port_report_t *unenabled_width_ports;
 	uint64_t ports_reduced_width;
 	port_report_t *reduced_width_ports;
 	uint64_t ports_sdr;
@@ -709,6 +731,8 @@ typedef struct {
 	uint64_t ports_fdr;
 	uint64_t ports_edr;
 	uint64_t ports_unknown_speed;
+	uint64_t ports_unenabled_speed;
+	port_report_t *unenabled_speed_ports;
 	uint64_t ports_reduced_speed;
 	port_report_t *reduced_speed_ports;
 } fabric_stats_t;
@@ -763,14 +787,43 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 		port_state = ib_port_info_get_port_state(pi);
 		port_phys_state = ib_port_info_get_port_phys_state(pi);
 
-		if ((enabled_width ^ active_width) > active_width) {
+		if (port_state == IB_LINK_DOWN)
+			fs->ports_down++;
+		else if (port_state == IB_LINK_ACTIVE)
+			fs->ports_active++;
+		if (port_phys_state == IB_PORT_PHYS_STATE_DISABLED) {
+			__tag_port_report(&(fs->disabled_ports),
+					  cl_ntoh64(node->node_info.node_guid),
+					  port, node->print_desc);
+			fs->ports_disabled++;
+		}
+
+		fs->total_ports++;
+
+		if (port_state == IB_LINK_DOWN)
+			continue;
+
+		if (!(active_width & enabled_width)) {
+			__tag_port_report(&(fs->unenabled_width_ports),
+					  cl_ntoh64(node->node_info.node_guid),
+					  port, node->print_desc);
+			fs->ports_unenabled_width++;
+		}
+		else if ((enabled_width ^ active_width) > active_width) {
 			__tag_port_report(&(fs->reduced_width_ports),
 					  cl_ntoh64(node->node_info.node_guid),
 					  port, node->print_desc);
 			fs->ports_reduced_width++;
 		}
 
-		if ((enabled_speed ^ active_speed) > active_speed) {
+		/* unenabled speed usually due to problems with force_link_speed */
+		if (!(active_speed & enabled_speed)) {
+			__tag_port_report(&(fs->unenabled_speed_ports),
+					  cl_ntoh64(node->node_info.node_guid),
+					  port, node->print_desc);
+			fs->ports_unenabled_speed++;
+		}
+		else if ((enabled_speed ^ active_speed) > active_speed) {
 			__tag_port_report(&(fs->reduced_speed_ports),
 					  cl_ntoh64(node->node_info.node_guid),
 					  port, node->print_desc);
@@ -808,10 +861,16 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 		}
 		if (pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS &&
 		    ib_port_info_get_link_speed_ext_sup(pi) &&
-		    (enabled_speed = pi->link_speed_ext_enabled) != IB_LINK_SPEED_EXT_DISABLE &&
+		    (enabled_speed = ib_port_info_get_link_speed_ext_enabled(pi)) != IB_LINK_SPEED_EXT_DISABLE &&
 		    active_speed == IB_LINK_SPEED_ACTIVE_10) {
 			active_speed = ib_port_info_get_link_speed_ext_active(pi);
-			if ((enabled_speed ^ active_speed) > active_speed) {
+			if (!(active_speed & enabled_speed)) {
+				__tag_port_report(&(fs->unenabled_speed_ports),
+						  cl_ntoh64(node->node_info.node_guid),
+						  port, node->print_desc);
+				fs->ports_unenabled_speed++;
+			}
+			else if ((enabled_speed ^ active_speed) > active_speed) {
 				__tag_port_report(&(fs->reduced_speed_ports),
 						  cl_ntoh64(node->node_info.node_guid),
 						  port, node->print_desc);
@@ -846,18 +905,6 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			fs->ports_unknown_width++;
 			break;
 		}
-		if (port_state == IB_LINK_DOWN)
-			fs->ports_down++;
-		else if (port_state == IB_LINK_ACTIVE)
-			fs->ports_active++;
-		if (port_phys_state == IB_PORT_PHYS_STATE_DISABLED) {
-			__tag_port_report(&(fs->disabled_ports),
-					  cl_ntoh64(node->node_info.node_guid),
-					  port, node->print_desc);
-			fs->ports_disabled++;
-		}
-
-		fs->total_ports++;
 	}
 }
 
@@ -930,17 +977,27 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		fprintf(out, "   %" PRIu64 " at 25.78125 Gbps\n", fs.ports_edr);
 
 	if (fs.ports_disabled + fs.ports_reduced_speed + fs.ports_reduced_width
-	    > 0) {
+	    + fs.ports_unenabled_width + fs.ports_unenabled_speed > 0) {
 		fprintf(out, "\nPossible issues:\n");
 	}
 	if (fs.ports_disabled) {
 		fprintf(out, "   %" PRIu64 " disabled\n", fs.ports_disabled);
 		__print_port_report(out, fs.disabled_ports);
 	}
+	if (fs.ports_unenabled_speed) {
+		fprintf(out, "   %" PRIu64 " with unenabled speed\n",
+			fs.ports_unenabled_speed);
+		__print_port_report(out, fs.unenabled_speed_ports);
+	}
 	if (fs.ports_reduced_speed) {
 		fprintf(out, "   %" PRIu64 " with reduced speed\n",
 			fs.ports_reduced_speed);
 		__print_port_report(out, fs.reduced_speed_ports);
+	}
+	if (fs.ports_unenabled_width) {
+		fprintf(out, "   %" PRIu64 " with unenabled width\n",
+			fs.ports_unenabled_width);
+		__print_port_report(out, fs.unenabled_width_ports);
 	}
 	if (fs.ports_reduced_width) {
 		fprintf(out, "   %" PRIu64 " with reduced width\n",
@@ -1466,6 +1523,10 @@ static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 			osm_perfmgr_set_rm_nodes(&p_osm->perfmgr, 1);
 		} else if (strcmp(p_cmd, "clear_rm_nodes") == 0) {
 			osm_perfmgr_set_rm_nodes(&p_osm->perfmgr, 0);
+		} else if (strcmp(p_cmd, "set_query_cpi") == 0) {
+			osm_perfmgr_set_query_cpi(&p_osm->perfmgr, 1);
+		} else if (strcmp(p_cmd, "clear_query_cpi") == 0) {
+			osm_perfmgr_set_query_cpi(&p_osm->perfmgr, 0);
 		} else if (strcmp(p_cmd, "dump_counters") == 0) {
 			p_cmd = next_token(p_last);
 			if (p_cmd && (strcmp(p_cmd, "mach") == 0)) {
@@ -1521,6 +1582,9 @@ static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 					"sweep_time requires a time period "
 					"(in seconds) to be specified\n");
 			}
+		} else if (strcmp(p_cmd, "sweep") == 0) {
+			osm_sm_signal(&p_osm->sm, OSM_SIGNAL_PERFMGR_SWEEP);
+			fprintf(out, "sweep initiated...\n");
 		} else {
 			fprintf(out, "\"%s\" option not found\n", p_cmd);
 		}
@@ -1530,13 +1594,16 @@ static void perfmgr_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 			"sweep state                  : %s\n"
 			"sweep time                   : %us\n"
 			"outstanding queries/max      : %d/%u\n"
-			"remove missing nodes from DB : %s\n",
+			"remove missing nodes from DB : %s\n"
+			"query ClassPortInfo          : %s\n",
 			osm_perfmgr_get_state_str(&p_osm->perfmgr),
 			osm_perfmgr_get_sweep_state_str(&p_osm->perfmgr),
 			osm_perfmgr_get_sweep_time_s(&p_osm->perfmgr),
 			p_osm->perfmgr.outstanding_queries,
 			p_osm->perfmgr.max_outstanding_queries,
 			osm_perfmgr_get_rm_nodes(&p_osm->perfmgr)
+						 ? "TRUE" : "FALSE",
+			osm_perfmgr_get_query_cpi(&p_osm->perfmgr)
 						 ? "TRUE" : "FALSE");
 	}
 }

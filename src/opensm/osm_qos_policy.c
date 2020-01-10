@@ -283,15 +283,16 @@ void osm_qos_policy_qos_level_destroy(osm_qos_level_t * p)
 	if (!p)
 		return;
 
-	if (p->name)
-		free(p->name);
-	if (p->use)
-		free(p->use);
+	free(p->name);
+	free(p->use);
 
 	for (i = 0; i < p->path_bits_range_len; i++)
 		free(p->path_bits_range_arr[i]);
-	if (p->path_bits_range_arr)
-		free(p->path_bits_range_arr);
+	free(p->path_bits_range_arr);
+
+	for(i = 0; i < p->pkey_range_len; i++)
+		free((p->pkey_range_arr[i]));
+	free(p->pkey_range_arr);
 
 	free(p);
 }
@@ -373,20 +374,23 @@ void osm_qos_policy_match_rule_destroy(osm_qos_match_rule_t * p)
 	if (p->use)
 		free(p->use);
 
-	for (i = 0; i < p->service_id_range_len; i++)
-		free(p->service_id_range_arr[i]);
-	if (p->service_id_range_arr)
+	if (p->service_id_range_arr) {
+		for (i = 0; i < p->service_id_range_len; i++)
+			free(p->service_id_range_arr[i]);
 		free(p->service_id_range_arr);
+	}
 
-	for (i = 0; i < p->qos_class_range_len; i++)
-		free(p->qos_class_range_arr[i]);
-	if (p->qos_class_range_arr)
+	if (p->qos_class_range_arr) {
+		for (i = 0; i < p->qos_class_range_len; i++)
+			free(p->qos_class_range_arr[i]);
 		free(p->qos_class_range_arr);
+	}
 
-	for (i = 0; i < p->pkey_range_len; i++)
-		free(p->pkey_range_arr[i]);
-	if (p->pkey_range_arr)
+	if (p->pkey_range_arr) {
+		for (i = 0; i < p->pkey_range_len; i++)
+			free(p->pkey_range_arr[i]);
 		free(p->pkey_range_arr);
+	}
 
 	cl_list_apply_func(&p->source_list, __free_single_element, NULL);
 	cl_list_remove_all(&p->source_list);
@@ -640,19 +644,19 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 		 */
 		if (cl_list_count(&p_qos_match_rule->source_group_list)
 		    && cl_list_count(&p_qos_match_rule->destination_group_list)) {
-			if (!__qos_policy_is_port_in_group_list(p_qos_policy,
-								p_src_physp,
-								&p_qos_match_rule->
-								source_group_list)
-			    && !__qos_policy_is_port_in_group_list(p_qos_policy,
-								   p_dest_physp,
-								   &p_qos_match_rule->
-								   destination_group_list))
-			{
+			if (__qos_policy_is_port_in_group_list(p_qos_policy,
+							       p_src_physp,
+							       &p_qos_match_rule->
+							       source_group_list)
+			    && __qos_policy_is_port_in_group_list(p_qos_policy,
+								  p_dest_physp,
+								  &p_qos_match_rule->
+								  destination_group_list))
+				matched_by_sordguid = TRUE;
+			else {
 				list_iterator = cl_list_next(list_iterator);
 				continue;
 			}
-			matched_by_sordguid = TRUE;
 		}
 
 		/* If a match rule has QoS classes, PR request HAS
@@ -744,7 +748,7 @@ static osm_qos_match_rule_t *__qos_policy_get_match_rule_by_params(
 
 static osm_qos_level_t *__qos_policy_get_qos_level_by_name(
 		const osm_qos_policy_t * p_qos_policy,
-		char *name)
+		const char *name)
 {
 	osm_qos_level_t *p_qos_level = NULL;
 	cl_list_iterator_t list_iterator;

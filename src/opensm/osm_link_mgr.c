@@ -101,11 +101,13 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	ib_api_status_t status;
 	uint8_t port_num, mtu, op_vls, smsl = OSM_DEFAULT_SL;
 	boolean_t esp0 = FALSE, send_set = FALSE, send_set2 = FALSE;
-	osm_physp_t *p_remote_physp, *physp0;
-	int qdr_change = 0, fdr10_change = 0;
+	osm_physp_t *p_remote_physp, *physp0 = NULL;
+	int issue_ext = 0, fdr10_change = 0;
 	int ret = 0;
 	ib_net32_t attr_mod, cap_mask;
 	boolean_t update_mkey = FALSE;
+	ib_net64_t m_key = 0;
+	osm_port_t *p_port;
 
 	OSM_LOG_ENTER(sm->p_log);
 
@@ -114,6 +116,27 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	p_old_pi = &p_physp->port_info;
 
 	port_num = osm_physp_get_port_num(p_physp);
+
+	memcpy(payload, p_old_pi, sizeof(ib_port_info_t));
+
+	if (osm_node_get_type(p_node) != IB_NODE_TYPE_SWITCH ||
+	    port_num == 0) {
+		/* Need to make sure LID and SMLID fields in PortInfo are not 0 */
+		if (!p_pi->base_lid) {
+			p_port = osm_get_port_by_guid(sm->p_subn,
+						      osm_physp_get_port_guid(p_physp));
+			p_pi->base_lid = p_port->lid;
+			send_set = TRUE;
+		}
+
+		/* we are initializing the ports with our local sm_base_lid */
+		p_pi->master_sm_base_lid = sm->p_subn->sm_base_lid;
+		if (p_pi->master_sm_base_lid != p_old_pi->master_sm_base_lid)
+			send_set = TRUE;
+	}
+
+	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH)
+		physp0 = osm_node_get_physp_ptr(p_node, 0);
 
 	if (port_num == 0) {
 		/*
@@ -142,7 +165,8 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 					PRIx64 "\n", smsl,
 					cl_ntoh64(osm_physp_get_port_guid
 						  (p_physp)));
-			} else {
+			/* Enter if base lid and master_sm_lid didn't change */
+			} else if (send_set == FALSE) {
 				/* This means the switch doesn't support
 				   enhanced port 0 and we don't need to
 				   change SMSL. Can skip it. */
@@ -157,8 +181,6 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 			esp0 = TRUE;
 	}
 
-	memcpy(payload, p_old_pi, sizeof(ib_port_info_t));
-
 	/*
 	   Should never write back a value that is bigger then 3 in
 	   the PortPhysicalState field - so can not simply copy!
@@ -170,6 +192,13 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	 */
 	p_pi->state_info2 = 0x02;
 	ib_port_info_set_port_state(p_pi, port_state);
+
+	/* Determine ports' M_Key */
+	if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH &&
+	    osm_physp_get_port_num(p_physp) != 0)
+		m_key = ib_port_info_get_m_key(&physp0->port_info);
+	else
+		m_key = ib_port_info_get_m_key(p_pi);
 
 	/* Check whether this is base port0 smsl handling only */
 	if (port_num == 0 && esp0 == FALSE) {
@@ -205,18 +234,6 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 			if (memcmp(&p_pi->subnet_prefix,
 				   &p_old_pi->subnet_prefix,
 				   sizeof(p_pi->subnet_prefix)))
-				send_set = TRUE;
-
-			p_pi->base_lid = osm_physp_get_base_lid(p_physp);
-			if (memcmp(&p_pi->base_lid, &p_old_pi->base_lid,
-				   sizeof(p_pi->base_lid)))
-				send_set = TRUE;
-
-			/* we are initializing the ports with our local sm_base_lid */
-			p_pi->master_sm_base_lid = sm->p_subn->sm_base_lid;
-			if (memcmp(&p_pi->master_sm_base_lid,
-				   &p_old_pi->master_sm_base_lid,
-				   sizeof(p_pi->master_sm_base_lid)))
 				send_set = TRUE;
 
 			smsl = link_mgr_get_smsl(sm, p_physp);
@@ -334,19 +351,8 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 							    sm->p_subn->opt.
 							    force_link_speed);
 			if (memcmp(&p_pi->link_speed, &p_old_pi->link_speed,
-				   sizeof(p_pi->link_speed))) {
+				   sizeof(p_pi->link_speed)))
 				send_set = TRUE;
-				/* Determine whether QDR in LSE is being changed */
-				if ((ib_port_info_get_link_speed_enabled(p_pi) &
-				     IB_LINK_SPEED_ACTIVE_10 &&
-				     !(ib_port_info_get_link_speed_enabled(p_old_pi) &
-				      IB_LINK_SPEED_ACTIVE_10)) ||
-				    ((!(ib_port_info_get_link_speed_enabled(p_pi) &
-				       IB_LINK_SPEED_ACTIVE_10) &&
-				      ib_port_info_get_link_speed_enabled(p_old_pi) &
-				      IB_LINK_SPEED_ACTIVE_10)))
-				qdr_change = 1;
-			}
 		}
 
 		if (sm->p_subn->opt.fdr10 &&
@@ -371,13 +377,14 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 			}
 		}
 
-		if (osm_node_get_type(p_physp->p_node) == IB_NODE_TYPE_SWITCH) {
-			physp0 = osm_node_get_physp_ptr(p_physp->p_node, 0);
+		if (osm_node_get_type(p_physp->p_node) == IB_NODE_TYPE_SWITCH &&
+		    osm_physp_get_port_num(p_physp) != 0) {
 			cap_mask = physp0->port_info.capability_mask;
 		} else
 			cap_mask = p_pi->capability_mask;
-		if (!(cap_mask & IB_PORT_CAP_HAS_EXT_SPEEDS))
-			qdr_change = 0;
+
+		if (cap_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)
+			issue_ext = 1;
 
 		/* Do peer ports support extended link speeds ? */
 		if (port_num != 0 && p_remote_physp) {
@@ -432,19 +439,19 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 	}
 
 Send:
+	context.pi_context.active_transition = FALSE;
 	if (port_state != IB_LINK_NO_CHANGE &&
 	    port_state != ib_port_info_get_port_state(p_old_pi)) {
 		send_set = TRUE;
 		if (port_state == IB_LINK_ACTIVE)
 			context.pi_context.active_transition = TRUE;
-		else
-			context.pi_context.active_transition = FALSE;
 	}
 
 	context.pi_context.node_guid = osm_node_get_node_guid(p_node);
 	context.pi_context.port_guid = osm_physp_get_port_guid(p_physp);
 	context.pi_context.set_method = TRUE;
 	context.pi_context.light_sweep = FALSE;
+	context.pi_context.client_rereg = FALSE;
 
 	/* We need to send the PortInfoSet request with the new sm_lid
 	   in the following cases:
@@ -462,11 +469,12 @@ Send:
 		goto Exit;
 
 	attr_mod = cl_hton32(port_num);
-	if (qdr_change)
+	if (issue_ext)
 		attr_mod |= cl_hton32(1 << 31);	/* AM SMSupportExtendedSpeeds */
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
-			     attr_mod, CL_DISP_MSGID_NONE, &context);
+			     attr_mod, FALSE, m_key,
+			     CL_DISP_MSGID_NONE, &context);
 	if (status)
 		ret = -1;
 
@@ -482,7 +490,7 @@ Send:
 		status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 				     payload2, sizeof(payload2),
 				     IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO,
-				     cl_hton32(port_num),
+				     cl_hton32(port_num), FALSE, m_key,
 				     CL_DISP_MSGID_NONE, &context);
 		if (status)
 			ret = -1;

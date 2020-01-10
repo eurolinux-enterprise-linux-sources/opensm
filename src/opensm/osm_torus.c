@@ -3,7 +3,7 @@
  * DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
  * certain rights in this software.
  * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
- *
+ * Copyright (c) 2010-2012 Mellanox Technologies LTD. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -61,6 +61,7 @@
 #define TORUS_MAX_DIM        3
 #define PORTGRP_MAX_PORTS    16
 #define SWITCH_MAX_PORTGRPS  (1 + 2 * TORUS_MAX_DIM)
+#define DEFAULT_MAX_CHANGES  32
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -307,6 +308,7 @@ struct torus {
 	struct t_switch *master_stree_root;
 
 	unsigned flags;
+	unsigned max_changes;
 	int debug;
 };
 
@@ -850,14 +852,14 @@ out:
 }
 
 static
-bool parse_port(unsigned *pnum, const char *parse_sep)
+bool parse_unsigned(unsigned *result, const char *parse_sep)
 {
 	char *val, *nextchar;
 
 	val = strtok(NULL, parse_sep);
 	if (!val)
 		return false;
-	*pnum = strtoul(val, &nextchar, 0);
+	*result = strtoul(val, &nextchar, 0);
 	return true;
 }
 
@@ -867,7 +869,7 @@ bool parse_port_order(struct torus *t, const char *parse_sep)
 	unsigned i, j, k, n;
 
 	for (i = 0; i < ARRAY_SIZE(t->port_order); i++) {
-		if (!parse_port(&(t->port_order[i]), parse_sep))
+		if (!parse_unsigned(&(t->port_order[i]), parse_sep))
 			break;
 
 		for (j = 0; j < i; j++) {
@@ -891,18 +893,6 @@ bool parse_port_order(struct torus *t, const char *parse_sep)
 			t->port_order[n++] = j;
 	}
 
-	return true;
-}
-
-static
-bool parse_pg_max_ports(struct torus *t, const char *parse_sep)
-{
-	char *val, *nextchar;
-
-	val = strtok(NULL, parse_sep);
-	if (!val)
-		return false;
-	t->portgrp_sz = strtoul(val, &nextchar, 0);
 	return true;
 }
 
@@ -1056,6 +1046,7 @@ bool parse_config(const char *fn, struct fabric *f, struct torus *t)
 	}
 	t->flags |= NOTIFY_CHANGES;
 	t->portgrp_sz = PORTGRP_MAX_PORTS;
+	t->max_changes = DEFAULT_MAX_CHANGES;
 
 next_line:
 	llen = getline(&line_buf, &line_buf_sz, fp);
@@ -1079,7 +1070,7 @@ next_line:
 		kw_success = grow_seed_array(t, 1);
 		t->seed_cnt++;
 	} else if (strcmp("portgroup_max_ports", keyword) == 0) {
-		kw_success = parse_pg_max_ports(t, parse_sep);
+		kw_success = parse_unsigned(&t->portgrp_sz, parse_sep);
 	} else if (strcmp("xp_link", keyword) == 0) {
 		if (!t->seed_cnt)
 			t->seed_cnt++;
@@ -1116,6 +1107,8 @@ next_line:
 		if (!t->seed_cnt)
 			t->seed_cnt++;
 		kw_success = parse_dir_dateline(3, t, parse_sep);
+	} else if (strcmp("max_changes", keyword) == 0) {
+		kw_success = parse_unsigned(&t->max_changes, parse_sep);
 	} else if (keyword[0] == '#')
 		goto next_line;
 	else {
@@ -1180,6 +1173,7 @@ bool capture_fabric(struct fabric *fabric)
 
 		osm_sw = (osm_switch_t *)item;
 		item = cl_qmap_next(item);
+		osm_sw->priv = NULL;  /* avoid stale pointer dereferencing */
 		osm_node = osm_sw->p_node;
 
 		if (osm_node_get_type(osm_node) != IB_NODE_TYPE_SWITCH)
@@ -1200,6 +1194,7 @@ bool capture_fabric(struct fabric *fabric)
 
 		lport = (osm_port_t *)item;
 		item = cl_qmap_next(item);
+		lport->priv = NULL;  /* avoid stale pointer dereferencing */
 
 		lphysp = lport->p_physp;
 		if (!(lphysp && osm_physp_is_valid(lphysp)))
@@ -1552,7 +1547,7 @@ bool link_tswitches(struct torus *t, int cdir,
 	int p;
 	struct port_grp *pg0, *pg1;
 	struct f_switch *f_sw0, *f_sw1;
-	char *cdir_name = "unknown";
+	const char *cdir_name = "unknown";
 	unsigned port_cnt;
 	int success = false;
 
@@ -7010,8 +7005,9 @@ out:
 	return;
 }
 
-#define LINK_ERR_STR " direction link required!\n"
-#define SEED_ERR_STR " direction links with different seed switches!\n"
+#define LINK_ERR_STR " direction link required for topology seed configuration since radix == 4! See torus-2QoS.conf(5).\n"
+#define LINK_ERR2_STR " direction link required for topology seed configuration! See torus-2QoS.conf(5).\n"
+#define SEED_ERR_STR " direction links for topology seed do not share a common switch! See torus-2QoS.conf(5).\n"
 
 static
 bool verify_setup(struct torus *t, struct fabric *f)
@@ -7027,21 +7023,28 @@ bool verify_setup(struct torus *t, struct fabric *f)
 			"ERR 4E20: missing required torus size specification!\n");
 		goto out;
 	}
+	if (t->osm->subn.min_sw_data_vls < 2) {
+		OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
+			"ERR 4E48: Too few data VLs to support torus routing "
+			"without credit loops (have switchport %d need 2)\n",
+			(int)t->osm->subn.min_sw_data_vls);
+		goto out;
+	}
+	if (t->osm->subn.min_sw_data_vls < 4)
+		OSM_LOG(&t->osm->log, OSM_LOG_INFO,
+			"Warning: Too few data VLs to support torus routing "
+			"with a failed switch without credit loops "
+			"(have switchport %d need 4)\n",
+			(int)t->osm->subn.min_sw_data_vls);
+	if (t->osm->subn.min_sw_data_vls < 8)
+		OSM_LOG(&t->osm->log, OSM_LOG_INFO,
+			"Warning: Too few data VLs to support torus routing "
+			"with two QoS levels (have switchport %d need 8)\n",
+			(int)t->osm->subn.min_sw_data_vls);
 	if (t->osm->subn.min_data_vls < 2)
 		OSM_LOG(&t->osm->log, OSM_LOG_INFO,
 			"Warning: Too few data VLs to support torus routing "
-			"without credit loops (have %d need 2)\n",
-			(int)t->osm->subn.min_data_vls);
-	if (t->osm->subn.min_data_vls < 4)
-		OSM_LOG(&t->osm->log, OSM_LOG_INFO,
-			"Warning: Too few data VLs to support torus routing "
-			"with a failed switch without credit loops"
-			"(have %d need 4)\n",
-			(int)t->osm->subn.min_data_vls);
-	if (t->osm->subn.min_data_vls < 8)
-		OSM_LOG(&t->osm->log, OSM_LOG_INFO,
-			"Warning: Too few data VLs to support torus routing "
-			"with two QoS levels (have %d need 8)\n",
+			"with two QoS levels (have endport %d need 2)\n",
 			(int)t->osm->subn.min_data_vls);
 	/*
 	 * Be sure all the switches in the torus support the port
@@ -7134,7 +7137,7 @@ again:
 		if (o->xp_link.end[0].port >= 0 &&
 		    o->xm_link.end[0].port >= 0) {
 			OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
-				"ERR 4E2B: Positive or negative x" LINK_ERR_STR);
+				"ERR 4E2B: Positive or negative x" LINK_ERR2_STR);
 			goto out;
 		}
 		if (o->xp_link.end[0].port < 0 &&
@@ -7157,7 +7160,7 @@ again:
 		if (o->zp_link.end[0].port >= 0 &&
 		    o->zm_link.end[0].port >= 0) {
 			OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
-				"ERR 4E2C: Positive or negative z" LINK_ERR_STR);
+				"ERR 4E2C: Positive or negative z" LINK_ERR2_STR);
 			goto out;
 		}
 		if ((o->xp_link.end[0].port < 0 &&
@@ -7200,7 +7203,7 @@ again:
 		if (o->yp_link.end[0].port >= 0 &&
 		    o->ym_link.end[0].port >= 0) {
 			OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
-				"ERR 4E2E: Positive or negative y" LINK_ERR_STR);
+				"ERR 4E2E: Positive or negative y" LINK_ERR2_STR);
 			goto out;
 		}
 		if ((o->xp_link.end[0].port < 0 &&
@@ -7249,7 +7252,9 @@ again:
 	if (need_seed)
 		OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
 			"ERR 4E30: Every configured torus seed has at "
-			"least one switch missing in fabric!\n");
+			"least one switch missing in fabric! See "
+			"torus-2QoS.conf(5) and TORUS TOPOLOGY DISCOVERY "
+			"in torus-2QoS(8)\n");
 	else
 		success = true;
 out:
@@ -7495,6 +7500,37 @@ out:
 }
 
 static
+void dump_torus(struct torus *t)
+{
+	unsigned i, j, k;
+	unsigned x_sz = t->x_sz;
+	unsigned y_sz = t->y_sz;
+	unsigned z_sz = t->z_sz;
+	char path[1024];
+	FILE *file;
+
+	snprintf(path, sizeof(path), "%s/%s", t->osm->subn.opt.dump_files_dir,
+		 "opensm-torus.dump");
+	file = fopen(path, "w");
+	if (!file) {
+		OSM_LOG(&t->osm->log, OSM_LOG_ERROR,
+			"ERR 4E47: cannot create file \'%s\'\n", path);
+		return;
+	}
+
+	for (k = 0; k < z_sz; k++)
+		for (j = 0; j < y_sz; j++)
+			for (i = 0; i < x_sz; i++)
+				if (t->sw[i][j][k])
+					fprintf(file, "switch %u,%u,%u GUID 0x%04"
+						PRIx64 " (%s)\n",
+						i, j, k,
+						cl_ntoh64(t->sw[i][j][k]->n_id),
+						t->sw[i][j][k]->osm_switch->p_node->print_desc);
+	fclose(file);
+}
+
+static
 void report_torus_changes(struct torus *nt, struct torus *ot)
 {
 	unsigned cnt = 0;
@@ -7502,8 +7538,12 @@ void report_torus_changes(struct torus *nt, struct torus *ot)
 	unsigned x_sz = nt->x_sz;
 	unsigned y_sz = nt->y_sz;
 	unsigned z_sz = nt->z_sz;
+	unsigned max_changes = nt->max_changes;
 
-	if (!(nt && ot))
+	if (OSM_LOG_IS_ACTIVE_V2(&nt->osm->log, OSM_LOG_ROUTING))
+		dump_torus(nt);
+
+	if (!ot)
 		return;
 
 	if (x_sz != ot->x_sz) {
@@ -7542,7 +7582,7 @@ void report_torus_changes(struct torus *nt, struct torus *ot)
 				 * We want to log changes to learn more about
 				 * bouncing links, etc, so they can be fixed.
 				 */
-				if (cnt > 32) {
+				if (cnt > max_changes) {
 					OSM_LOG(&nt->osm->log, OSM_LOG_INFO,
 						"Too many torus changes; "
 						"stopping reporting early\n");
@@ -7924,6 +7964,7 @@ unsigned sl_get_qos(unsigned sl)
  * Functions to encode routing/QoS info into VL bits.  Combine the resuts of
  * these functions with bitwise or to get final VL.
  *
+ * For interswitch links:
  * VL bit 0 encodes whether we need to leave on the "loop" VL.
  *
  * VL bit 1 encodes whether turn is XYZ DOR or ZYX DOR. A 3d mesh/torus
@@ -7938,6 +7979,9 @@ unsigned sl_get_qos(unsigned sl)
  *
  * VL bit 2 encodes QoS level.
  *
+ * For end port links:
+ * VL bit 0 encodes QoS level.
+ *
  * Note that if VL bit encodings are changed here, the available fabric VL
  * verification in verify_setup() needs to be updated as well.
  */
@@ -7951,6 +7995,12 @@ static inline
 unsigned vl_set_qos_vl(unsigned qos)
 {
 	return (qos & 0x1) << 2;
+}
+
+static inline
+unsigned vl_set_ca_qos_vl(unsigned qos)
+{
+	return qos & 0x1;
 }
 
 static inline
@@ -7982,16 +8032,23 @@ unsigned sl2vl_entry(struct torus *t, struct t_switch *sw,
 	else
 		od = TORUS_MAX_DIM;
 
-	data_vls = t->osm->subn.min_data_vls;
+	if (sw)
+		data_vls = t->osm->subn.min_sw_data_vls;
+	else
+		data_vls = t->osm->subn.min_data_vls;
+
 	vl = 0;
-
-	if (data_vls >= 2)
-		vl |= vl_set_loop_vl(sl_get_use_loop_vl(sl, od));
-	if (data_vls >= 4)
-		vl |= vl_set_turn_vl(id, od);
-	if (data_vls >= 8)
-		vl |= vl_set_qos_vl(sl_get_qos(sl));
-
+	if (sw && od != TORUS_MAX_DIM) {
+		if (data_vls >= 2)
+			vl |= vl_set_loop_vl(sl_get_use_loop_vl(sl, od));
+		if (data_vls >= 4)
+			vl |= vl_set_turn_vl(id, od);
+		if (data_vls >= 8)
+			vl |= vl_set_qos_vl(sl_get_qos(sl));
+	} else {
+		if (data_vls >= 2)
+			vl |= vl_set_ca_qos_vl(sl_get_qos(sl));
+	}
 	return vl;
 }
 
@@ -8013,15 +8070,82 @@ void torus_update_osm_sl2vl(void *context, osm_physp_t *osm_phys_port,
 
 			guid = osm_node_get_node_guid(node);
 			OSM_LOG(log, OSM_LOG_INFO,
-				"Error: osm_switch (GUID 0x%04"PRIx64") "
-				"not in our fabric description\n",
+				"Note: osm_switch (GUID 0x%04"PRIx64") "
+				"not in torus fabric description\n",
 				cl_ntoh64(guid));
-		return;
+			return;
 		}
 	}
 	for (sl = 0; sl < 16; sl++) {
 		vl = sl2vl_entry(ctx->torus, sw, iport_num, oport_num, sl);
 		ib_slvl_table_set(osm_oport_sl2vl, sl, vl);
+	}
+}
+
+static
+void torus_update_osm_vlarb(void *context, osm_physp_t *osm_phys_port,
+			    uint8_t port_num, ib_vl_arb_table_t *block,
+			    unsigned block_length, unsigned block_num)
+{
+	osm_node_t *node = osm_physp_get_node_ptr(osm_phys_port);
+	struct torus_context *ctx = context;
+	struct t_switch *sw = NULL;
+	unsigned i, next;
+
+	if (node->sw) {
+		sw = node->sw->priv;
+		if (sw && sw->osm_switch != node->sw) {
+			osm_log_t *log = &ctx->osm->log;
+			guid_t guid;
+
+			guid = osm_node_get_node_guid(node);
+			OSM_LOG(log, OSM_LOG_INFO,
+				"Note: osm_switch (GUID 0x%04"PRIx64") "
+				"not in torus fabric description\n",
+				cl_ntoh64(guid));
+			return;
+		}
+	}
+
+	/*
+	 * If osm_phys_port is a switch port that connects to a CA, then
+	 * we're using at most VL 0 (for QoS level 0) and VL 1 (for QoS
+	 * level 1).  We've been passed the  VLarb values for a switch
+	 * external port, so we need to fix them up to avoid unexpected
+	 * results depending on how the switch handles VLarb values for
+	 * unprogrammed VLs.
+	 *
+	 * For inter-switch links torus-2QoS uses VLs 0-3 to implement
+	 * QoS level 0, and VLs 4-7 to implement QoS level 1.
+	 *
+	 * So, leave VL 0 alone, remap VL 4 to VL 1, zero out the rest,
+	 * and compress out the zero entries to the end.
+	 */
+	if (!sw || !port_num || !sw->port[port_num] ||
+	    sw->port[port_num]->pgrp->port_grp != 2 * TORUS_MAX_DIM)
+		return;
+
+	next = 0;
+	for (i = 0; i < block_length; i++) {
+		switch (block->vl_entry[i].vl) {
+		case 4:
+			block->vl_entry[i].vl = 1;
+			/* fall through */
+		case 0:
+			block->vl_entry[next].vl = block->vl_entry[i].vl;
+			block->vl_entry[next].weight = block->vl_entry[i].weight;
+			next++;
+			/*
+			 * If we didn't update vl_entry[i] in place,
+			 * fall through to zero it out.
+			 */
+			if (next > i)
+				break;
+		default:
+			block->vl_entry[i].vl = 0;
+			block->vl_entry[i].weight = 0;
+			break;
+		}
 	}
 }
 
@@ -8569,7 +8693,7 @@ osm_mtree_node_t *mcast_stree_branch(struct t_switch *sw, osm_switch_t *osm_sw,
 	if (osm_sw->priv != sw) {
 		OSM_LOG(&sw->torus->osm->log, OSM_LOG_ERROR,
 			"ERR 4E3E: osm_sw (GUID 0x%04"PRIx64") "
-			"not in our fabric description\n",
+			"not in torus fabric description\n",
 			cl_ntoh64(osm_node_get_node_guid(osm_sw->p_node)));
 		goto out;
 	}
@@ -8583,7 +8707,7 @@ osm_mtree_node_t *mcast_stree_branch(struct t_switch *sw, osm_switch_t *osm_sw,
 	mtn = osm_mtree_node_new(osm_sw);
 	if (!mtn) {
 		OSM_LOG(&sw->torus->osm->log, OSM_LOG_ERROR,
-			"Insufficient memory to build multicast tree\n");
+			"ERR 4E46: Insufficient memory to build multicast tree\n");
 		goto out;
 	}
 	mcast_tbl = osm_switch_get_mcast_tbl_ptr(osm_sw);
@@ -8659,7 +8783,7 @@ osm_mtree_node_t *mcast_stree_branch(struct t_switch *sw, osm_switch_t *osm_sw,
 		}
 	}
 	if (!(mcast_end_ports || mcast_fwd_ports)) {
-		free(mtn);
+		osm_mtree_destroy(mtn);
 		mtn = NULL;
 	} else if (depth > *max_depth)
 		*max_depth = depth;
@@ -8739,7 +8863,7 @@ ib_api_status_t torus_mcast_stree(void *context, osm_mgrp_box_t *mgb)
 				id = osm_node_get_node_guid(osm_port->p_node);
 				OSM_LOG(&ctx->osm->log, OSM_LOG_ERROR,
 					"ERR 4E41: osm_port (GUID 0x%04"PRIx64") "
-					"not in our fabric description\n",
+					"not in torus fabric description\n",
 					cl_ntoh64(id));
 				continue;
 			}
@@ -9076,8 +9200,8 @@ uint8_t torus_path_sl(void *context, uint8_t path_sl_hint,
 		if (!sport) {
 			guid = osm_node_get_node_guid(osm_sport->p_node);
 			OSM_LOG(log, OSM_LOG_INFO,
-				"Error: osm_sport (GUID 0x%04"PRIx64") "
-				"not in our fabric description\n",
+				"Note: osm_sport (GUID 0x%04"PRIx64") "
+				"not in torus fabric description\n",
 				cl_ntoh64(guid));
 			goto out;
 		}
@@ -9088,8 +9212,8 @@ uint8_t torus_path_sl(void *context, uint8_t path_sl_hint,
 		if (!dport) {
 			guid = osm_node_get_node_guid(osm_dport->p_node);
 			OSM_LOG(log, OSM_LOG_INFO,
-				"Error: osm_dport (GUID 0x%04"PRIx64") "
-				"not in our fabric description\n",
+				"Note: osm_dport (GUID 0x%04"PRIx64") "
+				"not in torus fabric description\n",
 				cl_ntoh64(guid));
 			goto out;
 		}
@@ -9137,13 +9261,11 @@ out:
 }
 
 static
-void check_vlarb_config(const char *vlarb_str, bool is_default,
-			const char *str, const char *pri, osm_log_t *log)
+void sum_vlarb_weights(const char *vlarb_str,
+		       unsigned total_weight[IB_MAX_NUM_VLS])
 {
-	unsigned total_weight[IB_MAX_NUM_VLS] = {0,};
 	unsigned i = 0, v, vl = 0;
 	char *end;
-	bool uniform;
 
 	while (*vlarb_str && i++ < 2 * IB_NUM_VL_ARB_ELEMENTS_IN_BLOCK) {
 		v = strtoul(vlarb_str, &end, 0);
@@ -9155,15 +9277,29 @@ void check_vlarb_config(const char *vlarb_str, bool is_default,
 		else
 			total_weight[vl] += v & 0xff;
 	}
-	uniform = true;
-	v = total_weight[0];
-	for (i = 1; i < 8; i++) {
-		if (i == 4)
-			v = total_weight[i];
-		if (total_weight[i] != v)
-			uniform = false;
+}
+
+static
+int uniform_vlarb_weight_value(unsigned *weight, unsigned count)
+{
+	int i, v = weight[0];
+
+	for (i = 1; i < count; i++) {
+		if (v != weight[i])
+			return -1;
 	}
-	if (!uniform)
+	return v;
+}
+
+static
+void check_vlarb_config(const char *vlarb_str, bool is_default,
+			const char *str, const char *pri, osm_log_t *log)
+{
+	unsigned total_weight[IB_MAX_NUM_VLS] = {0,};
+
+	sum_vlarb_weights(vlarb_str, total_weight);
+	if (!(uniform_vlarb_weight_value(&total_weight[0], 4) >= 0 &&
+	      uniform_vlarb_weight_value(&total_weight[4], 4) >= 0))
 		OSM_LOG(log, OSM_LOG_INFO,
 			"Warning: torus-2QoS requires same VLarb weights for "
 			"VLs 0-3; also for VLs 4-7: not true for %s "
@@ -9171,42 +9307,135 @@ void check_vlarb_config(const char *vlarb_str, bool is_default,
 			(is_default ? "default" : "configured"), str, pri);
 }
 
+/*
+ * Use this to check the qos_config for switch external ports.
+ */
 static
-void check_qos_config(osm_qos_options_t *opt, bool tgt_is_default,
-		      const char *str, osm_log_t *log)
+void check_qos_swe_config(osm_qos_options_t *opt,
+			  osm_qos_options_t *def, osm_log_t *log)
 {
-	const char *vlarb_str;
+	const char *vlarb_str, *tstr;
 	bool is_default;
+	unsigned max_vls;
 
-	if (opt->max_vls > 0 && opt->max_vls < 8)
+	max_vls = def->max_vls;
+	if (opt->max_vls > 0)
+		max_vls = opt->max_vls;
+
+	if (max_vls > 0 && max_vls < 8)
 		OSM_LOG(log, OSM_LOG_INFO,
 			"Warning: full torus-2QoS functionality not available "
-			"for configured %s_max_vls = %d\n", str, opt->max_vls);
+			"for configured %s_max_vls = %d\n",
+			(opt->max_vls > 0 ? "qos_swe" : "qos"), opt->max_vls);
 
-	if (opt->vlarb_high) {
-		is_default = false;
-		vlarb_str = opt->vlarb_high;
-	} else{
-		is_default = true;
+	vlarb_str = opt->vlarb_high;
+	is_default = false;
+	tstr = "qos_swe";
+	if (!vlarb_str) {
+		vlarb_str = def->vlarb_high;
+		tstr = "qos";
+	}
+	if (!vlarb_str) {
 		vlarb_str = OSM_DEFAULT_QOS_VLARB_HIGH;
-	}
-	/*
-	 * Only check values that were actually configured, or the overall
-	 * defaults that target-specific (CA, switch port, etc) defaults
-	 * are set from.
-	 */
-	if (!is_default || tgt_is_default)
-		check_vlarb_config(vlarb_str, is_default, str, "high", log);
-
-	if (opt->vlarb_low) {
-		is_default = false;
-		vlarb_str = opt->vlarb_low;
-	} else {
 		is_default = true;
-		vlarb_str = OSM_DEFAULT_QOS_VLARB_LOW;
 	}
-	if (!is_default || tgt_is_default)
-		check_vlarb_config(vlarb_str, is_default, str, "low", log);
+	check_vlarb_config(vlarb_str, is_default, tstr, "high", log);
+
+	vlarb_str = opt->vlarb_low;
+	is_default = false;
+	tstr = "qos_swe";
+	if (!vlarb_str) {
+		vlarb_str = def->vlarb_low;
+		tstr = "qos";
+	}
+	if (!vlarb_str) {
+		vlarb_str = OSM_DEFAULT_QOS_VLARB_LOW;
+		is_default = true;
+	}
+	check_vlarb_config(vlarb_str, is_default, tstr, "low", log);
+
+	if (opt->sl2vl)
+		OSM_LOG(log, OSM_LOG_INFO,
+			"Warning: torus-2QoS must override configured "
+			"qos_swe_sl2vl to generate deadlock-free routes\n");
+}
+
+static
+void check_ep_vlarb_config(const char *vlarb_str,
+			   bool is_default, bool is_specific,
+			   const char *str, const char *pri, osm_log_t *log)
+{
+	unsigned i, total_weight[IB_MAX_NUM_VLS] = {0,};
+	int val = 0;
+
+	sum_vlarb_weights(vlarb_str, total_weight);
+	for (i = 2; i < 8; i++) {
+		val += total_weight[i];
+	}
+	if (!val)
+		return;
+
+	if (is_specific)
+		OSM_LOG(log, OSM_LOG_INFO,
+			"Warning: torus-2QoS recommends 0 VLarb weights"
+			" for VLs 2-7 on endpoint links; not true for "
+			" configured %s_vlarb_%s\n", str, pri);
+	else
+		OSM_LOG(log, OSM_LOG_INFO,
+			"Warning: torus-2QoS recommends 0 VLarb weights "
+			"for VLs 2-7 on endpoint links; not true for %s "
+			"qos_vlarb_%s values used for %s_vlarb_%s\n",
+			(is_default ? "default" : "configured"), pri, str, pri);
+}
+
+/*
+ * Use this to check the qos_config for endports
+ */
+static
+void check_qos_ep_config(osm_qos_options_t *opt, osm_qos_options_t *def,
+			 const char *str, osm_log_t *log)
+{
+	const char *vlarb_str;
+	bool is_default, is_specific;
+	unsigned max_vls;
+
+	max_vls = def->max_vls;
+	if (opt->max_vls > 0)
+		max_vls = opt->max_vls;
+
+	if (max_vls > 0 && max_vls < 2)
+		OSM_LOG(log, OSM_LOG_INFO,
+			"Warning: full torus-2QoS functionality not available "
+			"for configured %s_max_vls = %d\n",
+			(opt->max_vls > 0 ? str : "qos"), opt->max_vls);
+
+	vlarb_str = opt->vlarb_high;
+	is_default = false;
+	is_specific = true;
+	if (!vlarb_str) {
+		vlarb_str = def->vlarb_high;
+		is_specific = false;
+	}
+	if (!vlarb_str) {
+		vlarb_str = OSM_DEFAULT_QOS_VLARB_HIGH;
+		is_default = true;
+	}
+	check_ep_vlarb_config(vlarb_str, is_default, is_specific,
+			      str, "high", log);
+
+	vlarb_str = opt->vlarb_low;
+	is_default = false;
+	is_specific = true;
+	if (!vlarb_str) {
+		vlarb_str = def->vlarb_low;
+		is_specific = false;
+	}
+	if (!vlarb_str) {
+		vlarb_str = OSM_DEFAULT_QOS_VLARB_LOW;
+		is_default = true;
+	}
+	check_ep_vlarb_config(vlarb_str, is_default, is_specific,
+			      str, "low", log);
 
 	if (opt->sl2vl)
 		OSM_LOG(log, OSM_LOG_INFO,
@@ -9251,9 +9480,10 @@ int torus_build_lfts(void *context)
 
 	OSM_LOG(&torus->osm->log, OSM_LOG_INFO,
 		"Found fabric w/ %d links, %d switches, %d CA ports, "
-		"minimum %d data VLs\n",
+		"minimum data VLs: endport %d, switchport %d\n",
 		(int)fabric->link_cnt, (int)fabric->switch_cnt,
-		(int)fabric->ca_cnt, (int)ctx->osm->subn.min_data_vls);
+		(int)fabric->ca_cnt, (int)ctx->osm->subn.min_data_vls,
+		(int)ctx->osm->subn.min_sw_data_vls);
 
 	if (!verify_setup(torus, fabric))
 		goto out;
@@ -9295,11 +9525,15 @@ out:
 			teardown_torus(ctx->torus);
 		ctx->torus = torus;
 
-		check_qos_config(&opt->qos_options, 1, "qos", log);
-		check_qos_config(&opt->qos_ca_options, 0, "qos_ca", log);
-		check_qos_config(&opt->qos_sw0_options, 0, "qos_sw0", log);
-		check_qos_config(&opt->qos_swe_options, 0, "qos_swe", log);
-		check_qos_config(&opt->qos_rtr_options, 0, "qos_rtr", log);
+		check_qos_swe_config(&opt->qos_swe_options, &opt->qos_options,
+				     log);
+
+		check_qos_ep_config(&opt->qos_ca_options,
+				    &opt->qos_options, "qos_ca", log);
+		check_qos_ep_config(&opt->qos_sw0_options,
+				    &opt->qos_options, "qos_sw0", log);
+		check_qos_ep_config(&opt->qos_rtr_options,
+				    &opt->qos_options, "qos_rtr", log);
 	}
 	teardown_fabric(fabric);
 	return status;
@@ -9316,7 +9550,9 @@ int osm_ucast_torus2QoS_setup(struct osm_routing_engine *r,
 
 	r->context = ctx;
 	r->ucast_build_fwd_tables = torus_build_lfts;
+	r->build_lid_matrices = ucast_dummy_build_lid_matrices;
 	r->update_sl2vl = torus_update_osm_sl2vl;
+	r->update_vlarb = torus_update_osm_vlarb;
 	r->path_sl = torus_path_sl;
 	r->mcast_build_stree = torus_mcast_stree;
 	r->destroy = torus_context_delete;

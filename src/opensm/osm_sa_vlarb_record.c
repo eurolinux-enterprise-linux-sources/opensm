@@ -2,6 +2,7 @@
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
  * Copyright (c) 2002-2005 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -59,10 +60,7 @@
 #include <opensm/osm_pkey.h>
 #include <opensm/osm_sa.h>
 
-typedef struct osm_vl_arb_item {
-	cl_list_item_t list_item;
-	ib_vl_arb_table_record_t rec;
-} osm_vl_arb_item_t;
+#define SA_VLA_RESP_SIZE SA_ITEM_RESP_SIZE(vlarb_rec)
 
 typedef struct osm_vl_arb_search_ctxt {
 	const ib_vl_arb_table_record_t *p_rcvd_rec;
@@ -77,12 +75,12 @@ static void sa_vl_arb_create(IN osm_sa_t * sa, IN osm_physp_t * p_physp,
 			     IN osm_vl_arb_search_ctxt_t * p_ctxt,
 			     IN uint8_t block)
 {
-	osm_vl_arb_item_t *p_rec_item;
+	osm_sa_item_t *p_rec_item;
 	uint16_t lid;
 
 	OSM_LOG_ENTER(sa->p_log);
 
-	p_rec_item = malloc(sizeof(*p_rec_item));
+	p_rec_item = malloc(SA_VLA_RESP_SIZE);
 	if (p_rec_item == NULL) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2A02: "
 			"rec_item alloc failed\n");
@@ -100,12 +98,12 @@ static void sa_vl_arb_create(IN osm_sa_t * sa, IN osm_physp_t * p_physp,
 		cl_ntoh64(osm_physp_get_port_guid(p_physp)),
 		cl_ntoh16(lid), osm_physp_get_port_num(p_physp), block);
 
-	memset(p_rec_item, 0, sizeof(*p_rec_item));
+	memset(p_rec_item, 0, SA_VLA_RESP_SIZE);
 
-	p_rec_item->rec.lid = lid;
-	p_rec_item->rec.port_num = osm_physp_get_port_num(p_physp);
-	p_rec_item->rec.block_num = block;
-	p_rec_item->rec.vl_arb_tbl = *(osm_physp_get_vla_tbl(p_physp, block));
+	p_rec_item->resp.vlarb_rec.lid = lid;
+	p_rec_item->resp.vlarb_rec.port_num = osm_physp_get_port_num(p_physp);
+	p_rec_item->resp.vlarb_rec.block_num = block;
+	p_rec_item->resp.vlarb_rec.vl_arb_tbl = *(osm_physp_get_vla_tbl(p_physp, block));
 
 	cl_qlist_insert_tail(p_ctxt->p_list, &p_rec_item->list_item);
 
@@ -235,7 +233,7 @@ void osm_vlarb_rec_rcv_process(IN void *ctx, IN void *data)
 	if (sad_mad->method != IB_MAD_METHOD_GET &&
 	    sad_mad->method != IB_MAD_METHOD_GETTABLE) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 2A05: "
-			"Unsupported Method (%s)\n",
+			"Unsupported Method (%s) for a VLArbRecord request\n",
 			ib_get_sa_method_str(sad_mad->method));
 		osm_sa_send_error(sa, p_madw, IB_MAD_STATUS_UNSUP_METHOD_ATTR);
 		goto Exit;

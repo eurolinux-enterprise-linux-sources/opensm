@@ -4,6 +4,7 @@
  * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
+ * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -97,6 +98,8 @@ static void state_mgr_reset_node_count(IN cl_map_item_t * p_map_item,
 	osm_node_t *p_node = (osm_node_t *) p_map_item;
 
 	p_node->discovery_count = 0;
+
+	memset(p_node->physp_discovered, 0, sizeof(uint8_t) * p_node->physp_tbl_size);
 }
 
 static void state_mgr_reset_port_count(IN cl_map_item_t * p_map_item,
@@ -119,6 +122,7 @@ static void state_mgr_reset_switch_count(IN cl_map_item_t * p_map_item,
 static void state_mgr_get_sw_info(IN cl_map_item_t * p_object, IN void *context)
 {
 	osm_node_t *p_node;
+	osm_physp_t *p_physp;
 	osm_dr_path_t *p_dr_path;
 	osm_madw_context_t mad_context;
 	osm_switch_t *const p_sw = (osm_switch_t *) p_object;
@@ -128,20 +132,23 @@ static void state_mgr_get_sw_info(IN cl_map_item_t * p_object, IN void *context)
 	OSM_LOG_ENTER(sm->p_log);
 
 	p_node = p_sw->p_node;
-	p_dr_path =
-	    osm_physp_get_dr_path_ptr(osm_node_get_physp_ptr(p_node, 0));
+	p_physp = osm_node_get_physp_ptr(p_node, 0);
+	p_dr_path = osm_physp_get_dr_path_ptr(p_physp);
 
 	memset(&mad_context, 0, sizeof(mad_context));
 
 	mad_context.si_context.node_guid = osm_node_get_node_guid(p_node);
 	mad_context.si_context.set_method = FALSE;
 	mad_context.si_context.light_sweep = TRUE;
+	mad_context.si_context.lft_top_change = FALSE;
 
 	status = osm_req_get(sm, p_dr_path, IB_MAD_ATTR_SWITCH_INFO, 0,
+			     FALSE, ib_port_info_get_m_key(&p_physp->port_info),
 			     OSM_MSG_LIGHT_SWEEP_FAIL, &mad_context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3304: "
-			"Request for SwitchInfo failed (%s)\n",
+			"Request for SwitchInfo from 0x%" PRIx64 " failed (%s)\n",
+			cl_ntoh64(osm_node_get_node_guid(p_node)),
 			ib_get_err_str(status));
 
 	OSM_LOG_EXIT(sm->p_log);
@@ -179,15 +186,16 @@ static void state_mgr_get_remote_port_info(IN osm_sm_t * sm,
 	mad_context.pi_context.set_method = FALSE;
 	mad_context.pi_context.light_sweep = TRUE;
 	mad_context.pi_context.active_transition = FALSE;
+	mad_context.pi_context.client_rereg = FALSE;
 
 	/* note that with some negative logic - if the query failed it means
 	 * that there is no point in going to heavy sweep */
 	status = osm_req_get(sm, &rem_node_dr_path, IB_MAD_ATTR_PORT_INFO, 0,
-			     CL_DISP_MSGID_NONE, &mad_context);
+			     TRUE, 0, CL_DISP_MSGID_NONE, &mad_context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 332E: "
-			"Request for PortInfo failed (%s)\n",
-			ib_get_err_str(status));
+			"Request for remote PortInfo from 0x%" PRIx64 " failed (%s)\n",
+			cl_ntoh64(p_physp->port_guid), ib_get_err_str(status));
 
 Exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -243,7 +251,7 @@ static ib_api_status_t state_mgr_sweep_hop_0(IN osm_sm_t * sm)
 		osm_dr_path_init(&dr_path, 0, path_array);
 		CL_PLOCK_ACQUIRE(sm->p_lock);
 		status = osm_req_get(sm, &dr_path, IB_MAD_ATTR_NODE_INFO, 0,
-				     CL_DISP_MSGID_NONE, NULL);
+				     TRUE, 0, CL_DISP_MSGID_NONE, NULL);
 		CL_PLOCK_RELEASE(sm->p_lock);
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3305: "
@@ -438,7 +446,7 @@ static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 		osm_dr_path_init(&hop_1_path, 1, path_array);
 		CL_PLOCK_ACQUIRE(sm->p_lock);
 		status = osm_req_get(sm, &hop_1_path, IB_MAD_ATTR_NODE_INFO, 0,
-				     CL_DISP_MSGID_NONE, &context);
+				     TRUE, 0, CL_DISP_MSGID_NONE, &context);
 		CL_PLOCK_RELEASE(sm->p_lock);
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3311: "
@@ -470,6 +478,7 @@ static ib_api_status_t state_mgr_sweep_hop_1(IN osm_sm_t * sm)
 				CL_PLOCK_ACQUIRE(sm->p_lock);
 				status = osm_req_get(sm, &hop_1_path,
 						     IB_MAD_ATTR_NODE_INFO, 0,
+						     TRUE, 0,
 						     CL_DISP_MSGID_NONE,
 						     &context);
 				CL_PLOCK_RELEASE(sm->p_lock);
@@ -513,7 +522,9 @@ static void query_sm_info(cl_map_item_t * item, void *cxt)
 	context.smi_context.light_sweep = TRUE;
 
 	ret = osm_req_get(sm, osm_physp_get_dr_path_ptr(p_port->p_physp),
-			  IB_MAD_ATTR_SM_INFO, 0, CL_DISP_MSGID_NONE, &context);
+			  IB_MAD_ATTR_SM_INFO, 0, FALSE,
+			  ib_port_info_get_m_key(&p_port->p_physp->port_info),
+			  CL_DISP_MSGID_NONE, &context);
 	if (ret != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3314: "
 			"Failure requesting SMInfo (%s)\n",
@@ -552,12 +563,14 @@ static void state_mgr_update_node_desc(IN cl_map_item_t * obj, IN void *context)
 	mad_context.nd_context.node_guid = osm_node_get_node_guid(p_node);
 
 	status = osm_req_get(sm, osm_physp_get_dr_path_ptr(p_physp),
-			     IB_MAD_ATTR_NODE_DESC, 0, CL_DISP_MSGID_NONE,
-			     &mad_context);
+			     IB_MAD_ATTR_NODE_DESC, 0, FALSE,
+			     ib_port_info_get_m_key(&p_physp->port_info),
+			     CL_DISP_MSGID_NONE, &mad_context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR,
 			"ERR 331B: Failure initiating NodeDescription request "
-			"(%s)\n", ib_get_err_str(status));
+			"(%s) to 0x%016" PRIx64 "\n", ib_get_err_str(status),
+			cl_ntoh64(osm_node_get_node_guid(p_node)));
 
 exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -765,7 +778,7 @@ static osm_remote_sm_t *state_mgr_get_highest_sm(IN osm_sm_t * sm)
 	if (p_highest_sm != NULL) {
 		p_node = osm_get_node_by_guid(sm->p_subn, p_highest_sm->smi.guid);
 		OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
-			"Found higher SM with guid: %016" PRIx64 " (node %s)\n",
+			"Found higher priority SM with guid: %016" PRIx64 " (node %s)\n",
 			cl_ntoh64(p_highest_sm->smi.guid),
 			p_node ? p_node->print_desc : "UNKNOWN");
 	}
@@ -832,14 +845,17 @@ static void state_mgr_send_handover(IN osm_sm_t * sm, IN osm_remote_sm_t * p_sm)
 	CL_PLOCK_ACQUIRE(sm->p_lock);
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_port->p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_SM_INFO,
-			     IB_SMINFO_ATTR_MOD_HANDOVER, CL_DISP_MSGID_NONE,
-			     &context);
+			     IB_SMINFO_ATTR_MOD_HANDOVER, FALSE,
+			     ib_port_info_get_m_key(&p_port->p_physp->port_info),
+			     CL_DISP_MSGID_NONE, &context);
 	CL_PLOCK_RELEASE(sm->p_lock);
 
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3317: "
-			"Failure requesting SMInfo (%s)\n",
-			ib_get_err_str(status));
+			"Failure requesting SMInfo (%s), remote SM at 0x%"
+			PRIx64 " (node %s)\n",
+			ib_get_err_str(status), cl_ntoh64(p_port->guid),
+			p_port->p_node ? p_port->p_node->print_desc : "UNKNOWN");
 
 Exit:
 	OSM_LOG_EXIT(sm->p_log);
@@ -1022,8 +1038,8 @@ static void state_mgr_check_tbl_consistency(IN osm_sm_t * sm)
 				p_port_ref->p_node->print_desc,
 				p_port_ref->p_physp->port_num,
 				cl_ntoh64(osm_port_get_guid(p_port_stored)),
-				p_port_ref->p_node->print_desc,
-				p_port_ref->p_physp->port_num);
+				p_port_stored->p_node->print_desc,
+				p_port_stored->p_physp->port_num);
 
 		/* In any of these cases we want to set NULL in the
 		 * port_lid_tbl, since this entry is invalid. Also, make sure
@@ -1187,7 +1203,7 @@ static void do_sweep(osm_sm_t * sm)
 					"REROUTE COMPLETE");
 			osm_opensm_report_event(sm->p_subn->p_osm,
 						OSM_EVENT_ID_UCAST_ROUTING_DONE,
-						NULL);
+						(void *) UCAST_ROUTING_REROUTE);
 			return;
 		}
 	}
@@ -1208,6 +1224,7 @@ repeat_discovery:
 	sm->p_subn->min_ca_mtu = IB_MAX_MTU;
 	sm->p_subn->min_ca_rate = IB_MAX_RATE;
 	sm->p_subn->min_data_vls = IB_MAX_NUM_VLS - 1;
+	sm->p_subn->min_sw_data_vls = IB_MAX_NUM_VLS - 1;
 
 	/* rescan configuration updates */
 	if (!config_parsed && osm_subn_rescan_conf_files(sm->p_subn) < 0)
@@ -1383,7 +1400,8 @@ repeat_discovery:
 	OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 			"SWITCHES CONFIGURED FOR UNICAST");
 	osm_opensm_report_event(sm->p_subn->p_osm,
-				OSM_EVENT_ID_UCAST_ROUTING_DONE, NULL);
+				OSM_EVENT_ID_UCAST_ROUTING_DONE,
+				(void *) UCAST_ROUTING_HEAVY_SWEEP);
 
 	if (!sm->p_subn->opt.disable_multicast) {
 		osm_mcast_mgr_process(sm, TRUE);
@@ -1476,8 +1494,9 @@ repeat_discovery:
 		osm_sm_signal(sm, OSM_SIGNAL_SWEEP);
 
 	/* Write a new copy of our persistent guid2mkey database */
-	osm_db_store(sm->p_subn->p_g2m);
-	osm_db_store(sm->p_subn->p_neighbor);
+	osm_db_store(sm->p_subn->p_g2m, sm->p_subn->opt.fsync_high_avail_files);
+	osm_db_store(sm->p_subn->p_neighbor,
+		     sm->p_subn->opt.fsync_high_avail_files);
 }
 
 static void do_process_mgrp_queue(osm_sm_t * sm)

@@ -86,6 +86,7 @@ typedef struct _osmtest_opt {
 	uint8_t wait_time;
 	char *log_file;
 	boolean_t ignore_path_records;
+	boolean_t full_world_path_recs;
 } osmtest_opt_t;
 
 /*
@@ -127,6 +128,7 @@ typedef struct _osmtest {
 
 	osmtest_opt_t opt;
 	ib_port_attr_t local_port;
+	ib_gid_t local_port_gid;
 	subnet_t exp_subn;
 	cl_qpool_t node_pool;
 	cl_qpool_t port_pool;

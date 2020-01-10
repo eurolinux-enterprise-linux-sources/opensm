@@ -320,7 +320,7 @@ static void dump_lid_matrix(cl_map_item_t * item, FILE * file, void *cxt)
 				osm_switch_get_hop_count(p_sw, lid, port));
 		p_port = osm_get_port_by_lid_ho(&p_osm->subn, lid);
 		if (p_port)
-			fprintf(file, " # portguid 0x016%" PRIx64,
+			fprintf(file, " # portguid 0x%016" PRIx64,
 				cl_ntoh64(osm_port_get_guid(p_port)));
 		fprintf(file, "\n");
 	}
@@ -370,7 +370,7 @@ static void dump_topology_node(cl_map_item_t * item, FILE * file, void *cxt)
 	osm_node_t *p_nbnode;
 	osm_physp_t *p_physp, *p_default_physp, *p_rphysp;
 	uint8_t link_speed_act;
-	char *link_speed_act_str;
+	const char *link_speed_act_str;
 
 	if (!p_node->node_info.num_ports)
 		return;
@@ -493,8 +493,8 @@ static void dump_sl2vl_tbl(cl_map_item_t * item, FILE * file, void *cxt)
 	ib_slvl_table_t *p_tbl;
 	int i, n;
 	char buf[1024];
-	char * header_line =	"#in out : 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15";
-	char * separator_line = "#--------------------------------------------------------";
+	const char * header_line =	"#in out : 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15";
+	const char * separator_line = "#--------------------------------------------------------";
 
 	if (!num_ports)
 		return;
@@ -524,13 +524,11 @@ static void dump_sl2vl_tbl(cl_map_item_t * item, FILE * file, void *cxt)
 		}
 	} else {
 		p_physp = p_port->p_physp;
-		CL_ASSERT(p_physp->p_remote_physp);
 		p_tbl = osm_physp_get_slvl_tbl(p_physp, 0);
 		for (i = 0, n = 0; i < 16; i++)
 			n += sprintf(buf + n, " %-2d",
 					ib_slvl_table_get(p_tbl, i));
-		fprintf(file, "%-3d %-3d :%s\n",
-			0, p_physp->port_num, buf);
+		fprintf(file, "%-3d %-3d :%s\n", 0, 0, buf);
 	}
 
 	fprintf(file, "%s\n\n", separator_line);
@@ -564,9 +562,10 @@ static void print_node_report(cl_map_item_t * item, FILE * file, void *cxt)
 		p_pi = &p_physp->port_info;
 
 		/*
-		 * Port state is not defined for switch port 0
+		 * Port state is not defined for base switch port 0
 		 */
-		if (port_num == 0)
+		if (port_num == 0 &&
+		    ib_switch_info_is_enhanced_port0(&p_node->sw->switch_info) == FALSE)
 			fprintf(file, "     :");
 		else
 			fprintf(file, " %s :",
@@ -585,7 +584,10 @@ static void print_node_report(cl_map_item_t * item, FILE * file, void *cxt)
 		else
 			fprintf(file, "      :     :");
 
-		if (port_num != 0)
+		if (port_num == 0 &&
+		    ib_switch_info_is_enhanced_port0(&p_node->sw->switch_info) == FALSE)
+			fprintf(file, "      :     :      ");
+		else
 			fprintf(file, " %s : %s : %s ",
 				osm_get_mtu_str
 				(ib_port_info_get_neighbor_mtu(p_pi)),
@@ -595,8 +597,6 @@ static void print_node_report(cl_map_item_t * item, FILE * file, void *cxt)
 				 ib_port_info_get_link_speed_ext_active(p_pi),
 				 ib_port_info_get_port_state(p_pi),
 				 p_physp->ext_port_info.link_speed_active & FDR10));
-		else
-			fprintf(file, "      :     :      ");
 
 		if (osm_physp_get_port_guid(p_physp) == osm->subn.sm_port_guid)
 			fprintf(file, "* %016" PRIx64 " *",

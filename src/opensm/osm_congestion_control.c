@@ -362,7 +362,7 @@ int osm_congestion_control_setup(struct osm_opensm *p_osm)
 	/*
 	 * Do nothing unless the most recent routing attempt was successful.
 	 */
-	if (!p_osm->sm.p_subn->p_osm->routing_engine_used)
+	if (!p_osm->routing_engine_used)
 		return 0;
 
 	cc_setup_mad_data(&p_osm->sm);
@@ -377,6 +377,9 @@ int osm_congestion_control_setup(struct osm_opensm *p_osm)
 		ib_api_status_t status;
 
 		p_next = cl_qmap_next(p_next);
+
+		if (p_port->cc_unavailable_flag)
+			continue;
 
 		if (osm_node_get_type(p_node) == IB_NODE_TYPE_SWITCH) {
 			status = cc_send_sw_cong_setting(&p_osm->sm, p_node);
@@ -406,7 +409,7 @@ int osm_congestion_control_setup(struct osm_opensm *p_osm)
 
 int osm_congestion_control_wait_pending_transactions(struct osm_opensm *p_osm)
 {
-	osm_congestion_control_t *cc = &p_osm->sm.p_subn->p_osm->cc;
+	osm_congestion_control_t *cc = &p_osm->cc;
 
 	if (!p_osm->subn.opt.congestion_control)
 		return 0;
@@ -468,6 +471,18 @@ static void cc_rcv_mad(void *context, void *data)
 		goto Exit;
 	}
 
+	p_port->cc_timeout_count = 0;
+
+	if (p_cc_mad->header.status) {
+		if (p_cc_mad->header.status & IB_MAD_STATUS_UNSUP_METHOD
+		    || p_cc_mad->header.status & IB_MAD_STATUS_UNSUP_METHOD_ATTR)
+			p_port->cc_unavailable_flag = 1;
+		cl_plock_release(&p_osm->lock);
+		goto Exit;
+	}
+	else
+		p_port->cc_unavailable_flag = 0;
+
 	if (p_cc_mad->header.attr_id == IB_MAD_ATTR_SW_CONG_SETTING) {
 		ib_sw_cong_setting_t *p_sw_cong_setting;
 
@@ -506,24 +521,21 @@ static void cc_poller_send(osm_congestion_control_t *p_cc,
 {
 	osm_subn_opt_t *p_opt = &p_cc->subn->opt;
 	ib_api_status_t status;
+	osm_madw_context_t mad_context = p_madw->context;
 
 	status = osm_vendor_send(p_cc->bind_handle, p_madw, TRUE);
 	if (status == IB_SUCCESS) {
 		cl_atomic_inc(&p_cc->outstanding_mads_on_wire);
-		if (p_cc->outstanding_mads_on_wire >
-		    p_opt->cc_max_outstanding_mads)
+		while (p_cc->outstanding_mads_on_wire >
+		       (int32_t)p_opt->cc_max_outstanding_mads)
 			cl_event_wait_on(&p_cc->sig_mads_on_wire_continue,
 					 EVENT_NO_TIMEOUT,
 					 TRUE);
-	}
-	else {
-		osm_madw_context_t *mad_context = &p_madw->context;
-
+	} else
 		OSM_LOG(p_cc->log, OSM_LOG_ERROR, "ERR C104: "
 			"send failed to node 0x%" PRIx64 "port %u\n",
-			mad_context->cc_context.node_guid,
-			mad_context->cc_context.port);
-	}
+			mad_context.cc_context.node_guid,
+			mad_context.cc_context.port);
 }
 
 static void cc_poller(void *p_ptr)
@@ -617,6 +629,11 @@ static void cc_mad_recv_callback(osm_madw_t * p_madw, void *bind_context,
 
 	OSM_LOG_ENTER(p_cc->log);
 
+	CL_ASSERT(p_madw);
+
+	/* HACK - should be extended when supporting CC traps */
+	CL_ASSERT(p_req_madw != NULL);
+
 	osm_madw_copy_context(p_madw, p_req_madw);
 	osm_mad_pool_put(p_cc->mad_pool, p_req_madw);
 
@@ -637,23 +654,55 @@ static void cc_mad_send_err_callback(void *bind_context,
 {
 	osm_congestion_control_t *p_cc = bind_context;
 	osm_madw_context_t *p_madw_context = &p_madw->context;
+	osm_opensm_t *p_osm = p_cc->osm;
 	uint64_t node_guid = p_madw_context->cc_context.node_guid;
+	uint64_t port_guid = p_madw_context->cc_context.port_guid;
 	uint8_t port = p_madw_context->cc_context.port;
+	osm_port_t *p_port;
+	int log_flag = 1;
 
 	OSM_LOG_ENTER(p_cc->log);
 
-	OSM_LOG(p_cc->log, OSM_LOG_ERROR, "ERR C106: MAD Error (%s): "
-		"attr id = %u LID %u GUID 0x%016" PRIx64 " port %u "
-		"TID 0x%" PRIx64 "\n",
-		ib_get_err_str(p_madw->status),
-		p_madw->p_mad->attr_id,
-		cl_ntoh16(p_madw->mad_addr.dest_lid),
-		node_guid,
-		port,
-		cl_ntoh64(p_madw->p_mad->trans_id));
+	cl_plock_acquire(&p_osm->lock);
 
-	p_cc->subn->subnet_initialization_error = TRUE;
+	p_port = osm_get_port_by_guid(p_cc->subn, port_guid);
+	if (!p_port) {
+		OSM_LOG(p_cc->log, OSM_LOG_ERROR, "ERR C106A: "
+			"Port guid not in table 0x%" PRIx64 "\n",
+			port_guid);
+		cl_plock_release(&p_osm->lock);
+		goto Exit;
+	}
 
+	/* If timed out before, don't bothering logging again
+	 * we assume no CC support
+	 */
+	if (p_madw->status == IB_TIMEOUT
+	    && p_port->cc_timeout_count)
+		log_flag = 0;
+
+	if (log_flag)
+		OSM_LOG(p_cc->log, OSM_LOG_ERROR, "ERR C106: MAD Error (%s): "
+			"attr id = %u LID %u GUID 0x%016" PRIx64 " port %u "
+			"TID 0x%" PRIx64 "\n",
+			ib_get_err_str(p_madw->status),
+			p_madw->p_mad->attr_id,
+			cl_ntoh16(p_madw->mad_addr.dest_lid),
+			node_guid,
+			port,
+			cl_ntoh64(p_madw->p_mad->trans_id));
+
+	if (p_madw->status == IB_TIMEOUT) {
+		p_port->cc_timeout_count++;
+		if (p_port->cc_timeout_count > OSM_CC_TIMEOUT_COUNT_THRESHOLD
+		    && !p_port->cc_unavailable_flag)
+			p_port->cc_unavailable_flag++;
+	} else
+		p_cc->subn->subnet_initialization_error = TRUE;
+
+	cl_plock_release(&p_osm->lock);
+
+Exit:
 	osm_mad_pool_put(p_cc->mad_pool, p_madw);
 
 	decrement_outstanding_mads(p_cc);
