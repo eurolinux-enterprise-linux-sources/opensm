@@ -1,0 +1,135 @@
+OpenSM Performance manager HOWTO
+================================
+
+Introduction
+============
+
+OpenSM now includes a performance manager which collects Port counters from
+the subnet and stores them internally in OpenSM.
+
+Some of the features of the performance manager are:
+
+	1) Collect port data and error counters per v1.2 spec and store in
+	   64 bit internal counts.
+	2) Automatic reset of counters when they reach approximatly 3/4 full.
+	   (While not guarenteeing that counts will not be missed this does
+	   keep counts incrementing as best as possible given the current
+	   hardware limitations.)
+	3) Basic warnings in the OpenSM log on "critical" errors like symbol
+	   errors.
+	4) Automatically detects "outside" resets of counters and adjusts to
+	   continue collecting data.
+	5) Can be run when OpenSM is in standby or inactive states in
+	   addition to master state.
+
+Known issues are:
+
+	1) Data counters will be lost on high data rate links.  Sweeping the
+	   fabric fast enough for even a DDR link is not practical.
+	2) Default partition support only.
+
+
+Setup and Usage
+===============
+
+Using the Performance Manager consists of 3 steps:
+
+	1) compiling in support for the perfmgr (Optionally: the console
+	   socket as well)
+	2) enabling the perfmgr and console in opensm.conf
+	3) retrieving data which has been collected.
+	   3a) using console to "dump data"
+	   3b) using a plugin module to store the data to your own
+	       "database"
+
+Step 1: Compile in support for the Performance Manager
+------------------------------------------------------
+
+At this time it is really best to enable the console socket option as well.
+OpenSM can be run in an "interactive" mode.  But with the console socket
+option turned on one can also make a connection to a running OpenSM.  By
+default only "loopback" is enabled with the console with socket being a
+compile time option.  Regardless, please be aware of your network security
+configuration for as the commands presented in the console can affect the
+operation of your subnet.
+
+
+Step 2: Enable the perfmgr and console in opensm.conf
+-----------------------------------------------------
+
+Turning the Performance Manager on is pretty easy, set the following options in
+the opensm.conf config file.  (Default location is
+/usr/local/etc/opensm/opensm.conf)
+
+	# Turn it all on.
+	perfmgr TRUE
+
+	# sweep time in seconds
+	perfmgr_sweep_time_s 180
+
+	# Dump file to dump the events to
+	event_db_dump_file /var/log/opensm_port_counters.log
+
+Also enable the console socket and configure the port for it to listen to if
+desired.
+
+	# console [off|local|loopback]
+	console socket
+
+	# Telnet port for console (default 10000)
+	console_port 10000
+
+	"local" is only useful if you run OpenSM in the foreground.
+
+
+Step 3: retrieve data which has been collected
+----------------------------------------------
+
+Step 3a: Using console dump function
+------------------------------------
+
+The console command "perfmgr dump_counters" will dump counters to the file
+specified in the opensm.conf file.  In the example above
+"/var/log/opensm_port_counters.log"
+
+Example output is below:
+
+<snip>
+"SW1 wopr ISR9024D (MLX4 FW)" 0x8f10400411f56 port 1 (Since Mon May 12 13:27:14 2008)
+     symbol_err_cnt       : 0
+     link_err_recover     : 0
+     link_downed          : 0
+     rcv_err              : 0
+     rcv_rem_phys_err     : 0
+     rcv_switch_relay_err : 2
+     xmit_discards        : 0
+     xmit_constraint_err  : 0
+     rcv_constraint_err   : 0
+     link_integrity_err   : 0
+     buf_overrun_err      : 0
+     vl15_dropped         : 0
+     xmit_data            : 470435
+     rcv_data             : 405956
+     xmit_pkts            : 8954
+     rcv_pkts             : 6900
+     unicast_xmit_pkts    : 0
+     unicast_rcv_pkts     : 0
+     multicast_xmit_pkts  : 0
+     multicast_rcv_pkts   : 0
+</snip>
+
+
+Step 3b: Using a plugin module
+------------------------------
+
+If you want a more automated method of retrieving the data OpenSM provides a
+plugin interface to extend OpenSM.  The header file is osm_event_plugin.h.
+The functions you register with this interface will be called when data is
+collected.  You can then use that data as appropriate.
+
+An example plugin can be configured at compile time using the
+"--enable-default-event-plugin" option on the configure line.  This plugin is
+very simple.  It logs "events" received from the performance manager to a log
+file.  I don't recommend using this directly but rather use it as a template to
+create your own plugin.
+

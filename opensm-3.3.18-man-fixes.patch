@@ -1,0 +1,78 @@
+diff -up opensm-3.3.18/man/opensm.8.in.options opensm-3.3.18/man/opensm.8.in
+--- opensm-3.3.18/man/opensm.8.in.options	2014-10-17 13:14:58.462550601 -0400
++++ opensm-3.3.18/man/opensm.8.in	2014-10-17 13:22:19.587173079 -0400
+@@ -7,14 +7,14 @@ opensm \- InfiniBand subnet manager and
+ .B opensm
+ [\-\-version]]
+ [\-F | \-\-config <file_name>]
+-[\-c(reate-config) <file_name>]
+-[\-g(uid) <GUID in hex>]
+-[\-l(mc) <LMC>]
+-[\-p(riority) <PRIORITY>]
++[\-c | \-\-create-config <file_name>]
++[\-g | \-\-guid <GUID in hex>]
++[\-l | \-\-lmc <LMC>]
++[\-p | \-\-priority <PRIORITY>]
+ [\-\-subnet_prefix <PREFIX in hex>]
+ [\-\-smkey <SM_Key>]
+ [\-\-sm_sl <SL number>]
+-[\-r(eassign_lids)]
++[\-r | \-\-reassign_lids]
+ [\-R <engine name(s)> | \-\-routing_engine <engine name(s)>]
+ [\-\-do_mesh_analysis]
+ [\-\-lash_start_vl <vl number>]
+@@ -31,20 +31,21 @@ opensm \- InfiniBand subnet manager and
+ [\-H | \-\-max_reverse_hops <max reverse hops allowed>]
+ [\-X | \-\-guid_routing_order_file <path to file>]
+ [\-m | \-\-ids_guid_file <path to file>]
+-[\-o(nce)]
+-[\-s(weep) <interval>]
+-[\-t(imeout) <milliseconds>]
++[\-o | \-\-once]
++[\-s | \-\-sweep <interval>]
++[\-t | \-\-timeout <milliseconds>]
+ [\-\-retries <number>]
+ [\-\-maxsmps <number>]
+ [\-\-console [off | local | socket | loopback]]
+ [\-\-console-port <port>]
+-[\-i(gnore-guids) <equalize-ignore-guids-file>]
++[\-i | \-\-ignore-guids <equalize-ignore-guids-file>]
+ [\-w | \-\-hop_weights_file <path to file>]
+ [\-O | \-\-port_search_ordering_file <path to file>]
+ [\-O | \-\-dimn_ports_file <path to file>] (DEPRECATED)
+-[\-f <log file path> | \-\-log_file <log file path> ]
+-[\-L | \-\-log_limit <size in MB>] [\-e(rase_log_file)]
+-[\-P(config) <partition config file> ]
++[\-f | \-\-log_file <log file path> ]
++[\-L | \-\-log_limit <size in MB>]
++[\-e | \-\-erase_log_file]
++[\-P | \-\-Pconfig <partition config file> ]
+ [\-N | \-\-no_part_enforce] (DEPRECATED)
+ [\-Z | \-\-part_enforce [both | in | out | off]]
+ [\-W | \-\-allow_both_pkeys]
+@@ -61,8 +62,11 @@ opensm \- InfiniBand subnet manager and
+ [\-\-consolidate_ipv6_snm_req]
+ [\-\-log_prefix <prefix text>]
+ [\-\-torus_config <path to file>]
+-[\-v(erbose)] [\-V] [\-D <flags>] [\-d(ebug) <number>]
+-[\-h(elp)] [\-?]
++[\-v | \-\-verbose]
++[\-V]
++[\-D <flags>]
++[\-d | \-\-debug <number>]
++[\-h | \-? | \-\-help]
+ 
+ .SH DESCRIPTION
+ .PP
+@@ -511,10 +515,7 @@ option to enable as follows:
+  -d2  - Force log flushing after each log message
+  -d3  - Disable multicast support
+ .TP
+-\fB\-h\fR, \fB\-\-help\fR
+-Display this usage info then exit.
+-.TP
+-\fB\-?\fR
++\fB\-h\fR, \fB\-\-help\fR, \fB\-?\fR
+ Display this usage info then exit.
+ 
+ .SH ENVIRONMENT VARIABLES
