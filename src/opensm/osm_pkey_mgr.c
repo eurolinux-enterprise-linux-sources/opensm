@@ -247,7 +247,7 @@ pkey_mgr_update_pkey_entry(IN osm_sm_t * sm,
 			   (uint8_t *) block, sizeof(*block),
 			   IB_MAD_ATTR_P_KEY_TABLE,
 			   cl_hton32(attr_mod), FALSE, m_key,
-			   CL_DISP_MSGID_NONE, &context);
+			   0, CL_DISP_MSGID_NONE, &context);
 }
 
 static ib_api_status_t
@@ -310,7 +310,7 @@ pkey_mgr_enforce_partition(IN osm_log_t * p_log, osm_sm_t * sm,
 			     IB_MAD_ATTR_PORT_INFO,
 			     cl_hton32(osm_physp_get_port_num(p_physp)),
 			     FALSE, m_key,
-			     CL_DISP_MSGID_NONE, &context);
+			     0, CL_DISP_MSGID_NONE, &context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0511: "
 			"Failed to set PortInfo for "
@@ -815,6 +815,7 @@ int osm_pkey_mgr_process(IN osm_opensm_t * p_osm)
 	osm_port_t *p_port;
 	osm_switch_t *p_sw;
 	osm_physp_t *p_physp;
+	osm_pkey_tbl_t *p_pkey_tbl;
 	osm_node_t *p_remote_node;
 	uint8_t i;
 	int ret = 0;
@@ -830,6 +831,21 @@ int osm_pkey_mgr_process(IN osm_opensm_t * p_osm)
 			"osm_prtn_make_partitions() failed\n");
 		ret = -1;
 		goto _err;
+	}
+
+	if (!p_osm->subn.opt.keep_pkey_indexes) {
+		p_tbl = &p_osm->subn.port_guid_tbl;
+		p_next = cl_qmap_head(p_tbl);
+		while (p_next != cl_qmap_end(p_tbl)) {
+			p_port = (osm_port_t *) p_next;
+			p_next = cl_qmap_next(p_next);
+			if (!(p_physp = p_port->p_physp))
+				continue;
+			p_pkey_tbl = &p_physp->pkeys;
+			cl_map_remove_all(&p_pkey_tbl->keys);
+			cl_map_remove_all(&p_pkey_tbl->accum_pkeys);
+			p_pkey_tbl->last_pkey_idx=0;
+		}
 	}
 
 	/* populate the pending pkey entries by scanning all partitions */

@@ -359,6 +359,17 @@ BEGIN_C_DECLS
 */
 #define OSM_DEFAULT_TRANS_TIMEOUT_MILLISEC 200
 /***********/
+/****d* OpenSM: Base/OSM_DEFAULT_LONG_TRANS_TIMEOUT_MILLISEC
+* NAME
+*       OSM_DEFAULT_LONG_TRANS_TIMEOUT_MILLISEC
+*
+* DESCRIPTION
+*       Specifies the default "long" transaction timeout in milliseconds.
+*
+* SYNOPSIS
+*/
+#define OSM_DEFAULT_LONG_TRANS_TIMEOUT_MILLISEC 500
+/***********/
 /****d* OpenSM: Base/OSM_DEFAULT_SUBNET_TIMEOUT
 * NAME
 *	OSM_DEFAULT_SUBNET_TIMEOUT
@@ -907,6 +918,39 @@ typedef enum _osm_thread_state {
  */
 #define OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED (1 << 10)
 
+/****d* OpenSM: Base/OSM_CAP2_IS_SEND_ONLY_FULL_MEMBER_SUPPORTED
+ * Name
+ *	OSM_CAP2_IS_SEND_ONLY_FULL_MEMBER_SUPPORTED
+ *
+ * DESCRIPTION
+ *	Send only full member multicast join supported
+ *
+ * SYNOPSIS
+ */
+#define OSM_CAP2_IS_SEND_ONLY_FULL_MEMBER_SUPPORTED (1 << 12)
+
+/****d* OpenSM: Base/OSM_CAP2_IS_LINK_WIDTH_2X_SUPPORTED
+ * Name
+ *	OSM_CAP2_IS_LINK_WIDTH_2X_SUPPORTED
+ *
+ * DESCRIPTION
+ *	2x link widths supported
+ *
+ * SYNOPSIS
+ */
+#define OSM_CAP2_IS_LINK_WIDTH_2X_SUPPORTED (1 << 13)
+
+/****d* OpenSM: Base/OSM_CAP2_IS_LINK_SPEED_HDR_SUPPORTED
+ * Name
+ *	OSM_CAP2_IS_LINK_SPEED_HDR_SUPPORTED
+ *
+ * DESCRIPTION
+ *	HDR link speed supported
+ *
+ * SYNOPSIS
+ */
+#define OSM_CAP2_IS_LINK_SPEED_HDR_SUPPORTED (1 << 15)
+
 /****d* OpenSM: Base/osm_signal_t
 * NAME
 *	osm_signal_t
@@ -1011,6 +1055,11 @@ typedef enum _osm_sm_signal {
 #define OSM_VENDOR_ID_MELLANOX3     0x00258B
 #define OSM_VENDOR_ID_MELLANOX4     0xE41D2D
 #define OSM_VENDOR_ID_MELLANOX5     0x7CFE90
+#define OSM_VENDOR_ID_MELLANOX6     0xEC0D9A
+#define OSM_VENDOR_ID_MELLANOX7     0x248A07
+#define OSM_VENDOR_ID_MELLANOX8     0x506B4B
+#define OSM_VENDOR_ID_MELLANOX9     0x98039B
+#define OSM_VENDOR_ID_BULL          0x080038
 
 /* IPoIB Broadcast Defaults */
 #define OSM_IPOIB_BROADCAST_MGRP_QKEY 0x0b1b

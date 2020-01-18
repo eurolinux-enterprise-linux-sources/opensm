@@ -1,19 +1,28 @@
 %define _hardened_build 1
+%global __remake_config 1
 
 Name: opensm
-Version: 3.3.20
-Release: 3%{?dist}
+Version: 3.3.21
+Release: 2%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 License: GPLv2 or BSD
-Url: http://www.openfabrics.org/
-Source0: http://www.openfabrics.org/downloads/management/%{name}-%{version}.tar.gz
+Url: https://github.com/linux-rdma/opensm
+Source0: https://github.com/linux-rdma/opensm/releases/download/%{version}/%{name}-%{version}.tar.gz
 Source2: opensm.logrotate
 Source4: opensm.sysconfig
 Source5: opensm.service
 Source6: opensm.launch
 Source7: opensm.rwtab
 Patch0: opensm-3.3.13-prefix.patch
-BuildRequires: libibumad-devel, libtool, bison, flex, byacc, systemd
+Patch1: 0001-Use-precision-specifier-for-scanf.patch
+Patch2: 0002-osm_helper.c-Fix-lsea_str_fixed_width-OVERRUN-issue.patch
+Patch3: 0003-osm_helper.c-Make-50-string-proper-fixed-width-in-ls.patch
+Patch4: 0004-main.c-Remove-NO_EFFECT-code.patch
+Patch5: 0005-osm_-link_mgr-trap_rcv-.c-Check-the-return-value-of-.patch
+BuildRequires: libibumad-devel, libtool, bison, flex, byacc, systemd, gcc
+%if %{__remake_config}
+BuildRequires: libtool, autoconf, automake
+%endif
 Requires: %{name}-libs%{?_isa} = %{version}-%{release}, logrotate, rdma
 Requires(post): systemd
 Requires(preun): systemd
@@ -48,9 +57,17 @@ Static version of opensm libraries
 
 %prep
 %setup -q
-%patch0 -p1 -b .prefix
+%patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
 
 %build
+%if %{__remake_config}
+./autogen.sh
+%endif
 %configure --with-opensm-conf-sub-dir=rdma CFLAGS="$CFLAGS -fno-strict-aliasing"
 make %{?_smp_mflags}
 cd opensm
@@ -110,6 +127,14 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Wed Feb 13 2019 Honggang Li <honli@redhat.com> - 3.3.21-2
+- Fix a few defects
+- Resolves: bz1668201
+
+* Mon Jan 21 2019 Honggang Li <honli@redhat.com> - 3.3.21-1
+- Rebase to latest upstream release 3.3.21
+- Resolves: bz1535978, bz1653660
+
 * Tue Jun 19 2018 Honggang Li <honli@redhat.com> - 3.3.20-3
 - Fix BuildRequires
 - Resolves: bz1567528

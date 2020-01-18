@@ -658,7 +658,7 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 	uint8_t mtu_sel = 2;	/* exactly */
 	uint8_t mtu_required, mtu, port_mtu;
 	uint8_t rate_sel = 2;	/* exactly */
-	uint8_t rate_required, rate, port_rate;
+	uint8_t rate_required, rate, port_rate, new_rate;
 	const ib_port_info_t *p_pi;
 	osm_log_t *p_log = sa->p_log;
 	int extended;
@@ -679,7 +679,7 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 	 */
 
 	p_pi = &p_physp->port_info;
-	port_mtu = p_physp ? ib_port_info_get_mtu_cap(p_pi) : 0;
+	port_mtu = p_physp ? ib_port_info_get_neighbor_mtu(p_pi) : 0;
 	if (!(comp_mask & IB_MCR_COMPMASK_MTU) ||
 	    !(comp_mask & IB_MCR_COMPMASK_MTU_SEL) ||
 	    (mtu_sel = (p_mcm_rec->mtu >> 6)) == 3)
@@ -773,6 +773,15 @@ static boolean_t mgrp_request_is_realizable(IN osm_sa_t * sa,
 			OSM_LOG(p_log, OSM_LOG_VERBOSE,
 				"Calculated RATE %x is out of range\n", rate);
 			return FALSE;
+		}
+	}
+	if (sa->p_subn->opt.use_original_extended_sa_rates_only) {
+		new_rate = ib_path_rate_max_12xedr(rate);
+		if (new_rate != rate) {
+			OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+				"Rate decreased from %u to %u\n",
+				rate, new_rate);
+			rate = new_rate;
 		}
 	}
 	p_mcm_rec->rate = (rate_sel << 6) | rate;
@@ -1237,12 +1246,13 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	p_mgrp = osm_get_mgrp_by_mgid(sa->p_subn, &p_recvd_mcmember_rec->mgid);
 	if (!p_mgrp) {
 		/* check for JoinState.FullMember = 1 o15.0.1.9 */
-		if ((join_state & 0x01) != 0x01) {
+		if (!(join_state & (IB_JOIN_STATE_FULL | IB_JOIN_STATE_SEND_ONLY_FULL))) {
 			char gid_str[INET6_ADDRSTRLEN];
 			CL_PLOCK_RELEASE(sa->p_lock);
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B10: "
 				"Failed to create multicast group "
-				"because Join State != FullMember, "
+				"because Join State != FullMember | SendOnlyFullMember"
+				" - required for create, "
 				"MGID: %s from port 0x%016" PRIx64 " (%s)\n",
 				inet_ntop(AF_INET6,
 					  p_recvd_mcmember_rec->mgid.raw,
@@ -1335,6 +1345,12 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	    || !validate_port_caps(sa->p_log, p_mgrp, p_physp)
 	    || !(join_state != 0)) {
 		char gid_str[INET6_ADDRSTRLEN];
+		memset(gid_str, 0, sizeof(gid_str));
+
+		/* get the gid_str before the cleanup, the cleanup can free the pointer */
+		inet_ntop(AF_INET6, p_mgrp->mcmember_rec.mgid.raw, gid_str,
+			  sizeof gid_str);
+
 		/* since we might have created the new group we need to cleanup */
 		if (is_new_group)
 			osm_mgrp_cleanup(sa->p_subn, p_mgrp);
@@ -1343,9 +1359,7 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 			"validate_more_comp_fields, validate_port_caps, "
 			"or JoinState = 0 failed for MGID: %s port 0x%016" PRIx64
 			" (%s), sending IB_SA_MAD_STATUS_REQ_INVALID\n",
-			   inet_ntop(AF_INET6, p_mgrp->mcmember_rec.mgid.raw,
-				     gid_str, sizeof gid_str),
-			cl_ntoh64(portguid), p_port->p_node->print_desc);
+			gid_str, cl_ntoh64(portguid), p_port->p_node->print_desc);
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
@@ -1353,17 +1367,17 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	/* verify that the joining port is in the partition of the group */
 	if (!osm_physp_has_pkey(sa->p_log, p_mgrp->mcmember_rec.pkey, p_physp)) {
 		char gid_str[INET6_ADDRSTRLEN];
+		memset(gid_str, 0, sizeof(gid_str));
+		inet_ntop(AF_INET6, p_mgrp->mcmember_rec.mgid.raw, gid_str,
+			  sizeof(gid_str));
+
 		if (is_new_group)
 			osm_mgrp_cleanup(sa->p_subn, p_mgrp);
 		CL_PLOCK_RELEASE(sa->p_lock);
-		memset(gid_str, 0, sizeof(gid_str));
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B14: "
 			"Cannot join port 0x%016" PRIx64 " to MGID %s - "
 			"Port is not in partition of this MC group\n",
-			cl_ntoh64(portguid),
-			inet_ntop(AF_INET6,
-				  p_mgrp->mcmember_rec.mgid.raw,
-				  gid_str, sizeof(gid_str)));
+			cl_ntoh64(portguid), gid_str);
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
@@ -1375,11 +1389,15 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 	if (!is_new_group &&
 	    !validate_modify(sa, p_mgrp, osm_madw_get_mad_addr_ptr(p_madw),
 			     p_recvd_mcmember_rec, &p_mcm_alias_guid)) {
+		char gid_str[INET6_ADDRSTRLEN];
 		CL_PLOCK_RELEASE(sa->p_lock);
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B13: "
 			"validate_modify failed from port 0x%016" PRIx64
-			" (%s), sending IB_SA_MAD_STATUS_REQ_INVALID\n",
-			cl_ntoh64(portguid), p_port->p_node->print_desc);
+			" (%s) for MGID: %s, sending IB_SA_MAD_STATUS_REQ_INVALID\n",
+			cl_ntoh64(portguid), p_port->p_node->print_desc,
+			inet_ntop(AF_INET6,
+				  p_mgrp->mcmember_rec.mgid.raw,
+				  gid_str, sizeof(gid_str)));
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
@@ -1468,6 +1486,8 @@ static void mcmr_by_comp_mask(osm_sa_t * sa, const ib_member_rec_t * p_rcvd_rec,
 
 	OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
 		"Checking mlid:0x%X\n", cl_ntoh16(p_mgrp->mlid));
+
+	memset(&port_gid, 0, sizeof(port_gid));
 
 	/* first try to eliminate the group by MGID, MLID, or P_Key */
 	if ((IB_MCR_COMPMASK_MGID & comp_mask) &&

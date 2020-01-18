@@ -330,29 +330,32 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 							 local_phy_errors_threshold,
 							 sm->p_subn->opt.
 							 overrun_errors_threshold);
-		if (memcmp(&p_pi->error_threshold, &p_old_pi->error_threshold,
-			   sizeof(p_pi->error_threshold)))
+		if (p_pi->error_threshold != p_old_pi->error_threshold)
 			send_set = TRUE;
 
 		/*
 		   Set the easy common parameters for all port types,
 		   then determine the neighbor MTU.
 		 */
-		p_pi->link_width_enabled = p_old_pi->link_width_supported;
-		if (memcmp(&p_pi->link_width_enabled,
-			   &p_old_pi->link_width_enabled,
-			   sizeof(p_pi->link_width_enabled)))
-			send_set = TRUE;
+		if (sm->p_subn->opt.force_link_width &&
+		    (sm->p_subn->opt.force_link_width < IB_LINK_WIDTH_ACTIVE_2X ||
+		     (p_pi->capability_mask2 &
+		      IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED)) &&
+		    (sm->p_subn->opt.force_link_width != IB_LINK_WIDTH_SET_LWS ||
+		     p_pi->link_width_enabled != p_pi->link_width_supported)) {
+			p_pi->link_width_enabled = sm->p_subn->opt.force_link_width;
+			if (p_pi->link_width_enabled != p_old_pi->link_width_enabled)
+				send_set = TRUE;
+		}
 
 		if (sm->p_subn->opt.force_link_speed &&
-		    (sm->p_subn->opt.force_link_speed != 15 ||
+		    (sm->p_subn->opt.force_link_speed != IB_LINK_SPEED_SET_LSS ||
 		     ib_port_info_get_link_speed_enabled(p_pi) !=
 		     ib_port_info_get_link_speed_sup(p_pi))) {
 			ib_port_info_set_link_speed_enabled(p_pi,
 							    sm->p_subn->opt.
 							    force_link_speed);
-			if (memcmp(&p_pi->link_speed, &p_old_pi->link_speed,
-				   sizeof(p_pi->link_speed)))
+			if (p_pi->link_speed != p_old_pi->link_speed)
 				send_set = TRUE;
 		}
 
@@ -406,9 +409,8 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
 				     p_pi->link_speed_ext_enabled !=
 				     ib_port_info_get_link_speed_ext_sup(p_pi))) {
 					p_pi->link_speed_ext_enabled = sm->p_subn->opt.force_link_speed_ext;
-					if (memcmp(&p_pi->link_speed_ext_enabled,
-						   &p_old_pi->link_speed_ext_enabled,
-						   sizeof(p_pi->link_speed_ext_enabled)))
+					if (p_pi->link_speed_ext_enabled !=
+					    p_old_pi->link_speed_ext_enabled)
 						send_set = TRUE;
 				}
 			}
@@ -475,7 +477,7 @@ Send:
 	status = osm_req_set(sm, osm_physp_get_dr_path_ptr(p_physp),
 			     payload, sizeof(payload), IB_MAD_ATTR_PORT_INFO,
 			     attr_mod, FALSE, m_key,
-			     CL_DISP_MSGID_NONE, &context);
+			     0, CL_DISP_MSGID_NONE, &context);
 	if (status)
 		ret = -1;
 
@@ -493,7 +495,7 @@ SEND_EPI:
 				     payload2, sizeof(payload2),
 				     IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO,
 				     cl_hton32(port_num), FALSE, m_key,
-				     CL_DISP_MSGID_NONE, &context);
+				     0, CL_DISP_MSGID_NONE, &context);
 		if (status)
 			ret = -1;
 	}

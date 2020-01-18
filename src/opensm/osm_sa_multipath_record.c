@@ -379,9 +379,6 @@ static ib_api_status_t mpr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
-		p_pi0 = &p_physp0->port_info;
-		p0_extended = p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS;
 		p0_extended_rate = ib_port_info_compute_rate(p_pi, p0_extended);
 		if (ib_path_compare_rates(rate, p0_extended_rate) > 0)
 			rate = p0_extended_rate;
@@ -833,6 +830,7 @@ static void mpr_rcv_build_pr(IN osm_sa_t * sa,
 			     OUT ib_path_rec_t * p_pr)
 {
 	const osm_physp_t *p_src_physp, *p_dest_physp;
+	uint8_t rate, new_rate;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -854,7 +852,25 @@ static void mpr_rcv_build_pr(IN osm_sa_t * sa,
 	ib_path_rec_set_qos_class(p_pr, 0);
 	ib_path_rec_set_sl(p_pr, p_parms->sl);
 	p_pr->mtu = (uint8_t) (p_parms->mtu | 0x80);
-	p_pr->rate = (uint8_t) (p_parms->rate | 0x80);
+	rate = p_parms->rate;
+	if (sa->p_subn->opt.use_original_extended_sa_rates_only) {
+		new_rate = ib_path_rate_max_12xedr(rate);
+		if (new_rate != rate) {
+			OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+				"Rate decreased from %u to %u\n",
+				rate, new_rate);
+			rate = new_rate;
+		}
+	} else if (rate >= IB_PATH_RECORD_RATE_28_GBS) {
+		/*
+		 * If one of the new 2x or HDR rates, make sure that
+		 * src (and dest if reversible) ports support this
+		 */
+		rate = ib_path_rate_2x_hdr_fixups(&p_src_physp->port_info, rate);
+		if (p_parms->reversible)
+			 rate = ib_path_rate_2x_hdr_fixups(&p_dest_physp->port_info, rate);
+	}
+	p_pr->rate = (uint8_t) (rate | 0x80);
 
 	/* According to 1.2 spec definition Table 205 PacketLifeTime description,
 	   for loopback paths, packetLifeTime shall be zero. */

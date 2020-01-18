@@ -7,6 +7,7 @@
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2009-2015 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (C) 2012-2017 Tokyo Institute of Technology. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -186,9 +187,10 @@ static const char *module_name_str[] = {
 	"st.c",
 	"osm_ucast_dfsssp.c",
 	"osm_congestion_control.c",
+	"osm_ucast_nue.c",
 	/* Add new module names here ... */
 	/* FILE_ID define in those modules must be identical to index here */
-	/* last FILE_ID is currently 89 */
+	/* last FILE_ID is currently 90 */
 };
 
 #define MOD_NAME_STR_UNKNOWN_VAL (ARR_SIZE(module_name_str))
@@ -312,7 +314,7 @@ static int opts_strtoull(uint64_t *val, IN char *p_val_str,
 		return -1;
 	}
 	if (tmp_val > max_value || (tmp_val == ULLONG_MAX && errno == ERANGE)) {
-		log_report("-E- Parsing error in field %s, value out of range", p_key);
+		log_report("-E- Parsing error in field %s, value out of range\n", p_key);
 		return -1;
 	}
 	return 0;
@@ -762,7 +764,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "m_key", OPT_OFFSET(m_key), opts_parse_net64, NULL, 1 },
 	{ "sm_key", OPT_OFFSET(sm_key), opts_parse_net64, NULL, 1 },
 	{ "sa_key", OPT_OFFSET(sa_key), opts_parse_net64, NULL, 1 },
-	{ "subnet_prefix", OPT_OFFSET(subnet_prefix), opts_parse_net64, NULL, 1 },
+	{ "subnet_prefix", OPT_OFFSET(subnet_prefix), opts_parse_net64, NULL, 0 },
 	{ "m_key_lease_period", OPT_OFFSET(m_key_lease_period), opts_parse_net16, NULL, 1 },
 	{ "m_key_protection_level", OPT_OFFSET(m_key_protect_bits), opts_parse_uint8, NULL, 1 },
 	{ "m_key_lookup", OPT_OFFSET(m_key_lookup), opts_parse_boolean, NULL, 1 },
@@ -774,6 +776,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "console_port", OPT_OFFSET(console_port), opts_parse_uint16, NULL, 0 },
 	{ "transaction_timeout", OPT_OFFSET(transaction_timeout), opts_parse_uint32, NULL, 0 },
 	{ "transaction_retries", OPT_OFFSET(transaction_retries), opts_parse_uint32, NULL, 0 },
+	{ "long_transaction_timeout", OPT_OFFSET(long_transaction_timeout), opts_parse_uint32, NULL, 0 },
 	{ "max_msg_fifo_timeout", OPT_OFFSET(max_msg_fifo_timeout), opts_parse_uint32, NULL, 1 },
 	{ "sm_priority", OPT_OFFSET(sm_priority), opts_parse_uint8, opts_setup_sm_priority, 1 },
 	{ "lmc", OPT_OFFSET(lmc), opts_parse_uint8, NULL, 0 },
@@ -781,6 +784,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "max_op_vls", OPT_OFFSET(max_op_vls), opts_parse_uint8, NULL, 1 },
 	{ "force_link_speed", OPT_OFFSET(force_link_speed), opts_parse_uint8, NULL, 1 },
 	{ "force_link_speed_ext", OPT_OFFSET(force_link_speed_ext), opts_parse_uint8, NULL, 1 },
+	{ "force_link_width", OPT_OFFSET(force_link_width), opts_parse_uint8, NULL, 1 },
 	{ "fdr10", OPT_OFFSET(fdr10), opts_parse_uint8, NULL, 1 },
 	{ "reassign_lids", OPT_OFFSET(reassign_lids), opts_parse_boolean, NULL, 1 },
 	{ "ignore_other_sm", OPT_OFFSET(ignore_other_sm), opts_parse_boolean, NULL, 1 },
@@ -805,6 +809,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "port_profile_switch_nodes", OPT_OFFSET(port_profile_switch_nodes), opts_parse_boolean, NULL, 1 },
 	{ "sweep_on_trap", OPT_OFFSET(sweep_on_trap), opts_parse_boolean, NULL, 1 },
 	{ "routing_engine", OPT_OFFSET(routing_engine_names), opts_parse_charp, NULL, 0 },
+	{ "avoid_throttled_links", OPT_OFFSET(avoid_throttled_links), opts_parse_boolean, NULL, 0 },
 	{ "connect_roots", OPT_OFFSET(connect_roots), opts_parse_boolean, NULL, 1 },
 	{ "use_ucast_cache", OPT_OFFSET(use_ucast_cache), opts_parse_boolean, NULL, 0 },
 	{ "log_file", OPT_OFFSET(log_file), opts_parse_charp, NULL, 0 },
@@ -816,6 +821,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "no_partition_enforcement", OPT_OFFSET(no_partition_enforcement), opts_parse_boolean, NULL, 1 },
 	{ "part_enforce", OPT_OFFSET(part_enforce), opts_parse_charp, NULL, 1 },
 	{ "allow_both_pkeys", OPT_OFFSET(allow_both_pkeys), opts_parse_boolean, NULL, 0 },
+	{ "keep_pkey_indexes", OPT_OFFSET(keep_pkey_indexes), opts_parse_boolean, NULL, 1 },
 	{ "sm_assigned_guid", OPT_OFFSET(sm_assigned_guid), opts_parse_uint8, NULL, 1 },
 	{ "qos", OPT_OFFSET(qos), opts_parse_boolean, NULL, 1 },
 	{ "qos_policy_file", OPT_OFFSET(qos_policy_file), opts_parse_charp, NULL, 0 },
@@ -844,6 +850,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "drop_event_subscriptions", OPT_OFFSET(drop_event_subscriptions), opts_parse_boolean, NULL, 1 },
 	{ "ipoib_mcgroup_creation_validation", OPT_OFFSET(ipoib_mcgroup_creation_validation), opts_parse_boolean, NULL, 1 },
 	{ "mcgroup_join_validation", OPT_OFFSET(mcgroup_join_validation), opts_parse_boolean, NULL, 1 },
+	{ "use_original_extended_sa_rates_only", OPT_OFFSET(use_original_extended_sa_rates_only), opts_parse_boolean, NULL, 1 },
 	{ "use_optimized_slvl", OPT_OFFSET(use_optimized_slvl), opts_parse_boolean, NULL, 1 },
 	{ "fsync_high_avail_files", OPT_OFFSET(fsync_high_avail_files), opts_parse_boolean, NULL, 1 },
 #ifdef ENABLE_OSM_PERF_MGR
@@ -911,6 +918,8 @@ static const opt_rec_t opt_tbl[] = {
 	{ "consolidate_ipv6_snm_req", OPT_OFFSET(consolidate_ipv6_snm_req), opts_parse_boolean, NULL, 1 },
 	{ "lash_start_vl", OPT_OFFSET(lash_start_vl), opts_parse_uint8, NULL, 1 },
 	{ "sm_sl", OPT_OFFSET(sm_sl), opts_parse_uint8, NULL, 1 },
+	{ "nue_max_num_vls", OPT_OFFSET(nue_max_num_vls), opts_parse_uint8, NULL, 1 },
+	{ "nue_include_switches", OPT_OFFSET(nue_include_switches), opts_parse_boolean, NULL, 0 },
 	{ "log_prefix", OPT_OFFSET(log_prefix), opts_parse_charp, NULL, 1 },
 	{ "per_module_logging_file", OPT_OFFSET(per_module_logging_file), opts_parse_charp, NULL, 0 },
 	{ "quasi_ftree_indexing", OPT_OFFSET(quasi_ftree_indexing), opts_parse_boolean, NULL, 1 },
@@ -1253,7 +1262,7 @@ ib_api_status_t osm_subn_init(IN osm_subn_t * p_subn, IN osm_opensm_t * p_osm,
 	p_subn->max_ucast_lid_ho = IB_LID_UCAST_END_HO;
 	p_subn->max_mcast_lid_ho = IB_LID_MCAST_END_HO;
 	p_subn->min_ca_mtu = IB_MAX_MTU;
-	p_subn->min_ca_rate = IB_MAX_RATE;
+	p_subn->min_ca_rate = IB_PATH_RECORD_RATE_300_GBS;
 	p_subn->min_data_vls = IB_MAX_NUM_VLS - 1;
 	p_subn->min_sw_data_vls = IB_MAX_NUM_VLS - 1;
 	p_subn->ignore_existing_lfts = TRUE;
@@ -1472,16 +1481,44 @@ osm_mgrp_t *osm_get_mgrp_by_mgid(IN osm_subn_t * subn, IN ib_gid_t * mgid)
 	return NULL;
 }
 
-int is_mlnx_ext_port_info_supported(ib_net16_t devid)
+int is_mlnx_ext_port_info_supported(ib_net32_t vendid, ib_net16_t devid)
 {
+	uint32_t vendid_ho;
 	uint16_t devid_ho;
 
 	devid_ho = cl_ntoh16(devid);
-	if ((devid_ho >= 0xc738 && devid_ho <= 0xc73b) || devid_ho == 0xcb20 ||
-	    devid_ho == 0xcf08)
+	if ((devid_ho >= 0xc738 && devid_ho <= 0xc73b) ||
+	    devid_ho == 0xc839 || devid_ho == 0xcb20 ||
+	    devid_ho == 0xcf08 || devid_ho == 0xcf09 || devid_ho == 0xd2f0)
 		return 1;
-	if (devid_ho >= 0x1003 && devid_ho <= 0x1016)
+	if (devid_ho >= 0x1003 && devid_ho <= 0x101b)
 		return 1;
+	if (devid_ho == 0xa2d2)
+		return 1;
+
+	vendid_ho = cl_ntoh32(vendid);
+	if (vendid_ho == 0x119f) {
+		/* Bull Switch-X */
+		if (devid_ho == 0x1b02 || devid_ho == 0x1b50)
+			return 1;
+		/* Bull Switch-IB/IB2 */
+		if (devid_ho == 0x1ba0 ||
+		    (devid_ho >= 0x1bd0 && devid_ho <= 0x1bd5))
+			return 1;
+		/* Bull Connect-X3 */
+		if (devid_ho == 0x1b33 || devid_ho == 0x1b73 ||
+		    devid_ho == 0x1b40 || devid_ho == 0x1b41 ||
+		    devid_ho == 0x1b60 || devid_ho == 0x1b61)
+			return 1;
+		/* Bull Connect-IB */
+		if (devid_ho == 0x1b83 ||
+		    devid_ho == 0x1b93 || devid_ho == 0x1b94)
+			return 1;
+		/* Bull Connect-X4 */
+		if (devid_ho == 0x1bb4 || devid_ho == 0x1bb5 ||
+		    devid_ho == 0x1bc4)
+			return 1;
+	}
 	return 0;
 }
 
@@ -1520,6 +1557,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->console_port = OSM_DEFAULT_CONSOLE_PORT;
 	p_opt->transaction_timeout = OSM_DEFAULT_TRANS_TIMEOUT_MILLISEC;
 	p_opt->transaction_retries = OSM_DEFAULT_RETRY_COUNT;
+	p_opt->long_transaction_timeout = OSM_DEFAULT_LONG_TRANS_TIMEOUT_MILLISEC;
 	p_opt->max_smps_timeout = 1000 * p_opt->transaction_timeout *
 				  p_opt->transaction_retries;
 	/* by default we will consider waiting for 50x transaction timeout normal */
@@ -1528,8 +1566,9 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->lmc = OSM_DEFAULT_LMC;
 	p_opt->lmc_esp0 = FALSE;
 	p_opt->max_op_vls = OSM_DEFAULT_MAX_OP_VLS;
-	p_opt->force_link_speed = 15;
-	p_opt->force_link_speed_ext = 31;
+	p_opt->force_link_speed = IB_LINK_SPEED_SET_LSS;
+	p_opt->force_link_speed_ext = IB_LINK_SPEED_EXT_SET_LSES;
+	p_opt->force_link_width = IB_LINK_WIDTH_SET_LWS;
 	p_opt->fdr10 = 1;
 	p_opt->reassign_lids = FALSE;
 	p_opt->ignore_other_sm = FALSE;
@@ -1558,6 +1597,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->drop_event_subscriptions = FALSE;
 	p_opt->ipoib_mcgroup_creation_validation = TRUE;
 	p_opt->mcgroup_join_validation = TRUE;
+	p_opt->use_original_extended_sa_rates_only = FALSE;
 	p_opt->use_optimized_slvl = FALSE;
 	p_opt->fsync_high_avail_files = TRUE;
 #ifdef ENABLE_OSM_PERF_MGR
@@ -1590,6 +1630,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->no_partition_enforcement = FALSE;
 	p_opt->part_enforce = strdup(OSM_PARTITION_ENFORCE_BOTH);
 	p_opt->allow_both_pkeys = FALSE;
+	p_opt->keep_pkey_indexes = TRUE;
 	p_opt->sm_assigned_guid = 0;
 	p_opt->qos = FALSE;
 	p_opt->qos_policy_file = strdup(OSM_DEFAULT_QOS_POLICY_FILE);
@@ -1602,6 +1643,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->sweep_on_trap = TRUE;
 	p_opt->use_ucast_cache = FALSE;
 	p_opt->routing_engine_names = NULL;
+	p_opt->avoid_throttled_links = FALSE;
 	p_opt->connect_roots = FALSE;
 	p_opt->lid_matrix_dump_file = NULL;
 	p_opt->lfts_file = NULL;
@@ -1628,6 +1670,8 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->consolidate_ipv6_snm_req = FALSE;
 	p_opt->lash_start_vl = 0;
 	p_opt->sm_sl = OSM_DEFAULT_SL;
+	p_opt->nue_max_num_vls = 1;
+	p_opt->nue_include_switches = FALSE;
 	p_opt->log_prefix = NULL;
 	p_opt->per_module_logging_file = strdup(OSM_DEFAULT_PER_MOD_LOGGING_CONF_FILE);
 	subn_init_qos_options(&p_opt->qos_options, NULL);
@@ -2006,20 +2050,31 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 		p_opts->sm_priority = OSM_DEFAULT_SM_PRIORITY;
 	}
 
-	if ((15 < p_opts->force_link_speed) ||
-	    (p_opts->force_link_speed > 7 && p_opts->force_link_speed < 15)) {
+	if ((IB_LINK_SPEED_SET_LSS < p_opts->force_link_speed) ||
+	    (p_opts->force_link_speed > IB_LINK_SPEED_2_5_5_OR_10 &&
+	     p_opts->force_link_speed < IB_LINK_SPEED_SET_LSS)) {
 		log_report(" Invalid Cached Option Value:force_link_speed = %u:"
 			   "Using Default:%u\n", p_opts->force_link_speed,
-			   IB_PORT_LINK_SPEED_ENABLED_MASK);
-		p_opts->force_link_speed = IB_PORT_LINK_SPEED_ENABLED_MASK;
+			   IB_LINK_SPEED_SET_LSS);
+		p_opts->force_link_speed = IB_LINK_SPEED_SET_LSS;
 	}
 
-	if ((31 < p_opts->force_link_speed_ext) ||
-	    (p_opts->force_link_speed_ext > 3 && p_opts->force_link_speed_ext < 30)) {
+	if ((IB_LINK_SPEED_EXT_SET_LSES < p_opts->force_link_speed_ext) ||
+	    (p_opts->force_link_speed_ext > IB_LINK_SPEED_EXT_14_25_OR_50 &&
+	     p_opts->force_link_speed_ext < IB_LINK_SPEED_EXT_DISABLE)) {
 		log_report(" Invalid Cached Option Value:force_link_speed_ext = %u:"
 			   "Using Default:%u\n", p_opts->force_link_speed_ext,
-			   31);
-		p_opts->force_link_speed_ext = 31;
+			   IB_LINK_SPEED_EXT_SET_LSES);
+		p_opts->force_link_speed_ext = IB_LINK_SPEED_EXT_SET_LSES;
+	}
+
+	if ((IB_LINK_WIDTH_SET_LWS < p_opts->force_link_width) ||
+	    (p_opts->force_link_width > IB_LINK_WIDTH_1X_2X_4X_8X_OR_12X &&
+	     p_opts->force_link_width < IB_LINK_WIDTH_SET_LWS)) {
+		log_report(" Invalid Cached Option Value:force_link_width = %u:"
+			   "Using Default:%u\n", p_opts->force_link_width,
+			   IB_LINK_WIDTH_SET_LWS);
+		p_opts->force_link_width = IB_LINK_WIDTH_SET_LWS;
 	}
 
 	if (2 < p_opts->fdr10) {
@@ -2042,6 +2097,13 @@ int osm_subn_verify_config(IN osm_subn_opt_t * p_opts)
 			   " Using Default: %u",
 			   p_opts->max_wire_smps2, p_opts->max_wire_smps);
 		p_opts->max_wire_smps2 = p_opts->max_wire_smps;
+	}
+
+	if (p_opts->long_transaction_timeout < p_opts->transaction_timeout) {
+		log_report(" Invalid Cached Option Value: long_transaction_timeout = %u,"
+			   " Using transaction_timeout: %u",
+			   p_opts->long_transaction_timeout, p_opts->transaction_timeout);
+		p_opts->long_transaction_timeout = p_opts->transaction_timeout;
 	}
 
 	if (strcmp(p_opts->console, OSM_DISABLE_CONSOLE)
@@ -2356,13 +2418,56 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Force PortInfo:LinkSpeedExtEnabled on ports\n"
 		"# If 0, don't modify PortInfo:LinkSpeedExtEnabled on port\n"
 		"# Otherwise, use value for PortInfo:LinkSpeedExtEnabled on port\n"
-		"# Values are (MgtWG RefID #4722)\n"
+		"# Values are (MgtWG RefIDs #4722 and #9366)\n"
 		"#    1: 14.0625 Gbps\n"
 		"#    2: 25.78125 Gbps\n"
 		"#    3: 14.0625 Gbps or 25.78125 Gbps\n"
+		"#    4: 53.125 Gbps\n"
+		"#    5: 14.0625 Gbps or 53.125 Gbps\n"
+		"#    6: 25.78125 Gbps or 53.125 Gbps\n"
+		"#    7: 14.0625 Gbps, 25.78125 Gbps or 53.125 Gbps\n"
 		"#    30: Disable extended link speeds\n"
 		"#    Default 31: set to PortInfo:LinkSpeedExtSupported\n"
 		"force_link_speed_ext %u\n\n"
+		"# Force PortInfo:LinkWidthEnabled on switch ports\n"
+		"# If 0, don't modify PortInfo:LinkWidthEnabled on switch port\n"
+		"# Otherwise, use value for PortInfo:LinkWidthEnabled on switch port\n"
+		"# Values are (IB Spec 1.2.1, 14.2.5.6 Table 146 \"PortInfo\"\n"
+		"# augmented by MgtWG RefIDs #9306-9309)\n"
+		"#    1: 1x\n"
+		"#    2: 4x\n"
+		"#    3: 1x or 4x\n"
+		"#    4: 8x\n"
+		"#    5: 1x or 8x\n"
+		"#    6: 4x or 8x\n"
+		"#    7: 1x or 4x or 8x\n"
+		"#    8: 12x\n"
+		"#    9: 1x or 12x\n"
+		"#    10: 4x or 12x\n"
+		"#    11: 1x or 4x or 12x\n"
+		"#    12: 8x or 12x\n"
+		"#    13: 1x or 8x or 12x\n"
+		"#    14: 4x or 8x or 12x\n"
+		"#    15: 1x or 4x or 8x or 12x\n"
+		"#    16: 2x\n"
+		"#    17: 1x or 2x\n"
+		"#    18: 2x or 4x\n"
+		"#    19: 1x or 2x or 4x\n"
+		"#    20: 2x or 8x\n"
+		"#    21: 1x or 2x or 8x\n"
+		"#    22: 2x or 4x or 8x\n"
+		"#    23: 1x or 2x or 4x or 8x\n"
+		"#    24: 2x or 12x\n"
+		"#    25: 1x or 2x or 12x\n"
+		"#    26: 2x or 4x or 12x\n"
+		"#    27: 1x or 2x or 4x or 12x\n"
+		"#    28: 2x or 8x or 12x\n"
+		"#    29: 1x or 2x or 8x or 12x\n"
+		"#    30: 2x or 4x or 8x or 12x\n"
+		"#    31: 1x or 2x or 4x or 8x or 12x\n"
+		"#    32-254 Reserved\n"
+		"#    Default 255: set to PortInfo:LinkWidthSupported\n"
+		"force_link_width %u\n\n"
 		"# FDR10 on ports on devices that support FDR10\n"
 		"# Values are:\n"
 		"#    0: don't use fdr10 (no MLNX ExtendedPortInfo MADs)\n"
@@ -2397,6 +2502,7 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->max_op_vls,
 		p_opts->force_link_speed,
 		p_opts->force_link_speed_ext,
+		p_opts->force_link_width,
 		p_opts->fdr10,
 		p_opts->subnet_timeout,
 		p_opts->local_phy_errors_threshold,
@@ -2416,6 +2522,9 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"part_enforce %s\n\n"
 		"# Allow both full and limited membership on the same partition\n"
 		"allow_both_pkeys %s\n\n"
+		"# Keep current and take into account old pkey indexes\n"
+		"# during calculation of physical ports pkey tables\n"
+		"keep_pkey_indexes %s\n\n"
 		"# SM assigned GUID byte where GUID is formed from OpenFabrics OUI\n"
 		"# followed by 40 bits xy 00 ab cd ef where xy is the SM assigned GUID byte\n"
 		"# and ab cd ef is an SM autogenerated 24 bits\n"
@@ -2425,6 +2534,7 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->no_partition_enforcement ? "TRUE" : "FALSE",
 		p_opts->part_enforce,
 		p_opts->allow_both_pkeys ? "TRUE" : "FALSE",
+		p_opts->keep_pkey_indexes ?  "TRUE" : "FALSE",
 		p_opts->sm_assigned_guid);
 
 	fprintf(out,
@@ -2471,9 +2581,15 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# commas so that specific ordering of routing algorithms will\n"
 		"# be tried if earlier routing engines fail.\n"
 		"# Supported engines: minhop, updn, dnup, file, ftree, lash,\n"
-		"#    dor, torus-2QoS, dfsssp, sssp\n"
+		"#    dor, torus-2QoS, nue, dfsssp, sssp\n"
 		"routing_engine %s\n\n", p_opts->routing_engine_names ?
 		p_opts->routing_engine_names : null_str);
+
+	fprintf(out,
+		"# Routing engines will avoid throttled switch-to-switch links\n"
+		"# (supported by: nue, dfsssp, sssp; use FALSE if unsure)\n"
+		"avoid_throttled_links %s\n\n",
+		p_opts->avoid_throttled_links ? "TRUE" : "FALSE");
 
 	fprintf(out,
 		"# Connect roots (use FALSE if unsure)\n"
@@ -2548,6 +2664,21 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->lash_start_vl);
 
 	fprintf(out,
+		"# Maximum number of VLs for Nue routing algorithm (default: 1; to enforce\n"
+		"# deadlock-freedom even if QoS is not enabled). Set to 0 if Nue should\n"
+		"# automatically determine and choose maximum supported by the fabric, or\n"
+		"# any interger >= 1 (then Nue uses min(max_supported,nue_max_num_vls)\n"
+		"nue_max_num_vls %u\n\n",
+		p_opts->nue_max_num_vls);
+
+	fprintf(out,
+		"# If TRUE, then Nue assumes that switches will send/receive\n"
+		"# data traffic, too, and hence their paths are included in\n"
+		"# the deadlock-avoidance calculation (use FALSE if unsure)\n"
+		"nue_include_switches %s\n\n",
+		p_opts->nue_include_switches ? "TRUE" : "FALSE");
+
+	fprintf(out,
 		"# Port Shifting (use FALSE if unsure)\n"
 		"port_shifting %s\n\n",
 		p_opts->port_shifting ? "TRUE" : "FALSE");
@@ -2612,6 +2743,9 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"transaction_timeout %u\n\n"
 		"# The maximum number of retries allowed for a transaction to complete\n"
 		"transaction_retries %u\n\n"
+		"# The maximum time in [msec] allowed for a \"long\" transacrion to complete\n"
+		"# Currently, long transaction is only set of optimized SL2VLMappingTable\n"
+		"long_transaction_timeout %u\n\n"
 		"# Maximal time in [msec] a message can stay in the incoming message queue.\n"
 		"# If there is more than one message in the queue and the last message\n"
 		"# stayed in the queue more than this value, any SA request will be\n"
@@ -2624,6 +2758,7 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->max_smps_timeout,
 		p_opts->transaction_timeout,
 		p_opts->transaction_retries,
+		p_opts->long_transaction_timeout,
 		p_opts->max_msg_fifo_timeout,
 		p_opts->single_thread ? "TRUE" : "FALSE");
 
@@ -2643,6 +2778,12 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Validate multicast join parameters against multicast group\n"
 		"# parameters when MC group already exists\n"
 		"mcgroup_join_validation %s\n\n"
+		"# Use original extended SA rates only\n"
+		"# The original extended SA rates are up through 300 Gbps (12x EDR)\n"
+		"# Set to TRUE for subnets with old kernels/drivers that don't understand\n"
+		"# the new SA rates for 2x link width and/or HDR link speed (19-22)\n"
+		"# default is FALSE\n"
+		"use_original_extended_sa_rates_only %s\n\n"
 		"# Use Optimized SLtoVLMapping programming if supported by device\n"
 		"use_optimized_slvl %s\n\n"
 		"# Sync in memory files used for high availability with storage\n"
@@ -2653,6 +2794,7 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->drop_event_subscriptions ? "TRUE" : "FALSE",
 		p_opts->ipoib_mcgroup_creation_validation ? "TRUE" : "FALSE",
 		p_opts->mcgroup_join_validation ? "TRUE" : "FALSE",
+		p_opts->use_original_extended_sa_rates_only ? "TRUE" : "FALSE",
 		p_opts->use_optimized_slvl ? "TRUE" : "FALSE",
 		p_opts->fsync_high_avail_files ? "TRUE" : "FALSE");
 
@@ -2782,8 +2924,8 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Enable QoS setup\n"
 		"qos %s\n\n"
 		"# QoS policy file to be used\n"
-		"qos_policy_file %s\n"
-		"# Supress QoS MAD status errors\n"
+		"qos_policy_file %s\n\n"
+		"# Suppress QoS MAD status errors\n"
 		"suppress_sl2vl_mad_status_errors %s\n\n",
 		p_opts->qos ? "TRUE" : "FALSE", p_opts->qos_policy_file,
 		p_opts->suppress_sl2vl_mad_status_errors ? "TRUE" : "FALSE");

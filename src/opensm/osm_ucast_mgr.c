@@ -136,7 +136,7 @@ static void ucast_mgr_process_neighbor(IN osm_ucast_mgr_t * p_mgr,
 	osm_switch_t *p_sw;
 	cl_map_item_t *item;
 	uint16_t lid_ho;
-	uint8_t hops;
+	uint16_t hops;
 	osm_physp_t *p;
 
 	OSM_LOG_ENTER(p_mgr->p_log);
@@ -162,7 +162,7 @@ static void ucast_mgr_process_neighbor(IN osm_ucast_mgr_t * p_mgr,
 		if (hops <
 		    osm_switch_get_hop_count(p_this_sw, lid_ho, port_num)) {
 			if (osm_switch_set_hops
-			    (p_this_sw, lid_ho, port_num, hops) != 0)
+			    (p_this_sw, lid_ho, port_num, (uint8_t) hops) != 0)
 				OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A03: "
 					"cannot set hops for lid %u at switch 0x%"
 					PRIx64 "\n", lid_ho,
@@ -960,7 +960,7 @@ static void ucast_mgr_set_fwd_top(IN cl_map_item_t * p_map_item,
 				     sizeof(si), IB_MAD_ATTR_SWITCH_INFO,
 				     0, FALSE,
 				     ib_port_info_get_m_key(&p_physp->port_info),
-				     CL_DISP_MSGID_NONE, &context);
+				     0, CL_DISP_MSGID_NONE, &context);
 
 		if (status != IB_SUCCESS)
 			OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A06: "
@@ -1022,7 +1022,7 @@ static int set_lft_block(IN osm_switch_t *p_sw, IN osm_ucast_mgr_t *p_mgr,
 			     IB_SMP_DATA_SIZE, IB_MAD_ATTR_LIN_FWD_TBL,
 			     cl_hton32(block_id_ho), FALSE,
 			     ib_port_info_get_m_key(&p_physp->port_info),
-			     CL_DISP_MSGID_NONE, &context);
+			     0, CL_DISP_MSGID_NONE, &context);
 
 	if (status != IB_SUCCESS) {
 		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A10: "

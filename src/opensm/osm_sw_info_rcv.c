@@ -94,7 +94,7 @@ static void si_rcv_get_fwd_tbl(IN osm_sm_t * sm, IN osm_switch_t * p_sw)
 
 		status = osm_req_get(sm, p_dr_path, IB_MAD_ATTR_LIN_FWD_TBL,
 				     cl_hton32(block_id_ho), TRUE, 0,
-				     CL_DISP_MSGID_NONE, &context);
+				     0, CL_DISP_MSGID_NONE, &context);
 		if (status != IB_SUCCESS)
 			/* continue the loop despite the error */
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3603: "
@@ -176,7 +176,7 @@ static void si_rcv_get_mcast_fwd_tbl(IN osm_sm_t * sm, IN osm_switch_t * p_sw)
 			    osm_req_get(sm, p_dr_path,
 					IB_MAD_ATTR_MCAST_FWD_TBL,
 					cl_hton32(attr_mod_ho), TRUE, 0,
-					CL_DISP_MSGID_NONE, &context);
+					0, CL_DISP_MSGID_NONE, &context);
 			if (status != IB_SUCCESS)
 				/* continue the loop despite the error */
 				OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3607: "
@@ -352,7 +352,7 @@ static void si_rcv_get_sp0_info(IN osm_sm_t * sm, IN osm_node_t * node)
 
 	status = osm_req_get(sm, osm_physp_get_dr_path_ptr(physp),
 			     IB_MAD_ATTR_PORT_INFO, 0, TRUE, 0,
-			     CL_DISP_MSGID_NONE, &context);
+			     0, CL_DISP_MSGID_NONE, &context);
 	if (status != IB_SUCCESS)
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3611: "
 			"Failure initiating PortInfo request (%s)\n",
@@ -360,12 +360,14 @@ static void si_rcv_get_sp0_info(IN osm_sm_t * sm, IN osm_node_t * node)
 
 	if (ib_switch_info_is_enhanced_port0(&node->sw->switch_info) &&
 	    sm->p_subn->opt.fdr10) {
-		mlnx_epi_supported = is_mlnx_ext_port_info_supported(node->node_info.device_id);
+		mlnx_epi_supported = is_mlnx_ext_port_info_supported(
+						ib_node_info_get_vendor_id(&node->node_info),
+						node->node_info.device_id);
 		if (mlnx_epi_supported) {
 			status = osm_req_get(sm,
 					     osm_physp_get_dr_path_ptr(physp),
 					     IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO,
-					     0, TRUE, 0,
+					     0, TRUE, 0, 0,
 					     CL_DISP_MSGID_NONE, &context);
 			if (status != IB_SUCCESS)
 				OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 3616: "

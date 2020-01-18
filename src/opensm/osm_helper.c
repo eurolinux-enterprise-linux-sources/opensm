@@ -448,22 +448,26 @@ static int ordered_rates[] = {
 	6,	/*  4 - 30  Gbps */
 	2,	/*  5 - 5   Gbps */
 	5,	/*  6 - 20  Gbps */
-	8,	/*  7 - 40  Gbps */
-	9,	/*  8 - 60  Gbps */
-	11,	/*  9 - 80  Gbps */
-	12,	/* 10 - 120 Gbps */
+	9,	/*  7 - 40  Gbps */
+	10,	/*  8 - 60  Gbps */
+	13,	/*  9 - 80  Gbps */
+	14,	/* 10 - 120 Gbps */
 	4,	/* 11 -  14 Gbps (17 Gbps equiv) */
-	10,	/* 12 -  56 Gbps (68 Gbps equiv) */
-	14,	/* 13 - 112 Gbps (136 Gbps equiv) */
-	15,	/* 14 - 168 Gbps (204 Gbps equiv) */
+	12,	/* 12 -  56 Gbps (68 Gbps equiv) */
+	16,	/* 13 - 112 Gbps (136 Gbps equiv) */
+	17,	/* 14 - 168 Gbps (204 Gbps equiv) */
 	7,	/* 15 -  25 Gbps (31.25 Gbps equiv) */
-	13,	/* 16 - 100 Gbps (125 Gbps equiv) */
-	16,	/* 17 - 200 Gbps (250 Gbps equiv) */
-	17	/* 18 - 300 Gbps (375 Gbps equiv) */
+	15,	/* 16 - 100 Gbps (125 Gbps equiv) */
+	18,	/* 17 - 200 Gbps (250 Gbps equiv) */
+	19,	/* 18 - 300 Gbps (375 Gbps equiv) */
+	8,	/* 19 -  28 Gbps (35 Gbps equiv) */
+	11,	/* 20 -  50 Gbps (62.5 Gbps equiv) */
+	20,	/* 21 - 400 Gbps (500 Gbps equiv) */
+	21,	/* 22 - 600 Gbps (750 Gbps equiv) */
 };
 
-static int sprint_uint8_arr(char *buf, size_t size,
-			    const uint8_t * arr, size_t len)
+int sprint_uint8_arr(char *buf, size_t size,
+		     const uint8_t * arr, size_t len)
 {
 	int n;
 	unsigned int i;
@@ -674,9 +678,9 @@ static void dbg_get_capabilities_str(IN char *p_buf, IN uint32_t buf_size,
 				&total_len) != IB_SUCCESS)
 			return;
 	}
-	if (p_pi->capability_mask & IB_PORT_CAP_RESV13) {
+	if (p_pi->capability_mask & IB_PORT_CAP_HAS_CABLE_INFO) {
 		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
-				"IB_PORT_CAP_RESV13\n",
+				"IB_PORT_CAP_HAS_CABLE_INFO\n",
 				&total_len) != IB_SUCCESS)
 			return;
 	}
@@ -790,6 +794,54 @@ static void dbg_get_capabilities_str(IN char *p_buf, IN uint32_t buf_size,
 	}
 }
 
+static void dbg_get_capabilities2_str(IN char *p_buf, IN uint32_t buf_size,
+				      IN const char *p_prefix_str,
+				      IN const ib_port_info_t * p_pi)
+{
+	uint32_t total_len = 0;
+	char *p_local = p_buf;
+
+	strcpy(p_local, "Capability Mask2:\n");
+	p_local += strlen(p_local);
+
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_SET_NODE_DESC_SUPPORTED) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_SET_NODE_DESC_SUPPORTED\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_PORT_INFO_EXT_SUPPORTED) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_PORT_INFO_EXT_SUPPORTED\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_VIRT_SUPPORTED) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_VIRT_SUPPORTED\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_SWITCH_PORT_STATE_TBL_SUPP) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_SWITCH_PORT_STATE_TBL_SUPP\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+	if (p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_SPEED_HDR_SUPPORTED) {
+		if (dbg_do_line(&p_local, buf_size, p_prefix_str,
+				"IB_PORT_CAP2_IS_LINK_SPEED_HDR_SUPPORTED\n",
+				&total_len) != IB_SUCCESS)
+			return;
+	}
+}
+
 static void osm_dump_port_info_to_buf(IN ib_net64_t node_guid,
 				      IN ib_net64_t port_guid,
 				      IN uint8_t port_num,
@@ -890,10 +942,16 @@ void osm_dump_port_info(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 
 		osm_log(p_log, log_level, "%s", buf);
 
-		/*  show the capabilities mask */
+		/*  show the capabilities masks */
 		if (p_pi->capability_mask) {
 			dbg_get_capabilities_str(buf, BUF_SIZE, "\t\t\t\t",
 						 p_pi);
+			osm_log(p_log, log_level, "%s", buf);
+		}
+		if ((p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) &&
+		    p_pi->capability_mask2) {
+			dbg_get_capabilities2_str(buf, BUF_SIZE, "\t\t\t\t",
+						  p_pi);
 			osm_log(p_log, log_level, "%s", buf);
 		}
 	}
@@ -912,11 +970,17 @@ void osm_dump_port_info_v2(IN osm_log_t * p_log, IN ib_net64_t node_guid,
 
 		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 
-		/*  show the capabilities mask */
+		/*  show the capabilities masks */
 		if (p_pi->capability_mask) {
 			dbg_get_capabilities_str(buf, BUF_SIZE, "\t\t\t\t",
 						 p_pi);
 			osm_log_v2(p_log, log_level, file_id, "%s", buf);
+		}
+		if ((p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) &&
+		    p_pi->capability_mask2) {
+			dbg_get_capabilities2_str(buf, BUF_SIZE, "\t\t\t\t",
+						  p_pi);
+			osm_log(p_log, log_level, "%s", buf);
 		}
 	}
 }
@@ -1074,10 +1138,16 @@ void osm_dump_portinfo_record(IN osm_log_t * p_log,
 
 		osm_log(p_log, log_level, "%s", buf);
 
-		/*  show the capabilities mask */
+		/*  show the capabilities masks */
 		if (p_pi->capability_mask) {
 			dbg_get_capabilities_str(buf, BUF_SIZE, "\t\t\t\t",
 						 p_pi);
+			osm_log(p_log, log_level, "%s", buf);
+		}
+		if ((p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) &&
+		    p_pi->capability_mask2) {
+			dbg_get_capabilities2_str(buf, BUF_SIZE, "\t\t\t\t",
+						  p_pi);
 			osm_log(p_log, log_level, "%s", buf);
 		}
 	}
@@ -1096,11 +1166,17 @@ void osm_dump_portinfo_record_v2(IN osm_log_t * p_log,
 
 		osm_log_v2(p_log, log_level, file_id, "%s", buf);
 
-		/*  show the capabilities mask */
+		/*  show the capabilities masks */
 		if (p_pi->capability_mask) {
 			dbg_get_capabilities_str(buf, BUF_SIZE, "\t\t\t\t",
 						 p_pi);
 			osm_log_v2(p_log, log_level, file_id, "%s", buf);
+		}
+		if ((p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) &&
+		    p_pi->capability_mask2) {
+			dbg_get_capabilities2_str(buf, BUF_SIZE, "\t\t\t\t",
+						  p_pi);
+			osm_log(p_log, log_level, "%s", buf);
 		}
 	}
 }
@@ -3005,6 +3081,7 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 	static const char *supermicro_str = "SuperMicro";
 	static const char *openib_str = "OpenIB";
 	static const char *unknown_str = "Unknown";
+	static const char *bull_str = "Bull";
 
 	switch ((uint32_t) (guid_ho >> (5 * 8))) {
 	case OSM_VENDOR_ID_INTEL:
@@ -3014,6 +3091,10 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 	case OSM_VENDOR_ID_MELLANOX3:
 	case OSM_VENDOR_ID_MELLANOX4:
 	case OSM_VENDOR_ID_MELLANOX5:
+	case OSM_VENDOR_ID_MELLANOX6:
+	case OSM_VENDOR_ID_MELLANOX7:
+	case OSM_VENDOR_ID_MELLANOX8:
+	case OSM_VENDOR_ID_MELLANOX9:
 		return mellanox_str;
 	case OSM_VENDOR_ID_REDSWITCH:
 		return redswitch_str;
@@ -3069,6 +3150,8 @@ const char *osm_get_manufacturer_str(IN uint64_t guid_ho)
 		return supermicro_str;
 	case OSM_VENDOR_ID_OPENIB:
 		return openib_str;
+	case OSM_VENDOR_ID_BULL:
+		return bull_str;
 	default:
 		return unknown_str;
 	}
@@ -3100,12 +3183,20 @@ static const char *lwa_str_fixed_width[] = {
 	"???",
 	"???",
 	"???",
-	"12x"
+	"12x",
+	"???",
+	"???",
+	"???",
+	"???",
+	"???",
+	"???",
+	"???",
+	"2x "
 };
 
 const char *osm_get_lwa_str(IN uint8_t lwa)
 {
-	if (lwa > 8)
+	if (lwa > 16)
 		return lwa_str_fixed_width[0];
 	else
 		return lwa_str_fixed_width[lwa];
@@ -3122,7 +3213,8 @@ static const char *lsa_str_fixed_width[] = {
 static const char *lsea_str_fixed_width[] = {
 	"Std ",
 	"14  ",
-	"25  "
+	"25  ",
+	"50"
 };
 
 const char *osm_get_lsa_str(IN uint8_t lsa, IN uint8_t lsea, IN uint8_t state,
@@ -3136,7 +3228,7 @@ const char *osm_get_lsa_str(IN uint8_t lsa, IN uint8_t lsea, IN uint8_t state,
 		else
 			return lsa_str_fixed_width[lsa];
 	}
-	if (lsea > IB_LINK_SPEED_EXT_ACTIVE_25)
+	if (lsea > IB_LINK_SPEED_EXT_ACTIVE_50)
 		return lsa_str_fixed_width[3];
 	return lsea_str_fixed_width[lsea];
 }
@@ -3249,4 +3341,68 @@ int ib_path_rate_get_next(IN const int rate)
 	orate = ordered_rates[rate];
 	orate++;
 	return find_ordered_rate(orate);
+}
+
+int ib_path_rate_max_12xedr(IN const int rate)
+{
+	CL_ASSERT(rate >= IB_MIN_RATE && rate <= IB_MAX_RATE);
+
+	if (rate <= IB_PATH_RECORD_RATE_300_GBS)
+		return rate;
+
+	switch (rate) {
+	case IB_PATH_RECORD_RATE_28_GBS:
+		return IB_PATH_RECORD_RATE_25_GBS;
+	case IB_PATH_RECORD_RATE_50_GBS:
+		return IB_PATH_RECORD_RATE_40_GBS;
+	case IB_PATH_RECORD_RATE_400_GBS:
+	case IB_PATH_RECORD_RATE_600_GBS:
+		return IB_PATH_RECORD_RATE_300_GBS;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+int ib_path_rate_2x_hdr_fixups(IN const ib_port_info_t * p_pi,
+			       IN const int rate)
+{
+	int new_rate = rate;
+
+	CL_ASSERT(rate >= IB_MIN_RATE && rate <= IB_MAX_RATE);
+
+	switch (rate) {
+	case IB_PATH_RECORD_RATE_28_GBS:
+		/* 2x not supported but 2x only rate */
+		if (!(p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) ||
+		    (p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2 &&
+		    !(p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED))) {
+			if (p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS)
+				new_rate = IB_PATH_RECORD_RATE_25_GBS;
+			else
+				new_rate = IB_PATH_RECORD_RATE_20_GBS;
+		}
+		break;
+	case IB_PATH_RECORD_RATE_50_GBS:
+		/* neither 2x or HDR supported */
+		if (!(p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) ||
+		    (p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2 &&
+		    !(p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED) &&
+		    !(p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_SPEED_HDR_SUPPORTED)))
+			new_rate = IB_PATH_RECORD_RATE_40_GBS;
+		break;
+	case IB_PATH_RECORD_RATE_400_GBS:
+	case IB_PATH_RECORD_RATE_600_GBS:
+		/* HDR not supported but HDR only rate */
+		if (!(p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2) ||
+		    (p_pi->capability_mask & IB_PORT_CAP_HAS_CAP_MASK2 &&
+		    !(p_pi->capability_mask2 & IB_PORT_CAP2_IS_LINK_SPEED_HDR_SUPPORTED)))
+			new_rate = IB_PATH_RECORD_RATE_300_GBS;
+		break;
+	default:
+		break;
+	}
+
+	return new_rate;
 }

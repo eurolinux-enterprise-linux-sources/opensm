@@ -1286,20 +1286,24 @@ static void fabric_dump_hca_ordering(IN ftree_fabric_t * p_ftree)
 	ftree_sw_t *p_sw;
 	ftree_port_group_t *p_group_on_sw;
 	ftree_port_group_t *p_group_on_hca;
+	int rename_status = 0;
 	uint32_t i;
 	uint32_t j;
 	unsigned printed_hcas_on_leaf;
 
-	char path[1024];
+	char path[1024], path_tmp[1032];
 	FILE *p_hca_ordering_file;
 	const char *filename = "opensm-ftree-ca-order.dump";
 
 	snprintf(path, sizeof(path), "%s/%s",
 		 p_ftree->p_osm->subn.opt.dump_files_dir, filename);
-	p_hca_ordering_file = fopen(path, "w");
+
+	snprintf(path_tmp, sizeof(path_tmp), "%s.tmp", path);
+
+	p_hca_ordering_file = fopen(path_tmp, "w");
 	if (!p_hca_ordering_file) {
 		OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_ERROR, "ERR AB01: "
-			"cannot open file \'%s\': %s\n", filename,
+			"cannot open file \'%s\': %s\n", path_tmp,
 			strerror(errno));
 		return;
 	}
@@ -1342,6 +1346,13 @@ static void fabric_dump_hca_ordering(IN ftree_fabric_t * p_ftree)
 	/* done going through all the leaf switches */
 
 	fclose(p_hca_ordering_file);
+
+	rename_status = rename(path_tmp, path);
+	if (rename_status) {
+		OSM_LOG(&p_ftree->p_osm->log, OSM_LOG_ERROR, "ERR AB03: "
+			"cannot rename file \'%s\': %s\n", path_tmp,
+			strerror(errno));
+	}
 }				/* fabric_dump_hca_ordering() */
 
 /***************************************************/
@@ -1749,7 +1760,7 @@ static int fabric_create_leaf_switch_array(IN ftree_fabric_t * p_ftree)
 
 	if (first_leaf_idx >= last_leaf_idx) {
 		osm_log_v2(&p_ftree->p_osm->log, OSM_LOG_INFO, FILE_ID,
-			   "Faild to find leaf switches - topology is not "
+			   "Failed to find leaf switches - topology is not "
 			   "fat-tree\n");
 		res = -1;
 		goto Exit;
@@ -2540,10 +2551,8 @@ fabric_route_downgoing_by_going_up(IN ftree_fabric_t * p_ftree,
 		/* skip if target lid has been already set on remote switch fwd tbl (with a bigger hop count) */
 		if ((p_remote_sw->p_osm_sw->new_lft[target_lid] == OSM_NO_PATH)
 		    ||
-		    ((p_remote_sw->p_osm_sw->new_lft[target_lid] != OSM_NO_PATH)
-			     &&
-		      (current_hops + 1 <
-		       sw_get_least_hops(p_remote_sw, target_lid)))) {
+		    (current_hops + 1 <
+		     sw_get_least_hops(p_remote_sw, target_lid))) {
 
 			p_remote_sw->p_osm_sw->new_lft[target_lid] =
 				p_min_port->remote_port_num;
@@ -3917,13 +3926,16 @@ static int add_guid_item_to_map(void *cxt, uint64_t guid, char *p)
 {
 	cl_qmap_t *map = cxt;
 	name_map_item_t *item;
+	name_map_item_t *inserted_item;
 
 	item = malloc(sizeof(*item));
 	if (!item)
 		return -1;
 
 	item->guid = guid;
-	cl_qmap_insert(map, guid, &item->item);
+	inserted_item = (name_map_item_t *) cl_qmap_insert(map, guid, &item->item);
+	if (inserted_item != item)
+                free(item);
 
 	return 0;
 }

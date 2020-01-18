@@ -443,7 +443,7 @@ void osm_sa_respond(osm_sa_t *sa, osm_madw_t *madw, size_t attr_size,
 	if (sa_mad->method == IB_MAD_METHOD_GET && num_rec > 1) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4C05: "
 			"Got %u records for SubnAdmGet(%s) comp_mask 0x%016" PRIx64
-			"from requester LID %u\n",
+			" from requester LID %u\n",
 			num_rec, ib_get_sa_attr_str(sa_mad->attr_id),
 			cl_ntoh64(sa_mad->comp_mask),
 			cl_ntoh16(madw->mad_addr.dest_lid));
@@ -1125,7 +1125,7 @@ int osm_sa_db_file_load(osm_opensm_t * p_osm)
 	file_name = p_osm->subn.opt.sa_db_file;
 	if (!file_name) {
 		OSM_LOG(&p_osm->log, OSM_LOG_VERBOSE,
-			"sa db file name is not specifed. Skip restore\n");
+			"sa db file name is not specified. Skip restore\n");
 		return 0;
 	}
 

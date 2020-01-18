@@ -836,5 +836,101 @@ int ib_path_rate_get_next(IN const int rate);
 * SEE ALSO
 *********/
 
+/****f* IBA Base: Types/ib_path_rate_max_12xedr
+* NAME
+*	ib_path_rate_max_12xedr
+*
+* DESCRIPTION
+*	Obtains encoded rate from the set of "original" extended
+*	SA rates (up through and including 300 Gbps - 12x EDR).
+*
+* SYNOPSIS
+*/
+int ib_path_rate_max_12xedr(IN const int rate);
+
+/*
+* PARAMETERS
+*	rate
+*		[in] Encoded path rate.
+*
+* RETURN VALUES
+*	Returns an int indicating the encoded rate
+*	with a maximum of 300 Gbps (12x EDR).
+*	For new rates (relating to 2x and HDR), the
+*	nearest "original" extended rate lower than
+*	the 2x or HDR related rate is returned.
+*	0 if none can be found.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_path_rate_2x_hdr_fixups
+* NAME
+*	ib_path_rate_2x_hdr_fixups
+*
+* DESCRIPTION
+*	Fixes encoded rate based on whether 2x link width
+*	and/or HDR are supported.
+*
+* SYNOPSIS
+*/
+int ib_path_rate_2x_hdr_fixups(IN const ib_port_info_t * p_pi,
+			       IN const int rate);
+
+/*
+* PARAMETERS
+*	p_pi
+*		[in] Pointer to the PortInfo attribute
+*	rate
+*		[in] Encoded path rate.
+*
+* RETURN VALUES
+*	Returns an int indicating the fixed up encoded rate
+*	based on whether 2x link width and/or HDR are supported.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+/****f* OpenSM: Helper/sprint_uint8_arr
+* NAME
+*	sprint_uint8_arr
+*
+* DESCRIPTION
+*	Create the comma-separated string of numbers
+*	from input array of uint8 numbers
+*	(e.g. "1,2,3,4")
+*
+* SYNOPSIS
+*/
+int sprint_uint8_arr(IN char *buf, IN size_t size,
+		     IN const uint8_t * arr, IN size_t len);
+
+/*
+* PARAMETERS
+*	buf
+*		[in] Pointer to the output buffer
+*
+*	size
+*		[in] Size of the output buffer
+*
+*	arr
+*		[in] Pointer to the input array of uint8
+*
+*	len
+*		[in] Size of the input array
+*
+* RETURN VALUES
+*	Return the number of characters printed to the buffer
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
+
 END_C_DECLS
 #endif				/* _OSM_HELPER_H_ */

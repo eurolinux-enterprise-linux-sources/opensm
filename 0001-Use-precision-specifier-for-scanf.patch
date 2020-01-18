@@ -1,0 +1,44 @@
+From 2b9cf6fe72592379e4be1f2129c8031f0c2b5273 Mon Sep 17 00:00:00 2001
+From: Honggang Li <honli@redhat.com>
+Date: Fri, 12 Oct 2018 19:54:56 +0800
+Subject: [PATCH] Use precision specifier for scanf
+
+If user input a string larger than the length of buffer, the stack memory
+will be corrupted.
+
+Signed-off-by: Honggang Li <honli@redhat.com>
+Signed-off-by: Hal Rosenstock <hal@mellanox.com>
+---
+ opensm/main.c     | 2 +-
+ osmtest/osmtest.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/opensm/main.c b/opensm/main.c
+index 2d23fe2befef..8def799cea0f 100644
+--- a/opensm/main.c
++++ b/opensm/main.c
+@@ -499,7 +499,7 @@ static ib_net64_t get_port_guid(IN osm_opensm_t * p_osm, uint64_t port_guid)
+ 		fflush(stdout);
+ 		if (scanf("%u", &choice) <= 0) {
+ 			char junk[128];
+-			if (scanf("%s", junk) <= 0)
++			if (scanf("%127s", junk) <= 0)
+ 				printf("\nError: Cannot scan!\n");
+ 		} else if (choice == 0)
+ 			return 0;
+diff --git a/osmtest/osmtest.c b/osmtest/osmtest.c
+index 281b247a2e69..fa2e0704b8cc 100644
+--- a/osmtest/osmtest.c
++++ b/osmtest/osmtest.c
+@@ -7352,7 +7352,7 @@ osmtest_get_user_port(IN osmtest_t * const p_osmt,
+ 		fflush(stdout);
+ 		if (scanf("%u", &choice) <= 0) {
+ 			char junk[256];
+-			if (scanf("%s", junk) <= 0)
++			if (scanf("%255s", junk) <= 0)
+ 				printf("\nError: Cannot scan!\n");
+ 		} else if (choice && choice <= num_ports)
+ 			break;
+-- 
+2.15.0-rc1
+

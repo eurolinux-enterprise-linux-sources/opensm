@@ -1,7 +1,8 @@
-diff -up opensm-3.3.18/man/opensm.8.in.prefix opensm-3.3.18/man/opensm.8.in
---- opensm-3.3.18/man/opensm.8.in.prefix	2014-07-04 05:20:36.000000000 -0400
-+++ opensm-3.3.18/man/opensm.8.in	2014-10-17 12:36:56.914220493 -0400
-@@ -11,6 +11,7 @@ opensm \- InfiniBand subnet manager and
+diff --git a/man/opensm.8.in b/man/opensm.8.in
+index df55768..79e1bfb 100644
+--- a/man/opensm.8.in
++++ b/man/opensm.8.in
+@@ -11,6 +11,7 @@ opensm \- InfiniBand subnet manager and administration (SM/SA)
  [\-g(uid) <GUID in hex>]
  [\-l(mc) <LMC>]
  [\-p(riority) <PRIORITY>]
@@ -9,12 +10,12 @@ diff -up opensm-3.3.18/man/opensm.8.in.prefix opensm-3.3.18/man/opensm.8.in
  [\-\-smkey <SM_Key>]
  [\-\-sm_sl <SL number>]
  [\-r(eassign_lids)]
-@@ -135,6 +136,13 @@ This will effect the handover cases, whe
+@@ -136,6 +137,13 @@ This will effect the handover cases, where master
  is chosen by priority and GUID.  Range goes from 0
  (default and lowest priority) to 15 (highest).
  .TP
 +\fB\-\-subnet_prefix\fR <PREFIX in hex>
-+This option specifies the subnet prefix to use
++This option specifies the subnet prefix to use in
 +on the fabric.  The default prefix is
 +0xfe80000000000000.  OpenMPI in particular requires
 +separate fabrics plugged into different ports to
@@ -23,10 +24,11 @@ diff -up opensm-3.3.18/man/opensm.8.in.prefix opensm-3.3.18/man/opensm.8.in
  \fB\-\-smkey\fR <SM_Key value>
  This option specifies the SM\'s SM_Key (64 bits).
  This will effect SM authentication.
-diff -up opensm-3.3.18/opensm/main.c.prefix opensm-3.3.18/opensm/main.c
---- opensm-3.3.18/opensm/main.c.prefix	2014-07-04 05:06:48.000000000 -0400
-+++ opensm-3.3.18/opensm/main.c	2014-10-17 12:39:33.446663794 -0400
-@@ -160,6 +160,9 @@ static void show_usage(void)
+diff --git a/opensm/main.c b/opensm/main.c
+index 2d23fe2..b4bb348 100644
+--- a/opensm/main.c
++++ b/opensm/main.c
+@@ -161,6 +161,9 @@ static void show_usage(void)
  	       "          This will effect the handover cases, where master\n"
  	       "          is chosen by priority and GUID.  Range goes\n"
  	       "          from 0 (lowest priority) to 15 (highest).\n\n");
@@ -36,7 +38,7 @@ diff -up opensm-3.3.18/opensm/main.c.prefix opensm-3.3.18/opensm/main.c
  	printf("--smkey, -k <SM_Key>\n"
  	       "          This option specifies the SM's SM_Key (64 bits).\n"
  	       "          This will effect SM authentication.\n"
-@@ -656,6 +659,7 @@ int main(int argc, char *argv[])
+@@ -665,6 +668,7 @@ int main(int argc, char *argv[])
  		{"once", 0, NULL, 'o'},
  		{"reassign_lids", 0, NULL, 'r'},
  		{"priority", 1, NULL, 'p'},
@@ -44,11 +46,11 @@ diff -up opensm-3.3.18/opensm/main.c.prefix opensm-3.3.18/opensm/main.c
  		{"smkey", 1, NULL, 'k'},
  		{"routing_engine", 1, NULL, 'R'},
  		{"ucast_cache", 0, NULL, 'A'},
-@@ -998,6 +1002,11 @@ int main(int argc, char *argv[])
+@@ -1008,6 +1012,11 @@ int main(int argc, char *argv[])
  			printf(" Priority = %d\n", temp);
  			break;
  
-+		case 15:
++		case 16:
 +			opt.subnet_prefix = cl_hton64(strtoull(optarg, NULL, 16));
 +			printf(" Subnet_Prefix = <0x%" PRIx64 ">\n", cl_hton64(opt.subnet_prefix));
 +			break;

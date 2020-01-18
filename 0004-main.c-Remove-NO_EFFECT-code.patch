@@ -1,0 +1,37 @@
+From bd289653605c39555cf8deb96b6093ec07b8b0dd Mon Sep 17 00:00:00 2001
+From: Honggang Li <honli@redhat.com>
+Date: Tue, 22 Jan 2019 11:06:30 +0800
+Subject: [PATCH 4/5] main.c: Remove NO_EFFECT code
+
+Issue was found by Coverity.
+
+opensm-3.3.21/opensm/main.c:1165: unsigned_compare: This less-than-zero comparison of an unsigned value is never true. "temp < 0U".
+//  1163|   		case 15:
+//  1164|   			temp = strtoul(optarg, NULL, 0);
+//  1165|-> 			if (temp < 0 || temp >= IB_MAX_NUM_VLS) {
+//  1166|   				fprintf(stderr,
+//  1167|   					"ERROR: maximum #VLs for nue routing must be between 0
+
+Signed-off-by: Honggang Li <honli@redhat.com>
+Signed-off-by: Hal Rosenstock <hal@mellanox.com>
+Signed-off-by: Honggang Li <honli@redhat.com>
+---
+ opensm/main.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/opensm/main.c b/opensm/main.c
+index 56bf7d5c588a..9932cd667378 100644
+--- a/opensm/main.c
++++ b/opensm/main.c
+@@ -1165,7 +1165,7 @@ int main(int argc, char *argv[])
+ 			break;
+ 		case 15:
+ 			temp = strtoul(optarg, NULL, 0);
+-			if (temp < 0 || temp >= IB_MAX_NUM_VLS) {
++			if (temp >= IB_MAX_NUM_VLS) {
+ 				fprintf(stderr,
+ 					"ERROR: maximum #VLs for nue routing must be between 0 and %d\n",
+ 					IB_MAX_NUM_VLS);
+-- 
+2.15.0-rc1
+

@@ -1,0 +1,28 @@
+From d1cbc9e5309c2009f0d73f4181cd8dde0505cd59 Mon Sep 17 00:00:00 2001
+From: Hal Rosenstock <hal@mellanox.com>
+Date: Tue, 22 Jan 2019 18:23:27 +0200
+Subject: [PATCH 3/5] osm_helper.c: Make "50" string proper fixed width in
+ lsea_str_fixed_width
+
+Signed-off-by: Hal Rosenstock <hal@mellanox.com>
+Signed-off-by: Honggang Li <honli@redhat.com>
+---
+ opensm/osm_helper.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/opensm/osm_helper.c b/opensm/osm_helper.c
+index f1219b225703..9791172f212c 100644
+--- a/opensm/osm_helper.c
++++ b/opensm/osm_helper.c
+@@ -3215,7 +3215,7 @@ static const char *lsea_str_fixed_width[] = {
+ 	"14  ",
+ 	"25  ",
+ 	"????",
+-	"50"
++	"50  "
+ };
+ 
+ const char *osm_get_lsa_str(IN uint8_t lsa, IN uint8_t lsea, IN uint8_t state,
+-- 
+2.15.0-rc1
+

@@ -372,9 +372,6 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		if (mtu > ib_port_info_get_mtu_cap(p_pi))
 			mtu = ib_port_info_get_mtu_cap(p_pi);
 
-		p_physp0 = osm_node_get_physp_ptr((osm_node_t *)p_node, 0);
-		p_pi0 = &p_physp0->port_info;
-		p0_extended = p_pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS;
 		p0_extended_rate = ib_port_info_compute_rate(p_pi, p0_extended);
 		if (ib_path_compare_rates(rate, p0_extended_rate) > 0)
 			rate = p0_extended_rate;
@@ -861,7 +858,11 @@ ib_api_status_t osm_get_path_params(IN osm_sa_t * sa,
 	osm_alias_guid_t *p_src_alias_guid, *p_dest_alias_guid;
 	ib_path_rec_t pr;
 
+	if (!p_src_port || !slid_ho || !p_dest_port || !dlid_ho)
+		return IB_INVALID_PARAMETER;
+
 	memset(&pr, 0, sizeof(ib_path_rec_t));
+
 	p_src_alias_guid = osm_get_alias_guid_by_guid(sa->p_subn,
 						      osm_port_get_guid(p_src_port));
 	p_dest_alias_guid = osm_get_alias_guid_by_guid(sa->p_subn,
@@ -882,7 +883,9 @@ static void pr_rcv_build_pr(IN osm_sa_t * sa,
 			    IN const osm_path_parms_t * p_parms,
 			    OUT ib_path_rec_t * p_pr)
 {
-	const osm_physp_t *p_src_physp, *p_dest_physp;
+	const osm_physp_t *p_src_physp = NULL, *p_dest_physp = NULL;
+	osm_port_t *p_port;
+	uint8_t rate, new_rate;
 
 	OSM_LOG_ENTER(sa->p_log);
 
@@ -917,7 +920,40 @@ static void pr_rcv_build_pr(IN osm_sa_t * sa,
 	ib_path_rec_set_sl(p_pr, p_parms->sl);
 	ib_path_rec_set_qos_class(p_pr, 0);
 	p_pr->mtu = (uint8_t) (p_parms->mtu | 0x80);
-	p_pr->rate = (uint8_t) (p_parms->rate | 0x80);
+	rate = p_parms->rate;
+	if (sa->p_subn->opt.use_original_extended_sa_rates_only) {
+		new_rate = ib_path_rate_max_12xedr(rate);
+		if (new_rate != rate) {
+			OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+				"Rate decreased from %u to %u\n",
+				rate, new_rate);
+			rate = new_rate;
+		}
+	} else if (rate >= IB_PATH_RECORD_RATE_28_GBS) {
+		/*
+		 * If one of the new 2x or HDR rates, make sure that
+		 * src (and dest if reversible) ports support this
+		 */
+		if (p_src_physp == NULL) {
+			p_port = osm_get_port_by_lid_ho(sa->p_subn, src_lid_ho);
+			if (p_port)
+				p_src_physp = p_port->p_physp;
+		}
+
+		if (p_src_physp)
+			rate = ib_path_rate_2x_hdr_fixups(&p_src_physp->port_info, rate);
+		if (p_parms->reversible) {
+			if (p_dest_physp == NULL) {
+				p_port = osm_get_port_by_lid_ho(sa->p_subn,
+								dest_lid_ho);
+				if (p_port)
+					p_dest_physp = p_port->p_physp;
+			}
+			if (p_dest_physp)
+				rate = ib_path_rate_2x_hdr_fixups(&p_dest_physp->port_info, rate);
+		}
+	}
+	p_pr->rate = (uint8_t) (rate | 0x80);
 
 	/* According to 1.2 spec definition Table 205 PacketLifeTime description,
 	   for loopback paths, packetLifeTime shall be zero. */

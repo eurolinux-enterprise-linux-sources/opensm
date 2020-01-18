@@ -109,7 +109,7 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 
 		extended = p_pi->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS;
 		rate = ib_port_info_compute_rate(p_pi, extended);
-		if (rate < sm->p_subn->min_ca_rate) {
+		if (ib_path_compare_rates(rate, sm->p_subn->min_ca_rate) < 0) {
 			OSM_LOG(sm->p_log, OSM_LOG_VERBOSE,
 				"Setting endport minimal rate to:%u defined by port:0x%"
 				PRIx64 "\n", rate, cl_ntoh64(port_guid));
@@ -176,7 +176,7 @@ static void pi_rcv_process_endport(IN osm_sm_t * sm, IN osm_physp_t * p_physp,
 						     IB_MAD_ATTR_SM_INFO, 0,
 						     FALSE,
 						     ib_port_info_get_m_key(&p_physp->port_info),
-						     CL_DISP_MSGID_NONE,
+						     0, CL_DISP_MSGID_NONE,
 						     &context);
 
 				if (status != IB_SUCCESS)
@@ -242,7 +242,7 @@ static void pi_rcv_process_switch_port0(IN osm_sm_t * sm,
 				     IB_MAD_ATTR_PORT_INFO, cl_hton32(port),
 				     FALSE,
 				     ib_port_info_get_m_key(&p_physp->port_info),
-				     CL_DISP_MSGID_NONE, &context);
+				     0, CL_DISP_MSGID_NONE, &context);
 		if (status != IB_SUCCESS)
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0F16: "
 				"Failure initiating PortInfo request (%s)\n",
@@ -282,7 +282,9 @@ static void pi_rcv_process_switch_ext_port(IN osm_sm_t * sm,
 	port_num = osm_physp_get_port_num(p_physp);
 
 	if (sm->p_subn->opt.fdr10)
-		mlnx_epi_supported = is_mlnx_ext_port_info_supported(p_node->node_info.device_id);
+		mlnx_epi_supported = is_mlnx_ext_port_info_supported(
+						ib_node_info_get_vendor_id(&p_node->node_info),
+						p_node->node_info.device_id);
 
 	/* if in_sweep_hop_0 is TRUE, then this means the SM is on the switch,
 	   and we got switchInfo of our local switch. Do not continue
@@ -336,7 +338,7 @@ static void pi_rcv_process_switch_ext_port(IN osm_sm_t * sm,
 					     osm_physp_get_dr_path_ptr(p_physp),
 					     IB_MAD_ATTR_MLNX_EXTENDED_PORT_INFO,
 					     cl_hton32(port_num), FALSE, m_key,
-					     CL_DISP_MSGID_NONE, &context);
+					     0, CL_DISP_MSGID_NONE, &context);
 			if (status != IB_SUCCESS)
 				OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0F11: "
 					"Failure initiating MLNX ExtPortInfo request (%s)\n",
@@ -375,7 +377,7 @@ static void pi_rcv_process_switch_ext_port(IN osm_sm_t * sm,
 
 				status = osm_req_get(sm, &path,
 						     IB_MAD_ATTR_NODE_INFO, 0,
-						     TRUE, 0,
+						     TRUE, 0, 0,
 						     CL_DISP_MSGID_NONE,
 						     &context);
 
@@ -520,7 +522,7 @@ static void get_pkey_table(IN osm_log_t * p_log, IN osm_sm_t * sm,
 		}
 		status = osm_req_get(sm, &path, IB_MAD_ATTR_P_KEY_TABLE,
 				     cl_hton32(attr_mod_ho), FALSE,
-				     m_key, CL_DISP_MSGID_NONE, &context);
+				     m_key, 0, CL_DISP_MSGID_NONE, &context);
 
 		if (status != IB_SUCCESS) {
 			OSM_LOG(p_log, OSM_LOG_ERROR, "ERR 0F12: "
@@ -599,7 +601,8 @@ static void pi_rcv_process_set(IN osm_sm_t * sm, IN osm_node_t * p_node,
 		}
 		osm_dump_port_info_v2(sm->p_log, osm_node_get_node_guid(p_node),
 				      port_guid, port_num, p_pi, FILE_ID, level);
-	}
+	} else
+		osm_physp_set_port_info(p_physp, p_pi, sm);
 
 	OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 		"Received logical SetResp() for GUID 0x%" PRIx64
@@ -610,7 +613,6 @@ static void pi_rcv_process_set(IN osm_sm_t * sm, IN osm_node_t * p_node,
 		cl_ntoh64(osm_node_get_node_guid(p_node)),
 		cl_ntoh64(p_smp->trans_id));
 
-	osm_physp_set_port_info(p_physp, p_pi, sm);
 
 	OSM_LOG_EXIT(sm->p_log);
 }

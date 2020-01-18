@@ -1,0 +1,42 @@
+From c6c7973478c07869b99478b44a6d49db6738b5f0 Mon Sep 17 00:00:00 2001
+From: Honggang Li <honli@redhat.com>
+Date: Tue, 22 Jan 2019 16:02:54 +0800
+Subject: [PATCH 2/5] osm_helper.c: Fix lsea_str_fixed_width OVERRUN issue
+
+Issue was found by Coverity.
+
+When (lsea == IB_LINK_SPEED_EXT_ACTIVE_50 == 4), lsea_str_fixed_width[lsea]
+will overrun array.
+
+Defect type: OVERRUN
+4. opensm-3.3.21/opensm/osm_helper.c:3225: cond_at_least: Checking "lsea == 0" implies that "lsea" is at least 1 on the false branch.
+6. opensm-3.3.21/opensm/osm_helper.c:3231: cond_between: Checking "lsea > 4" implies that "lsea" is between 1 and 4 (inclusive) on the false branch.
+7. opensm-3.3.21/opensm/osm_helper.c:3233: overrun-local: Overrunning array "lsea_str_fixed_width" of 4 8-byte elements at element index 4 (byte offset 32) using index "lsea" (which evaluates to 4).
+//  3231|   	if (lsea > IB_LINK_SPEED_EXT_ACTIVE_50)
+//  3232|   		return lsa_str_fixed_width[3];
+//  3233|-> 	return lsea_str_fixed_width[lsea];
+//  3234|   }
+//  3235|
+
+Signed-off-by: Honggang Li <honli@redhat.com>
+Signed-off-by: Hal Rosenstock <hal@mellanox.com>
+Signed-off-by: Honggang Li <honli@redhat.com>
+---
+ opensm/osm_helper.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/opensm/osm_helper.c b/opensm/osm_helper.c
+index e62775822014..f1219b225703 100644
+--- a/opensm/osm_helper.c
++++ b/opensm/osm_helper.c
+@@ -3214,6 +3214,7 @@ static const char *lsea_str_fixed_width[] = {
+ 	"Std ",
+ 	"14  ",
+ 	"25  ",
++	"????",
+ 	"50"
+ };
+ 
+-- 
+2.15.0-rc1
+

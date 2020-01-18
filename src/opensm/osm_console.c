@@ -37,7 +37,6 @@
 #  include <config.h>
 #endif				/* HAVE_CONFIG_H */
 
-#define _GNU_SOURCE		/* for getline */
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/poll.h>
@@ -260,12 +259,12 @@ static void help_perfmgr(FILE * out, int detail)
 			"   [dump_counters [mach]] -- dump the counters (optionally in [mach]ine readable format)\n");
 		fprintf(out,
 			"   [print_counters [<nodename|nodeguid>][:<port>]] -- print the internal counters\n"
-			"                                                      Optionaly limit output by name, guid, or port\n");
+			"                                                      Optionally limit output by name, guid, or port\n");
 		fprintf(out,
 			"   [pc [<nodename|nodeguid>][:<port>]] -- same as print_counters\n");
 		fprintf(out,
 			"   [print_errors [<nodename|nodeguid>]] -- print only ports with errors\n"
-			"                                           Optionaly limit output by name or guid\n");
+			"                                           Optionally limit output by name or guid\n");
 		fprintf(out,
 			"   [pe [<nodename|nodeguid>]] -- same as print_errors\n");
 		fprintf(out,
@@ -717,6 +716,7 @@ typedef struct {
 	uint64_t ports_4X;
 	uint64_t ports_8X;
 	uint64_t ports_12X;
+	uint64_t ports_2X;
 	uint64_t ports_unknown_width;
 	port_report_t *unknown_width_ports;
 	uint64_t ports_unenabled_width;
@@ -729,6 +729,7 @@ typedef struct {
 	uint64_t ports_fdr10;
 	uint64_t ports_fdr;
 	uint64_t ports_edr;
+	uint64_t ports_hdr;
 	uint64_t ports_unknown_speed;
 	port_report_t *unknown_speed_ports;
 	uint64_t ports_unenabled_speed;
@@ -839,8 +840,7 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			break;
 		case IB_LINK_SPEED_ACTIVE_10:
 			if (!(pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) ||
-			    ((pi0->capability_mask & IB_PORT_CAP_HAS_EXT_SPEEDS) &&
-			    !ib_port_info_get_link_speed_ext_active(pi))) {
+			    !ib_port_info_get_link_speed_ext_active(pi)) {
 				if (epi->link_speed_active & FDR10)
 					fs->ports_fdr10++;
 				else {
@@ -888,6 +888,9 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			case IB_LINK_SPEED_EXT_ACTIVE_25:
 				fs->ports_edr++;
 				break;
+			case IB_LINK_SPEED_EXT_ACTIVE_50:
+				fs->ports_hdr++;
+				break;
 			case IB_LINK_SPEED_EXT_ACTIVE_NONE:
 				break;
 			default:
@@ -910,6 +913,9 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			break;
 		case IB_LINK_WIDTH_ACTIVE_12X:
 			fs->ports_12X++;
+			break;
+		case IB_LINK_WIDTH_ACTIVE_2X:
+			fs->ports_2X++;
 			break;
 		default:
 			__tag_port_report(&(fs->unknown_width_ports),
@@ -988,6 +994,8 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		fprintf(out, "   %" PRIu64 " at 14.0625 Gbps\n", fs.ports_fdr);
 	if (fs.ports_edr)
 		fprintf(out, "   %" PRIu64 " at 25.78125 Gbps\n", fs.ports_edr);
+	if (fs.ports_hdr)
+		fprintf(out, "   %" PRIu64 " at 53.125 Gbps\n", fs.ports_hdr);
 
 	if (fs.ports_disabled + fs.ports_reduced_speed + fs.ports_reduced_width
 	    + fs.ports_unenabled_width + fs.ports_unenabled_speed
@@ -1671,6 +1679,8 @@ static void dump_portguid_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		if (strcmp(p_cmd, "file") == 0) {
 			p_cmd = next_token(p_last);
 			if (p_cmd) {
+				if (output != out)
+					fclose(output);
 				output = fopen(p_cmd, "w+");
 				if (output == NULL) {
 					fprintf(out,

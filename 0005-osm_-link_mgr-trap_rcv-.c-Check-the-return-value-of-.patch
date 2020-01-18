@@ -1,0 +1,111 @@
+From 1da99335fa1b1efd086e537682203ff65a09bed9 Mon Sep 17 00:00:00 2001
+From: Hal Rosenstock <hal@mellanox.com>
+Date: Tue, 22 Jan 2019 11:28:47 +0800
+Subject: [PATCH 5/5] osm_[link_mgr trap_rcv].c: Check the return value of
+ osm_get_port_by_guid
+
+Issue was found by Coverity.
+
+3. Defect type: NULL_RETURNS
+8. opensm-3.3.21/opensm/osm_trap_rcv.c:254: returned_null: "osm_get_port_by_guid" returns null (checked 46 out of 49 times).
+9. opensm-3.3.21/opensm/osm_trap_rcv.c:254: var_assigned: Assigning: "p_port" = null return value from "osm_get_port_by_guid".
+10. opensm-3.3.21/opensm/osm_trap_rcv.c:256: dereference: Dereferencing a null pointer "p_port".
+11. opensm-3.3.21/opensm/osm_congestion_control.c:678: example_assign: Example 1: Assigning: "p_port" = return value from "osm_get_port_by_guid(p_cc->subn, port_guid)".
+12. opensm-3.3.21/opensm/osm_congestion_control.c:679: example_checked: Example 1 (cont.): "p_port" has its value checked in "p_port".
+13. opensm-3.3.21/opensm/osm_drop_mgr.c:91: example_assign: Example 2: Assigning: "p_remote_port" = return value from "osm_get_port_by_guid(sm->p_subn, p_remote_physp->port_guid)".
+14. opensm-3.3.21/opensm/osm_drop_mgr.c:94: example_checked: Example 2 (cont.): "p_remote_port" has its value checked in "p_remote_port".
+15. opensm-3.3.21/opensm/osm_guid_info_rcv.c:105: example_assign: Example 3: Assigning: "p_port" = return value from "osm_get_port_by_guid(sm->p_subn, port_guid)".
+16. opensm-3.3.21/opensm/osm_guid_info_rcv.c:106: example_checked: Example 3 (cont.): "p_port" has its value checked in "p_port".
+17. opensm-3.3.21/opensm/osm_inform.c:434: example_assign: Example 4: Assigning: "p_src_port" = return value from "osm_get_port_by_guid(p_subn, source_gid.unicast.interface_id)".
+18. opensm-3.3.21/opensm/osm_inform.c:436: example_checked: Example 4 (cont.): "p_src_port" has its value checked in "p_src_port".
+19. opensm-3.3.21/opensm/osm_lid_mgr.c:1112: example_assign: Example 5: Assigning: "p_port" = return value from "osm_get_port_by_guid(p_mgr->p_subn, p_mgr->p_subn->sm_port_guid)".
+20. opensm-3.3.21/opensm/osm_lid_mgr.c:1114: example_checked: Example 5 (cont.): "p_port" has its value checked in "p_port".
+//  1112|   	p_port = osm_get_port_by_guid(p_mgr->p_subn,
+//  1113|   				      p_mgr->p_subn->sm_port_guid);
+//  1114|-> 	if (!p_port) {
+//  1115|   		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 0308: "
+//  1116|   			"Can't acquire SM's port object, GUID 0x%016" PRIx64
+
+4. Defect type: NULL_RETURNS
+3. opensm-3.3.21/opensm/osm_link_mgr.c:126: returned_null: "osm_get_port_by_guid" returns null (checked 46 out of 49 times).
+4. opensm-3.3.21/opensm/osm_link_mgr.c:126: var_assigned: Assigning: "p_port" = null return value from "osm_get_port_by_guid".
+5. opensm-3.3.21/opensm/osm_link_mgr.c:128: dereference: Dereferencing a null pointer "p_port".
+6. opensm-3.3.21/opensm/osm_congestion_control.c:678: example_assign: Example 1: Assigning: "p_port" = return value from "osm_get_port_by_guid(p_cc->subn, port_guid)".
+7. opensm-3.3.21/opensm/osm_congestion_control.c:679: example_checked: Example 1 (cont.): "p_port" has its value checked in "p_port".
+8. opensm-3.3.21/opensm/osm_drop_mgr.c:91: example_assign: Example 2: Assigning: "p_remote_port" = return value from "osm_get_port_by_guid(sm->p_subn, p_remote_physp->port_guid)".
+9. opensm-3.3.21/opensm/osm_drop_mgr.c:94: example_checked: Example 2 (cont.): "p_remote_port" has its value checked in "p_remote_port".
+10. opensm-3.3.21/opensm/osm_guid_info_rcv.c:105: example_assign: Example 3: Assigning: "p_port" = return value from "osm_get_port_by_guid(sm->p_subn, port_guid)".
+11. opensm-3.3.21/opensm/osm_guid_info_rcv.c:106: example_checked: Example 3 (cont.): "p_port" has its value checked in "p_port".
+12. opensm-3.3.21/opensm/osm_inform.c:434: example_assign: Example 4: Assigning: "p_src_port" = return value from "osm_get_port_by_guid(p_subn, source_gid.unicast.interface_id)".
+13. opensm-3.3.21/opensm/osm_inform.c:436: example_checked: Example 4 (cont.): "p_src_port" has its value checked in "p_src_port".
+14. opensm-3.3.21/opensm/osm_lid_mgr.c:1112: example_assign: Example 5: Assigning: "p_port" = return value from "osm_get_port_by_guid(p_mgr->p_subn, p_mgr->p_subn->sm_port_guid)".
+15. opensm-3.3.21/opensm/osm_lid_mgr.c:1114: example_checked: Example 5 (cont.): "p_port" has its value checked in "p_port".
+//  1112|   	p_port = osm_get_port_by_guid(p_mgr->p_subn,
+//  1113|   				      p_mgr->p_subn->sm_port_guid);
+//  1114|-> 	if (!p_port) {
+//  1115|   		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 0308: "
+//  1116|   			"Can't acquire SM's port object, GUID 0x%016" PRIx64
+
+Pointed-out-by: Honggang Li <honli@redhat.com>
+
+Signed-off-by: Hal Rosenstock <hal@mellanox.com>
+Signed-off-by: Honggang Li <honli@redhat.com>
+---
+ opensm/osm_link_mgr.c |  2 ++
+ opensm/osm_trap_rcv.c | 13 ++++++++++++-
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/opensm/osm_link_mgr.c b/opensm/osm_link_mgr.c
+index 64ddaf7d1560..ca69375378a0 100644
+--- a/opensm/osm_link_mgr.c
++++ b/opensm/osm_link_mgr.c
+@@ -112,6 +112,7 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
+ 	OSM_LOG_ENTER(sm->p_log);
+ 
+ 	p_node = osm_physp_get_node_ptr(p_physp);
++	CL_ASSERT(p_node);
+ 
+ 	p_old_pi = &p_physp->port_info;
+ 
+@@ -125,6 +126,7 @@ static int link_mgr_set_physp_pi(osm_sm_t * sm, IN osm_physp_t * p_physp,
+ 		if (!p_pi->base_lid) {
+ 			p_port = osm_get_port_by_guid(sm->p_subn,
+ 						      osm_physp_get_port_guid(p_physp));
++			CL_ASSERT(p_port);
+ 			p_pi->base_lid = p_port->lid;
+ 			sm->lid_mgr.dirty = TRUE;
+ 			send_set = TRUE;
+diff --git a/opensm/osm_trap_rcv.c b/opensm/osm_trap_rcv.c
+index 51a836981e8c..ba50d9f2fcdb 100644
+--- a/opensm/osm_trap_rcv.c
++++ b/opensm/osm_trap_rcv.c
+@@ -253,7 +253,16 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
+ 		if (!pi->base_lid) {
+ 			p_port = osm_get_port_by_guid(sm->p_subn,
+ 						      osm_physp_get_port_guid(p));
+-			pi->base_lid = p_port->lid;
++			if (p_port)
++				pi->base_lid = p_port->lid;
++			else {
++				OSM_LOG(sm->p_log, OSM_LOG_ERROR,
++					"ERR 3804: Port 0x%" PRIx64
++					" not found, port set failed\n",
++					cl_ntoh64(osm_physp_get_port_guid(p)));
++				status = IB_ERROR;
++				goto EXIT;
++			}
+ 		}
+ 		pi->master_sm_base_lid = sm->p_subn->sm_base_lid;
+ 	}
+@@ -263,6 +272,8 @@ static int disable_port(osm_sm_t *sm, osm_physp_t *p)
+ 			   cl_hton32(osm_physp_get_port_num(p)),
+ 			   FALSE, m_key,
+ 			   0, CL_DISP_MSGID_NONE, &context);
++
++EXIT:
+ 	return status;
+ }
+ 
+-- 
+2.15.0-rc1
+

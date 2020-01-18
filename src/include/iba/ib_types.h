@@ -2160,6 +2160,7 @@ ib_get_port_state_from_str(IN char *p_port_state_str)
 #define IB_JOIN_STATE_FULL		1
 #define IB_JOIN_STATE_NON		2
 #define IB_JOIN_STATE_SEND_ONLY		4
+#define IB_JOIN_STATE_SEND_ONLY_FULL	8
 /**********/
 
 /****f* IBA Base: Types/ib_pkey_get_base
@@ -2266,6 +2267,12 @@ typedef union _ib_gid {
 		uint8_t header[2];
 		uint8_t raw_group_id[14];
 	} PACK_SUFFIX multicast;
+	struct _ib_gid_ip_multicast {
+		uint8_t header[2];
+		ib_net16_t signature;
+		ib_net16_t p_key;
+		uint8_t group_id[10];
+	} PACK_SUFFIX ip_multicast;
 } PACK_SUFFIX ib_gid_t;
 #include <complib/cl_packoff.h>
 /*
@@ -3209,6 +3216,10 @@ ib_path_rec_rate(IN const ib_path_rec_t * const p_rec)
 *		16: 100 Gb/sec.
 *		17: 200 Gb/sec.
 *		18: 300 Gb/sec.
+*		19: 28 Gb/sec.
+*		20: 50 Gb/sec.
+*		21: 400 Gb/sec.
+*		22: 600 Gb/sec.
 *		others: reserved
 *
 * NOTES
@@ -3379,7 +3390,7 @@ ib_path_rec_hop_limit(IN const ib_path_rec_t * const p_rec)
 *	if the class supports Trap() MADs (13.4.8.1).
 *
 * SEE ALSO
-*	ib_class_port_info_t, IB_CLASS_CAP_GETSET
+*	ib_class_port_info_t, IB_CLASS_CAP_GETSET, IB_CLASS_CAP_CAPMASK2
 *
 * SOURCE
 */
@@ -3395,11 +3406,28 @@ ib_path_rec_hop_limit(IN const ib_path_rec_t * const p_rec)
 *	if the class supports Get(Notice) and Set(Notice) MADs (13.4.8.1).
 *
 * SEE ALSO
-*	ib_class_port_info_t, IB_CLASS_CAP_TRAP
+*	ib_class_port_info_t, IB_CLASS_CAP_TRAP, IB_CLASS_CAP_CAPMASK2
 *
 * SOURCE
 */
 #define IB_CLASS_CAP_GETSET					0x0002
+/*********/
+
+/****s* IBA Base: Constants/IB_CLASS_CAP_CAPMASK2
+* NAME
+*	IB_CLASS_CAP_CAPMASK2
+*
+* DESCRIPTION
+*	ClassPortInfo CapabilityMask bits.
+*	This bit will be set of the class supports additional class specific
+*	capabilities (CapabilityMask2) (13.4.8.1).
+*
+* SEE ALSO
+*	ib_class_port_info_t, IB_CLASS_CAP_TRAP, IB_CLASS_CAP_GETSET
+*
+* SOURCE
+*/
+#define IB_CLASS_CAP_CAPMASK2					0x0004
 /*********/
 
 /****s* IBA Base: Constants/IB_CLASS_ENH_PORT0_CC_MASK
@@ -3424,8 +3452,8 @@ ib_path_rec_hop_limit(IN const ib_path_rec_t * const p_rec)
 *	IB_CLASS_RESP_TIME_MASK
 *
 * DESCRIPTION
-*	Mask bits to extract the reponse time value from the
-*	resp_time_val field of ib_class_port_info_t.
+*	Mask bits to extract the response time value from the
+*	cap_mask2_resp_time field of ib_class_port_info_t.
 *
 * SEE ALSO
 *	ib_class_port_info_t
@@ -3433,6 +3461,22 @@ ib_path_rec_hop_limit(IN const ib_path_rec_t * const p_rec)
 * SOURCE
 */
 #define IB_CLASS_RESP_TIME_MASK				0x1F
+/*********/
+
+/****s* IBA Base: Constants/IB_CLASS_CAPMASK2_SHIFT
+* NAME
+*	IB_CLASS_CAPMASK2_SHIFT
+*
+* DESCRIPTION
+*	Number of bits to shift to extract the capability mask2
+*	from the cap_mask2_resp_time field of ib_class_port_info_t.
+*
+* SEE ALSO
+*	ib_class_port_info_t
+*
+* SOURCE
+*/
+#define IB_CLASS_CAPMASK2_SHIFT				5
 /*********/
 
 /****s* IBA Base: Types/ib_class_port_info_t
@@ -3531,6 +3575,9 @@ typedef struct _ib_class_port_info {
 #define IS_PM_INH_LMTD_PKEY_MC_CONSTR_ERR	(CL_HTON16(((uint16_t)1)<<13))
 #define IS_PM_RSFEC_COUNTERS_SUP		(CL_HTON16(((uint16_t)1)<<14))
 #define IB_PM_IS_QP1_DROP_SUP			(CL_HTON16(((uint16_t)1)<<15))
+/* CapabilityMask2 */
+#define IB_PM_IS_PM_KEY_SUPPORTED		(CL_HTON32(((uint32_t)1)<<0))
+#define IB_PM_IS_ADDL_PORT_CTRS_EXT_SUP		(CL_HTON32(((uint32_t)1)<<1))
 
 /****f* IBA Base: Types/ib_class_set_resp_time_val
 * NAME
@@ -3612,7 +3659,7 @@ ib_class_set_cap_mask2(IN ib_class_port_info_t * const p_cpi,
 {
 	p_cpi->cap_mask2_resp_time = (p_cpi->cap_mask2_resp_time &
 		CL_HTON32(IB_CLASS_RESP_TIME_MASK)) |
-		cl_hton32(cap_mask2 << 5);
+		cl_hton32(cap_mask2 << IB_CLASS_CAPMASK2_SHIFT);
 }
 
 /*
@@ -3644,7 +3691,7 @@ ib_class_set_cap_mask2(IN ib_class_port_info_t * const p_cpi,
 static inline uint32_t OSM_API
 ib_class_cap_mask2(IN const ib_class_port_info_t * const p_cpi)
 {
-	return (cl_ntoh32(p_cpi->cap_mask2_resp_time) >> 5);
+	return (cl_ntoh32(p_cpi->cap_mask2_resp_time) >> IB_CLASS_CAPMASK2_SHIFT);
 }
 
 /*
@@ -4597,7 +4644,7 @@ typedef struct _ib_port_info {
 	ib_net16_t p_key_violations;
 	ib_net16_t q_key_violations;
 	uint8_t guid_cap;
-	uint8_t subnet_timeout;	/* cli_rereg(1b), mcast_pkey_trap_suppr(1b), reserv(1b), timeout(5b) */
+	uint8_t subnet_timeout;	/* cli_rereg(1b), mcast_pkey_trap_suppr(2b), timeout(5b) */
 	uint8_t resp_time_value; /* reserv(3b), rtv(5b) */
 	uint8_t error_threshold; /* local phy errors(4b), overrun errors(4b) */
 	ib_net16_t max_credit_hint;
@@ -4643,7 +4690,7 @@ typedef struct _ib_port_info {
 #define IB_PORT_CAP_SM_DISAB      (CL_HTON32(0x00000400))
 #define IB_PORT_CAP_HAS_SYS_IMG_GUID  (CL_HTON32(0x00000800))
 #define IB_PORT_CAP_HAS_PKEY_SW_EXT_PORT_TRAP (CL_HTON32(0x00001000))
-#define IB_PORT_CAP_RESV13        (CL_HTON32(0x00002000))
+#define IB_PORT_CAP_HAS_CABLE_INFO  (CL_HTON32(0x00002000))
 #define IB_PORT_CAP_HAS_EXT_SPEEDS  (CL_HTON32(0x00004000))
 #define IB_PORT_CAP_HAS_CAP_MASK2 (CL_HTON32(0x00008000))
 #define IB_PORT_CAP_HAS_COM_MGT   (CL_HTON32(0x00010000))
@@ -4665,6 +4712,10 @@ typedef struct _ib_port_info {
 
 #define IB_PORT_CAP2_IS_SET_NODE_DESC_SUPPORTED (CL_HTON16(0x0001))
 #define IB_PORT_CAP2_IS_PORT_INFO_EXT_SUPPORTED (CL_HTON16(0x0002))
+#define IB_PORT_CAP2_IS_VIRT_SUPPORTED (CL_HTON16(0x0004))
+#define IB_PORT_CAP2_IS_SWITCH_PORT_STATE_TBL_SUPP (CL_HTON16(0x0008))
+#define IB_PORT_CAP2_IS_LINK_WIDTH_2X_SUPPORTED (CL_HTON16(0x0010))
+#define IB_PORT_CAP2_IS_LINK_SPEED_HDR_SUPPORTED (CL_HTON16(0x0020))
 
 /****s* IBA Base: Types/ib_port_info_ext_t
 * NAME
@@ -4683,7 +4734,9 @@ typedef struct _ib_port_info_ext {
 	ib_net16_t fdr_fec_mode_enable;
 	ib_net16_t edr_fec_mode_sup;
 	ib_net16_t edr_fec_mode_enable;
-	uint8_t reserved[50];
+	ib_net16_t hdr_fec_mode_sup;
+	ib_net16_t hdr_fec_mode_enable;
+	uint8_t reserved[46];
 } PACK_SUFFIX ib_port_info_ext_t;
 #include <complib/cl_packoff.h>
 /************/
@@ -5126,17 +5179,32 @@ ib_port_info_get_link_speed_active(IN const ib_port_info_t * const p_pi)
 #define IB_LINK_WIDTH_ACTIVE_4X			2
 #define IB_LINK_WIDTH_ACTIVE_8X			4
 #define IB_LINK_WIDTH_ACTIVE_12X 		8
+#define IB_LINK_WIDTH_ACTIVE_2X			16
+#define IB_LINK_WIDTH_1X_2X_4X_8X_OR_12X	(IB_LINK_WIDTH_ACTIVE_1X | \
+						 IB_LINK_WIDTH_ACTIVE_2X | \
+						 IB_LINK_WIDTH_ACTIVE_4X | \
+						 IB_LINK_WIDTH_ACTIVE_8X | \
+						 IB_LINK_WIDTH_ACTIVE_12X)
+#define IB_LINK_WIDTH_SET_LWS			255
 #define IB_LINK_SPEED_ACTIVE_EXTENDED		0
 #define IB_LINK_SPEED_ACTIVE_2_5		1
 #define IB_LINK_SPEED_ACTIVE_5			2
 #define IB_LINK_SPEED_ACTIVE_10			4
+#define IB_LINK_SPEED_2_5_5_OR_10		(IB_LINK_SPEED_ACTIVE_2_5 | \
+						 IB_LINK_SPEED_ACTIVE_5 | \
+						 IB_LINK_SPEED_ACTIVE_10)
+#define IB_LINK_SPEED_SET_LSS			15
 #define IB_LINK_SPEED_EXT_ACTIVE_NONE		0
 #define IB_LINK_SPEED_EXT_ACTIVE_14		1
 #define IB_LINK_SPEED_EXT_ACTIVE_25		2
+#define IB_LINK_SPEED_EXT_ACTIVE_50		4
+#define IB_LINK_SPEED_EXT_14_25_OR_50		(IB_LINK_SPEED_EXT_ACTIVE_14 | \
+						 IB_LINK_SPEED_EXT_ACTIVE_25 | \
+						 IB_LINK_SPEED_EXT_ACTIVE_50)
 #define IB_LINK_SPEED_EXT_DISABLE		30
 #define IB_LINK_SPEED_EXT_SET_LSES		31
 
-/* following v1 ver1.2 p901 */
+/* following v1 ver1.3 p984 */
 #define IB_PATH_RECORD_RATE_2_5_GBS		2
 #define IB_PATH_RECORD_RATE_10_GBS		3
 #define IB_PATH_RECORD_RATE_30_GBS		4
@@ -5154,9 +5222,14 @@ ib_port_info_get_link_speed_active(IN const ib_port_info_t * const p_pi)
 #define IB_PATH_RECORD_RATE_100_GBS		16
 #define IB_PATH_RECORD_RATE_200_GBS		17
 #define IB_PATH_RECORD_RATE_300_GBS		18
+#define IB_PATH_RECORD_RATE_28_GBS		19
+#define IB_PATH_RECORD_RATE_50_GBS		20
+#define IB_PATH_RECORD_RATE_400_GBS		21
+#define IB_PATH_RECORD_RATE_600_GBS		22
 
 #define IB_MIN_RATE    IB_PATH_RECORD_RATE_2_5_GBS
-#define IB_MAX_RATE    IB_PATH_RECORD_RATE_300_GBS
+#define IB_MAX_RATE    IB_PATH_RECORD_RATE_600_GBS
+#define IB_RATE_MAX    IB_PATH_RECORD_RATE_600_GBS
 
 static inline uint8_t OSM_API
 ib_port_info_get_link_speed_ext_active(IN const ib_port_info_t * const p_pi);
@@ -5196,6 +5269,10 @@ ib_port_info_compute_rate(IN const ib_port_info_t * const p_pi,
 				rate = IB_PATH_RECORD_RATE_168_GBS;
 				break;
 
+			case IB_LINK_WIDTH_ACTIVE_2X:
+				rate = IB_PATH_RECORD_RATE_28_GBS;
+				break;
+
 			default:
 				rate = IB_PATH_RECORD_RATE_14_GBS;
 				break;
@@ -5219,8 +5296,39 @@ ib_port_info_compute_rate(IN const ib_port_info_t * const p_pi,
 				rate = IB_PATH_RECORD_RATE_300_GBS;
 				break;
 
+			case IB_LINK_WIDTH_ACTIVE_2X:
+				rate = IB_PATH_RECORD_RATE_50_GBS;
+				break;
+
 			default:
 				rate = IB_PATH_RECORD_RATE_25_GBS;
+				break;
+			}
+			break;
+		case IB_LINK_SPEED_EXT_ACTIVE_50:
+			switch (p_pi->link_width_active) {
+			case IB_LINK_WIDTH_ACTIVE_1X:
+				rate = IB_PATH_RECORD_RATE_50_GBS;
+				break;
+
+			case IB_LINK_WIDTH_ACTIVE_4X:
+				rate = IB_PATH_RECORD_RATE_200_GBS;
+				break;
+
+			case IB_LINK_WIDTH_ACTIVE_8X:
+				rate = IB_PATH_RECORD_RATE_400_GBS;
+				break;
+
+			case IB_LINK_WIDTH_ACTIVE_12X:
+				rate = IB_PATH_RECORD_RATE_600_GBS;
+				break;
+
+			case IB_LINK_WIDTH_ACTIVE_2X:
+				rate = IB_PATH_RECORD_RATE_100_GBS;
+				break;
+
+			default:
+				rate = IB_PATH_RECORD_RATE_50_GBS;
 				break;
 			}
 			break;
@@ -5251,6 +5359,10 @@ ib_port_info_compute_rate(IN const ib_port_info_t * const p_pi,
 			rate = IB_PATH_RECORD_RATE_30_GBS;
 			break;
 
+		case IB_LINK_WIDTH_ACTIVE_2X:
+			rate = IB_PATH_RECORD_RATE_5_GBS;
+			break;
+
 		default:
 			rate = IB_PATH_RECORD_RATE_2_5_GBS;
 			break;
@@ -5274,6 +5386,10 @@ ib_port_info_compute_rate(IN const ib_port_info_t * const p_pi,
 			rate = IB_PATH_RECORD_RATE_60_GBS;
 			break;
 
+		case IB_LINK_WIDTH_ACTIVE_2X:
+			rate = IB_PATH_RECORD_RATE_10_GBS;
+			break;
+
 		default:
 			rate = IB_PATH_RECORD_RATE_5_GBS;
 			break;
@@ -5295,6 +5411,10 @@ ib_port_info_compute_rate(IN const ib_port_info_t * const p_pi,
 
 		case IB_LINK_WIDTH_ACTIVE_12X:
 			rate = IB_PATH_RECORD_RATE_120_GBS;
+			break;
+
+		case IB_LINK_WIDTH_ACTIVE_2X:
+			rate = IB_PATH_RECORD_RATE_20_GBS;
 			break;
 
 		default:
@@ -5616,7 +5736,7 @@ ib_port_info_set_client_rereg(IN ib_port_info_t * const p_pi,
 *	ib_port_info_set_mcast_pkey_trap_suppress
 *
 * DESCRIPTION
-*	Sets the encoded multicast pkey trap suppression enabled bit value
+*	Sets the encoded multicast pkey trap suppression enabled bits value
 *	in the PortInfo attribute.
 *
 * SYNOPSIS
@@ -5627,7 +5747,7 @@ ib_port_info_set_mcast_pkey_trap_suppress(IN ib_port_info_t * const p_pi,
 {
 	CL_ASSERT(trap_suppress <= 0x1);
 	p_pi->subnet_timeout =
-	    (uint8_t) ((p_pi->subnet_timeout & 0xBF) | (trap_suppress << 6));
+	    (uint8_t) ((p_pi->subnet_timeout & 0x9F) | (trap_suppress << 5));
 }
 
 /*
@@ -5853,7 +5973,7 @@ ib_port_info_get_client_rereg(IN ib_port_info_t const *p_pi)
 *	ib_port_info_get_mcast_pkey_trap_suppress
 *
 * DESCRIPTION
-*	Gets the encoded multicast pkey trap suppression enabled bit value
+*	Gets the encoded multicast pkey trap suppression enabled bits value
 *	in the PortInfo attribute.
 *
 * SYNOPSIS
@@ -5861,7 +5981,7 @@ ib_port_info_get_client_rereg(IN ib_port_info_t const *p_pi)
 static inline uint8_t OSM_API
 ib_port_info_get_mcast_pkey_trap_suppress(IN ib_port_info_t const *p_pi)
 {
-	return ((p_pi->subnet_timeout & 0x40) >> 6);
+	return ((p_pi->subnet_timeout & 0x60) >> 5);
 }
 
 /*
@@ -6336,6 +6456,103 @@ ib_port_info_set_m_key(IN ib_port_info_t * const p_pi, IN ib_net64_t m_key)
 * SEE ALSO
 *********/
 
+#define FDR10 0x01
+
+/****f* IBA Base: Types/ib_get_highest_link_speed
+* NAME
+*	ib_get_highest_link_speed
+*
+* DESCRIPTION
+*	Returns the highest link speed encoded in the given bit field.
+*
+* SYNOPSIS
+*/
+static inline uint8_t OSM_API ib_get_highest_link_speed(IN const uint8_t speeds)
+{
+	uint8_t ret = 0;
+	uint8_t extspeeds = (speeds >> 4);
+
+	if (extspeeds & IB_LINK_SPEED_EXT_ACTIVE_50)
+		ret = IB_LINK_SPEED_EXT_ACTIVE_50 << 4;
+	else if (extspeeds & IB_LINK_SPEED_EXT_ACTIVE_25)
+		ret = IB_LINK_SPEED_EXT_ACTIVE_25 << 4;
+	else if (extspeeds & IB_LINK_SPEED_EXT_ACTIVE_14)
+		ret = IB_LINK_SPEED_EXT_ACTIVE_14 << 4;
+	else if (speeds & (FDR10 << 3))
+		ret = FDR10 << 3;
+	else if (speeds & IB_LINK_SPEED_ACTIVE_10)
+		ret = IB_LINK_SPEED_ACTIVE_10;
+	else if (speeds & IB_LINK_SPEED_ACTIVE_5)
+		ret = IB_LINK_SPEED_ACTIVE_5;
+	else if (speeds & IB_LINK_SPEED_ACTIVE_2_5)
+		ret = IB_LINK_SPEED_ACTIVE_2_5;
+
+	return ret;
+}
+
+/*
+* PARAMETERS
+*	speed
+*		[in] The bit field for the supported or enabled link speeds,
+*		     where the 3 LSBs of `speeds' encode the last 3 bits of
+*		     LinkSpeedSupported or LinkSpeedEnabled, the 4. bit encodes
+*		     supported/enabled FDR10 and the first 4 bits of `speeds'
+*		     encode either all bits of LinkSpeedExtSupported or the last
+*		     4 bits of the 5-bit long LinkSpeedExtEnabled component.
+*
+* RETURN VALUES
+*	Returns the highest link speed encoded in the given bit field, e.g.
+*	a return value of 2 indicates DDR, 8 indicates FDR10, and a return value
+*	of 32 (or 00100000 in bit) would indicate EDR speed.
+*
+* NOTES
+*	This fn most likely will only support up to NDR speeds, because the
+*	LinkSpeedExtActive component is defined as 4 bits wide (and HDR already
+*	occupies the 3rd bit).
+*
+* SEE ALSO
+*********/
+
+/****f* IBA Base: Types/ib_get_highest_link_width
+* NAME
+*	ib_get_highest_link_width
+*
+* DESCRIPTION
+*	Returns the highest link width encoded in the given bit field.
+*
+* SYNOPSIS
+*/
+static inline uint8_t OSM_API ib_get_highest_link_width(IN const uint8_t widths)
+{
+	uint8_t ret = 0;
+
+	if (widths & IB_LINK_WIDTH_ACTIVE_12X)
+		ret = IB_LINK_WIDTH_ACTIVE_12X;
+	else if (widths & IB_LINK_WIDTH_ACTIVE_8X)
+		ret = IB_LINK_WIDTH_ACTIVE_8X;
+	else if (widths & IB_LINK_WIDTH_ACTIVE_4X)
+		ret = IB_LINK_WIDTH_ACTIVE_4X;
+	else if (widths & IB_LINK_WIDTH_ACTIVE_2X)
+		ret = IB_LINK_WIDTH_ACTIVE_2X;
+	else if (widths & IB_LINK_WIDTH_ACTIVE_1X)
+		ret = IB_LINK_WIDTH_ACTIVE_1X;
+
+	return ret;
+}
+
+/*
+* PARAMETERS
+*	widths
+*		[in] The bit field for the supported or enabled link widths.
+*
+* RETURN VALUES
+*	Returns the highest link width encoded in the given bit field.
+*
+* NOTES
+*
+* SEE ALSO
+*********/
+
 
 /****s* IBA Base: Types/ib_mlnx_ext_port_info_t
 * NAME
@@ -6360,8 +6577,6 @@ typedef struct _ib_mlnx_ext_port_info {
 } PACK_SUFFIX ib_mlnx_ext_port_info_t;
 #include <complib/cl_packoff.h>
 /************/
-
-#define FDR10 0x01
 
 typedef uint8_t ib_svc_name_t[64];
 
@@ -7021,6 +7236,10 @@ ib_multipath_rec_rate(IN const ib_multipath_rec_t * const p_rec)
 *		16: 100 Gb/sec.
 *		17: 200 Gb/sec.
 *		18: 300 Gb/sec.
+*		19: 28 Gb/sec.
+*		20: 50 Gb/sec.
+*		21: 400 Gb/sec.
+*		22: 600 Gb/sec.
 *               others: reserved
 *
 * NOTES
@@ -7773,6 +7992,7 @@ ib_member_set_join_state(IN OUT ib_member_rec_t * p_mc_rec,
 #define IB_MC_REC_STATE_FULL_MEMBER 0x01
 #define IB_MC_REC_STATE_NON_MEMBER 0x02
 #define IB_MC_REC_STATE_SEND_ONLY_NON_MEMBER 0x04
+#define IB_MC_REC_STATE_SEND_ONLY_FULL_MEMBER 0x08
 
 /*
  *	Generic MAD notice types
@@ -8428,7 +8648,7 @@ typedef struct _ib_port_counters {
 	uint8_t rcv_constraint_err;
 	uint8_t counter_select2;
 	uint8_t link_int_buffer_overrun;
-	ib_net16_t resv;
+	ib_net16_t qp1_dropped;
 	ib_net16_t vl15_dropped;
 	ib_net32_t xmit_data;
 	ib_net32_t rcv_data;
@@ -8455,7 +8675,7 @@ typedef struct _ib_port_counters_ext {
 	uint8_t reserved;
 	uint8_t port_select;
 	ib_net16_t counter_select;
-	ib_net32_t reserved2;
+	ib_net32_t counter_select2;
 	ib_net64_t xmit_data;
 	ib_net64_t rcv_data;
 	ib_net64_t xmit_pkts;
@@ -8464,6 +8684,20 @@ typedef struct _ib_port_counters_ext {
 	ib_net64_t unicast_rcv_pkts;
 	ib_net64_t multicast_xmit_pkts;
 	ib_net64_t multicast_rcv_pkts;
+	ib_net64_t symbol_err_cnt;
+	ib_net64_t link_err_recover;
+	ib_net64_t link_downed;
+	ib_net64_t rcv_err;
+	ib_net64_t rcv_rem_phys_err;
+	ib_net64_t rcv_switch_relay_err;
+	ib_net64_t xmit_discards;
+	ib_net64_t xmit_constraint_err;
+	ib_net64_t rcv_constraint_err;
+	ib_net64_t link_integrity_err;
+	ib_net64_t buffer_overrun;
+	ib_net64_t vl15_dropped;
+	ib_net64_t xmit_wait;
+	ib_net64_t qp1_dropped;
 } PACK_SUFFIX ib_port_counters_ext_t;
 #include <complib/cl_packoff.h>
 

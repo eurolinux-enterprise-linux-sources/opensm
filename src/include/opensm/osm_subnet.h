@@ -7,6 +7,7 @@
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2009-2015 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
+ * Copyright (C) 2012-2017 Tokyo Institute of Technology. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -260,12 +261,14 @@ typedef struct osm_subn_opt {
 	uint32_t max_smps_timeout;
 	uint32_t transaction_timeout;
 	uint32_t transaction_retries;
+	uint32_t long_transaction_timeout;
 	uint8_t sm_priority;
 	uint8_t lmc;
 	boolean_t lmc_esp0;
 	uint8_t max_op_vls;
 	uint8_t force_link_speed;
 	uint8_t force_link_speed_ext;
+	uint8_t force_link_width;
 	uint8_t fdr10;
 	boolean_t reassign_lids;
 	boolean_t ignore_other_sm;
@@ -294,6 +297,7 @@ typedef struct osm_subn_opt {
 	char *part_enforce;
 	osm_partition_enforce_type_enum part_enforce_enum;
 	boolean_t allow_both_pkeys;
+	boolean_t keep_pkey_indexes;
 	uint8_t sm_assigned_guid;
 	boolean_t qos;
 	char *qos_policy_file;
@@ -307,6 +311,7 @@ typedef struct osm_subn_opt {
 	boolean_t port_profile_switch_nodes;
 	boolean_t sweep_on_trap;
 	char *routing_engine_names;
+	boolean_t avoid_throttled_links;
 	boolean_t use_ucast_cache;
 	boolean_t connect_roots;
 	char *lid_matrix_dump_file;
@@ -332,6 +337,7 @@ typedef struct osm_subn_opt {
 	boolean_t drop_event_subscriptions;
 	boolean_t ipoib_mcgroup_creation_validation;
 	boolean_t mcgroup_join_validation;
+	boolean_t use_original_extended_sa_rates_only;
 	boolean_t use_optimized_slvl;
 	boolean_t fsync_high_avail_files;
 	osm_qos_options_t qos_options;
@@ -378,6 +384,8 @@ typedef struct osm_subn_opt {
 	struct osm_subn_opt *file_opts; /* used for update */
 	uint8_t lash_start_vl;			/* starting vl to use in lash */
 	uint8_t sm_sl;			/* which SL to use for SM/SA communication */
+	uint8_t nue_max_num_vls;	/* maximum #VLs to use in nue */
+	boolean_t nue_include_switches;	/* control how nue treats switches */
 	char *per_module_logging_file;
 	boolean_t quasi_ftree_indexing;
 } osm_subn_opt_t;
@@ -427,6 +435,10 @@ typedef struct osm_subn_opt {
 *
 *	transaction_retries
 *		The number of retries for a transaction. Default is 3.
+*
+*	long_transaction_timeout
+*		The maximum time in milliseconds allowed for "long" transaction
+*		to complete.  Default is 500.
 *
 *	sm_priority
 *		The priority of this SM as specified by the user.  This
@@ -534,6 +546,12 @@ typedef struct osm_subn_opt {
 *	routing_engine_names
 *		Name of routing engine(s) to use.
 *
+*	avoid_throttled_links
+*		This option will enforce that throttled switch-to-switch links
+*		in the fabric are treated as 'broken' by the routing engines
+*		(if they support it), and hence no path is assigned to these
+*		underperforming links and a warning is logged instead.
+*
 *	connect_roots
 *		The option which will enforce root to root connectivity with
 *		up/down and fat-tree routing engines (even if this violates
@@ -616,6 +634,12 @@ typedef struct osm_subn_opt {
 *	mcgroup_join_validation
 *		OpenSM will validate multicast join parameters against
 *		multicast group parameters when MC group already exists.
+*
+*	use_original_extended_sa_rates_only
+*		Use only original extended SA rates (up through 300 Gbps
+*		for 12x EDR). Option is needed for subnets with
+*		old kernels/drivers that don't understand the
+*		new SA rates for 2x link width and/or HDR link speed (19-22).
 *
 *	use_optimized_slvl
 *		Use optimized SLtoVLMappingTable programming if
@@ -1499,7 +1523,7 @@ static inline struct osm_mgrp_box *osm_get_mbox_by_mlid(osm_subn_t const *p_subn
 *	The multicast group structure pointer if found. NULL otherwise.
 *********/
 
-int is_mlnx_ext_port_info_supported(ib_net16_t devid);
+int is_mlnx_ext_port_info_supported(ib_net32_t vendid, ib_net16_t devid);
 
 /****f* OpenSM: Subnet/osm_subn_set_default_opt
 * NAME

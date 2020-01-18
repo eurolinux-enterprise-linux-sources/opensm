@@ -929,7 +929,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 
 	/* impossible requested rate */
 	mc_req_rec.rate =
-	    IB_MAX_RATE | IB_PATH_SELECTOR_GREATER_THAN << 6;
+	    IB_RATE_MAX | IB_PATH_SELECTOR_GREATER_THAN << 6;
 
 	comp_mask = IB_MCR_COMPMASK_GID | IB_MCR_COMPMASK_PORT_GID | IB_MCR_COMPMASK_QKEY | IB_MCR_COMPMASK_PKEY | IB_MCR_COMPMASK_SL | IB_MCR_COMPMASK_FLOW | IB_MCR_COMPMASK_JOIN_STATE | IB_MCR_COMPMASK_TCLASS |	/* all above are required */
 	    IB_MCR_COMPMASK_RATE_SEL | IB_MCR_COMPMASK_RATE;
@@ -2423,7 +2423,7 @@ ib_api_status_t osmt_run_mcast_flow(IN osmtest_t * const p_osmt)
 		/* Check invalid Join with max mlid which is more than the
 		   Mellanox switches support 0xC000+0x1000 = 0xd000 */
 		OSM_LOG(&p_osmt->log, OSM_LOG_INFO,
-			"Checking Creation of Maximum avaliable Groups (MulticastFDBCap)...\n");
+			"Checking Creation of Maximum available Groups (MulticastFDBCap)...\n");
 		tmp_mlid = cl_ntoh16(max_mlid) - cnt;
 
 		while (tmp_mlid > 0) {
