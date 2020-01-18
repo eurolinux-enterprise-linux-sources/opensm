@@ -718,6 +718,7 @@ typedef struct {
 	uint64_t ports_8X;
 	uint64_t ports_12X;
 	uint64_t ports_unknown_width;
+	port_report_t *unknown_width_ports;
 	uint64_t ports_unenabled_width;
 	port_report_t *unenabled_width_ports;
 	uint64_t ports_reduced_width;
@@ -729,6 +730,7 @@ typedef struct {
 	uint64_t ports_fdr;
 	uint64_t ports_edr;
 	uint64_t ports_unknown_speed;
+	port_report_t *unknown_speed_ports;
 	uint64_t ports_unenabled_speed;
 	port_report_t *unenabled_speed_ports;
 	uint64_t ports_reduced_speed;
@@ -853,7 +855,12 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 				}
 			}
 			break;
+		case IB_LINK_SPEED_ACTIVE_EXTENDED:
+			break;
 		default:
+			__tag_port_report(&(fs->unknown_speed_ports),
+					  cl_ntoh64(node->node_info.node_guid),
+					  port, node->print_desc);
 			fs->ports_unknown_speed++;
 			break;
 		}
@@ -881,7 +888,12 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			case IB_LINK_SPEED_EXT_ACTIVE_25:
 				fs->ports_edr++;
 				break;
+			case IB_LINK_SPEED_EXT_ACTIVE_NONE:
+				break;
 			default:
+				__tag_port_report(&(fs->unknown_speed_ports),
+						  cl_ntoh64(node->node_info.node_guid),
+						  port, node->print_desc);
 				fs->ports_unknown_speed++;
 				break;
 			}
@@ -900,6 +912,9 @@ static void __get_stats(cl_map_item_t * const p_map_item, void *context)
 			fs->ports_12X++;
 			break;
 		default:
+			__tag_port_report(&(fs->unknown_width_ports),
+					  cl_ntoh64(node->node_info.node_guid),
+					  port, node->print_desc);
 			fs->ports_unknown_width++;
 			break;
 		}
@@ -975,7 +990,8 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		fprintf(out, "   %" PRIu64 " at 25.78125 Gbps\n", fs.ports_edr);
 
 	if (fs.ports_disabled + fs.ports_reduced_speed + fs.ports_reduced_width
-	    + fs.ports_unenabled_width + fs.ports_unenabled_speed > 0) {
+	    + fs.ports_unenabled_width + fs.ports_unenabled_speed
+	    + fs.ports_unknown_width + fs.ports_unknown_speed > 0) {
 		fprintf(out, "\nPossible issues:\n");
 	}
 	if (fs.ports_disabled) {
@@ -992,6 +1008,11 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 			fs.ports_reduced_speed);
 		__print_port_report(out, fs.reduced_speed_ports);
 	}
+	if (fs.ports_unknown_speed) {
+		fprintf(out, "   %" PRIu64 " with unknown speed\n",
+			fs.ports_unknown_speed);
+		__print_port_report(out, fs.unknown_speed_ports);
+	}
 	if (fs.ports_unenabled_width) {
 		fprintf(out, "   %" PRIu64 " with unenabled width\n",
 			fs.ports_unenabled_width);
@@ -1001,6 +1022,11 @@ static void portstatus_parse(char **p_last, osm_opensm_t * p_osm, FILE * out)
 		fprintf(out, "   %" PRIu64 " with reduced width\n",
 			fs.ports_reduced_width);
 		__print_port_report(out, fs.reduced_width_ports);
+	}
+	if (fs.ports_unknown_width) {
+		fprintf(out, "   %" PRIu64 " with unknown width\n",
+			fs.ports_unknown_width);
+		__print_port_report(out, fs.unknown_width_ports);
 	}
 	fprintf(out, "\n");
 }

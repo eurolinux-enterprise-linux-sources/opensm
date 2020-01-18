@@ -462,7 +462,7 @@ static void mcast_mgr_subdivide(osm_sm_t * sm, uint16_t mlid_ho,
 	OSM_LOG_EXIT(sm->p_log);
 }
 
-static void mcast_mgr_purge_list(osm_sm_t * sm, cl_qlist_t * list)
+static void mcast_mgr_purge_list(osm_sm_t * sm, uint16_t mlid, cl_qlist_t * list)
 {
 	if (OSM_LOG_IS_ACTIVE_V2(sm->p_log, OSM_LOG_ERROR)) {
 		osm_mcast_work_obj_t *wobj;
@@ -471,8 +471,8 @@ static void mcast_mgr_purge_list(osm_sm_t * sm, cl_qlist_t * list)
 		     i = cl_qlist_next(i)) {
 			wobj = cl_item_obj(i, wobj, list_item);
 			OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A06: "
-				"Unable to route for port 0x%" PRIx64 "\n",
-				cl_ntoh64(osm_port_get_guid(wobj->p_port)));
+				"Unable to route MLID 0x%X for port 0x%" PRIx64 "\n",
+				mlid, cl_ntoh64(osm_port_get_guid(wobj->p_port)));
 		}
 	}
 	osm_mcast_drop_port_list(list);
@@ -523,7 +523,7 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A21: "
 			"Maximal hops number is reached for MLID 0x%x."
 			" Break processing\n", mlid_ho);
-		mcast_mgr_purge_list(sm, p_list);
+		mcast_mgr_purge_list(sm, mlid_ho, p_list);
 		goto Exit;
 	}
 
@@ -543,7 +543,7 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 		/*
 		   Deallocate all the work objects on this branch of the tree.
 		 */
-		mcast_mgr_purge_list(sm, p_list);
+		mcast_mgr_purge_list(sm, mlid_ho, p_list);
 		goto Exit;
 	}
 
@@ -559,7 +559,7 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 		/*
 		   Deallocate all the work objects on this branch of the tree.
 		 */
-		mcast_mgr_purge_list(sm, p_list);
+		mcast_mgr_purge_list(sm, mlid_ho, p_list);
 		goto Exit;
 	}
 
@@ -576,7 +576,7 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 	if (list_array == NULL) {
 		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0A16: "
 			"Unable to allocate list array\n");
-		mcast_mgr_purge_list(sm, p_list);
+		mcast_mgr_purge_list(sm, mlid_ho, p_list);
 		osm_mtree_destroy(p_mtn);
 		p_mtn = NULL;
 		goto Exit;
@@ -634,17 +634,13 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 			"Routing %zu destinations via switch port %u\n",
 			count, i);
 
-		/*
-		   This port routes frames for this mcast group.  Therefore,
-		   set the appropriate bit in the multicast forwarding
-		   table for this switch.
-		 */
-		osm_mcast_tbl_set(p_tbl, mlid_ho, i);
 		if (i == 0) {
 			/* This means we are adding the switch to the MC group.
 			   We do not need to continue looking at the remote
 			   port, just needed to add the port to the table */
 			CL_ASSERT(count == 1);
+
+			osm_mcast_tbl_set(p_tbl, mlid_ho, i);
 
 			p_wobj = (osm_mcast_work_obj_t *)
 			    cl_qlist_remove_head(p_port_list);
@@ -654,8 +650,47 @@ static osm_mtree_node_t *mcast_mgr_branch(osm_sm_t * sm, uint16_t mlid_ho,
 
 		p_node = p_sw->p_node;
 		p_remote_node = osm_node_get_remote_node(p_node, i, NULL);
-		if (!p_remote_node)
+		if (!p_remote_node) {
+			/*
+			 * If we reached here, it means the minhop table has
+			 * invalid entries that leads to disconnected ports.
+			 *
+			 * A possible reason for the code to reach here is
+			 * that ucast cache is enabled, and a leaf switch that
+			 * is used as a non-leaf switch in a multicast has been
+			 * removed from the fabric.
+			 *
+			 * When it happens, we should invalidate the cache
+			 * and force rerouting of the fabric.
+			 */
+
+			OSM_LOG(sm->p_log, OSM_LOG_ERROR,
+				"ERR 0A1E: Tried to route MLID 0x%X through "
+				"disconnected switch 0x%" PRIx64 " port %d\n",
+				mlid_ho, cl_ntoh64(node_guid), i);
+
+			/* Free memory */
+			mcast_mgr_purge_list(sm, mlid_ho, p_port_list);
+
+			/* Invalidate ucast cache */
+			if (sm->ucast_mgr.p_subn->opt.use_ucast_cache &&
+			    sm->ucast_mgr.cache_valid) {
+				OSM_LOG(sm->p_log, OSM_LOG_INFO,
+					"Unicast Cache will be invalidated due "
+					"to multicast routing errors\n");
+				osm_ucast_cache_invalidate(&sm->ucast_mgr);
+				sm->p_subn->force_heavy_sweep = TRUE;
+			}
+
 			continue;
+		}
+
+		/*
+		   This port routes frames for this mcast group.  Therefore,
+		   set the appropriate bit in the multicast forwarding
+		   table for this switch.
+		 */
+		osm_mcast_tbl_set(p_tbl, mlid_ho, i);
 
 		if (osm_node_get_type(p_remote_node) == IB_NODE_TYPE_SWITCH) {
 			/*

@@ -401,9 +401,11 @@ void osm_sa_respond(osm_sa_t *sa, osm_madw_t *madw, size_t attr_size,
 	 */
 	if (sa_mad->method == IB_MAD_METHOD_GET && num_rec > 1) {
 		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 4C05: "
-			"Got %u records for SubnAdmGet(%s) comp_mask 0x%016" PRIx64 "\n",
+			"Got %u records for SubnAdmGet(%s) comp_mask 0x%016" PRIx64
+			"from requester LID %u\n",
 			num_rec, ib_get_sa_attr_str(sa_mad->attr_id),
-			cl_ntoh64(sa_mad->comp_mask));
+			cl_ntoh64(sa_mad->comp_mask),
+			cl_ntoh16(madw->mad_addr.dest_lid));
 		osm_sa_send_error(sa, madw, IB_SA_MAD_STATUS_TOO_MANY_RECORDS);
 		goto Exit;
 	}
@@ -524,7 +526,14 @@ opensm_dump_to_file(osm_opensm_t * p_osm, const char *file_name,
 		return -1;
 	}
 
-	chmod(path_tmp, S_IRUSR | S_IWUSR);
+	if (chmod(path_tmp, S_IRUSR | S_IWUSR)) {
+		OSM_LOG(&p_osm->log, OSM_LOG_ERROR, "ERR 4C0C: "
+			"cannot change access permissions of file "
+			"\'%s\' : %s\n",
+			path_tmp, strerror(errno));
+		fclose(file);
+		return -1;
+	}
 
 	dump_func(p_osm, file);
 

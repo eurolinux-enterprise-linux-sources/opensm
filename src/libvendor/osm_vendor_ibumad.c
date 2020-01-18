@@ -277,9 +277,9 @@ ib_mad_addr_conv(ib_user_mad_t * umad, osm_mad_addr_t * osm_mad_addr,
 {
 	ib_mad_addr_t *ib_mad_addr = umad_get_mad_addr(umad);
 
+	memset(osm_mad_addr, 0, sizeof(osm_mad_addr_t));
 	osm_mad_addr->dest_lid = ib_mad_addr->lid;
 	osm_mad_addr->path_bits = ib_mad_addr->path_bits;
-	osm_mad_addr->static_rate = 0;
 
 	if (is_smi) {
 		osm_mad_addr->addr_type.smi.source_lid = osm_mad_addr->dest_lid;
@@ -300,10 +300,6 @@ ib_mad_addr_conv(ib_user_mad_t * umad, osm_mad_addr_t * osm_mad_addr,
 						  ib_mad_addr->flow_label);
 		memcpy(&osm_mad_addr->addr_type.gsi.grh_info.dest_gid,
 		       &ib_mad_addr->gid, 16);
-	} else {
-		osm_mad_addr->addr_type.gsi.global_route = 0;
-		memset(&osm_mad_addr->addr_type.gsi.grh_info, 0,
-		       sizeof osm_mad_addr->addr_type.gsi.grh_info);
 	}
 }
 
@@ -331,7 +327,6 @@ static void *umad_receiver(void *p_ptr)
 	osm_mad_addr_t osm_addr;
 	osm_madw_t *p_madw, *p_req_madw;
 	ib_mad_t *p_mad, *p_req_mad;
-	ib_mad_addr_t *p_mad_addr;
 	void *umad = 0;
 	int mad_agent, length;
 
@@ -384,14 +379,6 @@ static void *umad_receiver(void *p_ptr)
 		}
 
 		p_mad = (ib_mad_t *) umad_get_mad(umad);
-		p_mad_addr = umad_get_mad_addr(umad);
-		/* Only support GID index 0 currently */
-		if (p_mad_addr->grh_present && p_mad_addr->gid_index) {
-			OSM_LOG(p_ur->p_log, OSM_LOG_ERROR, "ERR 5409: "
-				"GRH received on GID index %d for mgmt class 0x%x\n",
-				p_mad_addr->gid_index, p_mad->mgmt_class);
-			continue;
-		}
 
 		ib_mad_addr_conv(umad, &osm_addr,
 				 p_mad->mgmt_class == IB_MCLASS_SUBN_LID ||

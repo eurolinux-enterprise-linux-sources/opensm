@@ -1,5 +1,302 @@
 
-** Version: HEAD
+** Version: opensm-3.3.19
+
+Wed Dec 17 20:01:21 2014 +0200 Hal Rosenstock
+fa92807d9c0d60b6aaa66c5303b19a8c5ec101c6
+
+	* Update opensm_release_notes-3.3.txt
+
+Wed Dec 17 19:41:39 2014 +0200 Hal Rosenstock
+2a30f922f4414763aac72d7f55c00c919bd2e63b
+
+	* Update package number for OpenSM to 3.3.19 for release
+
+Wed Dec 17 19:38:29 2014 +0200 Hal Rosenstock
+e29f77a6996da847e235b75316be9577b081f498
+
+	* Update (internal) shared library versions
+
+Sat Dec 13 18:19:13 2014 +0200 Hal Rosenstock
+28fd4eefb2e112039a3ac0081890adb4d6fd3597
+
+	* osm_[subnet congestion_control].c: Cosmetic commentary change
+
+Sat Dec 13 16:54:51 2014 +0200 Hal Rosenstock
+391c244f350b91a03a4b3a0591737f27ca3bbb33
+
+	* osm_congestion_control.c: Added Mellanox copyright
+
+Sat Dec 13 16:49:48 2014 +0200 Hal Rosenstock
+7e08621264f70af7f9875409bae86938f0aaa448
+
+	* osm_congestion_control.c: In cc_rcv_mad, add attribute ID and modifier to log message
+
+Sat Dec 13 16:37:31 2014 +0200 Hal Rosenstock
+62075d689bee0fd75beb5ecdace97424670930f4
+
+	* osm_perfmgr.c: Fix endian of MAD status in pc_recv_process
+
+Sat Dec 13 16:36:03 2014 +0200 Hal Rosenstock
+cd94c9cc7c4d096c4450e760b392f0c23cdc6753
+
+	* osm_congestion_control.c: Fix endian of MAD status in cc_rcv_mad
+
+Sat Dec 13 16:31:44 2014 +0200 Hal Rosenstock
+cb5df8bbbbb67aceb6ddfd15fbff4979d5bed437
+
+	* osm_congestion_control.c: Fix endian of node and port GUIDs in some log messages
+
+Sat Dec 13 16:11:34 2014 +0200 Hal Rosenstock
+68887fb2388a6f1c7154ffa70bc89eab43177f98
+
+	* osm_congestion_control.c: Cosmetic changes
+
+Tue Dec 9 19:32:18 2014 +0200 Daniel Klein
+5077198d156636c547f2a4ab4099439ddccd390e
+
+	* osm_perfmgr.c: Reset physp_discovered before discovery
+
+Wed Dec 10 09:30:50 2014 +0200 Shlomi Nimrodi
+1331a46b017ff83e819f85bdbd3d1659182c3225
+
+	* osm_subnet.[h c]: Fix possibility for open file descriptor issue
+
+Mon Dec 8 10:39:12 2014 -0800 Albert Chu
+ce15bb76b58e50f2606e1c96077d40216a610bcc
+
+	* osm_perfmgr.c: Output remote port on perfmgr error counter log messages
+
+Mon Dec 1 11:11:00 2014 +0200 Tomer Cohen
+030ac82209e920f09ff24ebe101a41e5c9bb3103
+
+	* osm_sa.c: Improve ERR 4C05 log message
+
+Tue Dec 2 14:01:33 2014 +0200 Daniel Klein
+fbb63d6c3d9b7bcaf34c47a7840b74d39b0c8807
+
+	* osm_subnet.c: Update MEPI supported devices white list
+
+Tue Dec 2 20:52:21 2014 +0200 Hal Rosenstock
+0774229f1f2ec90665b6798456921c6b661b7d76
+
+	* osm_subnet.c: Cosmetic formatting change
+
+Tue Nov 18 16:14:22 2014 +0200 Daniel Klein
+5871ef71c177de927f105caa7c6a56aadc3d3d1d
+
+	* osm_sa.c: Check return value from chmod in opensm_dump_to_file
+
+Thu Nov 20 11:15:11 2014 +0200 Daniel Klein
+8d51ae5dabdbe66f8e276ad372c8f4adcada85b2
+
+	* osm_state_mgr.c: Avoid continuing discovery when SM port is unresponsive
+
+Mon Nov 17 19:18:39 2014 +0200 Daniel Klein
+61cd0cfb9760904d1d49cf190bbaffe4c058d781
+
+	* osm_switch.c: Fix potential memory leak due to misuse of realloc
+
+Tue Dec 11 12:27:03 2012 +0200 Alex Netes
+c78adde242ddcd67f8f1a84ab8721d25fa886f03
+
+	* osm_req.c: Initialize dest_port_guid in req_determine_mkey
+
+Tue Nov 4 16:03:21 2014 +0200 Daniel Klein
+dd5e5dff8e1865a6c2d06ebbdf2a303562885a85
+
+	* osm_mcast_mgr.c: Add MLID to error 0A06 log message
+
+Thu Apr 25 19:20:31 2013 +0300 Alex Netes
+f017063f57ce2abaedd24c420915c72db9815c91
+
+	* Better way to handle polling other MASTER SM
+
+Thu Oct 30 16:30:15 2014 +0200 Hal Rosenstock
+63900bcc9fdba2c02b32a8ace2123f28ffaf276e
+
+	* osm_vendor_ibumad.h: Use UMAD_MAX_DEVICES for OSM_UMAD_MAX_CAS
+
+Tue Oct 14 08:53:08 2014 +0200 Daniel Klein
+25e5ee52cc2df4fba81483d0c9d220b5dbbbf975
+
+	* complib/cl_dispatcher.c: Check registrations vector size when searching for handlers
+
+Tue Oct 7 16:17:47 2014 +0200 Dan Ben Yosef
+a5c0200ea101a24f3f1753e608cb0b677403a562
+
+	* iba/ib_types.h: Add support for new MAD SM:PortInfoExtended and for modifying PM:PortExtendedSpeedsCounters
+
+Tue Oct 21 17:18:21 2014 +0200 Hal Rosenstock
+3f9953573f0cecb482d17d01da7cb8e2f867a85e
+
+	* osm_port_info_rcv.c: In osm_pi_rcv_process, move assert before first log message
+
+Tue Oct 21 10:26:02 2014 +0200 Vladimir Koushnir
+6b0fb4d1881e3c227d4c2950b1bee208728a81d9
+
+	* osm_lid_mgr.c: Send client reregistration in case of SM LID change
+
+Sun Oct 19 18:25:09 2014 +0200 Shlomi Nimrodi
+5d231f8791fc166ceba6a5171d122e7409f2524c
+
+	* osm_pkey_mgr.c: Use calloc instead of malloc in pkey_mgr_process_physical_port
+
+Mon Oct 13 15:29:24 2014 +0200 Vladimir Koushnir
+985859e552dcb8802b1bad1250cf848745f2373d
+
+	* Fix turning on first_time_master_sweep flag
+
+Tue Oct 7 10:01:10 2014 +0200 Daniel Klein
+4629e80e48d6a618e55b372a191d884b556738b3
+
+	* osm_mcast_mgr.c: Invalidate cache due to multicast routing errors
+
+Tue Sep 16 16:32:38 2014 +0300 Daniel Klein
+a0b94442bfb217fbecf2f108781cc0863ae8da08
+
+	* Change osm_subn_t.log_max_size type to uint32_t
+
+Thu Sep 25 17:40:40 2014 +0300 Hal Rosenstock
+b5abaa2883ecb3973febe97bcc15c7ce45b3c97d
+
+	* osmeventplugin.c: Add include of osm_config.h as first OpenSM include
+
+Sat Sep 20 14:43:04 2014 +0300 Hal Rosenstock
+ecce4e36ac1c1cc270a266195add5fe257e5b1e8
+
+	* osm_console.c: Handle LinkSpeed[Ext]Active 0 for portstatus command
+
+Sat Sep 20 14:40:14 2014 +0300 Hal Rosenstock
+f6228104335e429a3803facba6daa3e79fd86061
+
+	* osm_console.c: Fix unknown speed/width port reporting for portstatus command
+
+Sat Sep 20 00:59:21 2014 +0300 Hal Rosenstock
+ffdd042751408e73c722e12658fccc44bb8a5778
+
+	* osm_console_io.c: In is_authorized, STRING_UNKNOWN is define
+
+Mon Sep 15 14:29:06 2014 +0300 Tomer Cohen
+a6ba88828ae6ca19689b10e5802e7d60967a8d00
+
+	* Add missing keyword in partition definition in man page and partition.txt doc
+
+Wed Sep 17 14:14:55 2014 +0300 Hal Rosenstock
+7444e5e2e83d69aa8842217bd5b5e32ca1ecd52f
+
+	* Fix the difference in osm_opensm struct size between OpenSM and plugin(s)
+
+Sun Sep 14 15:13:18 2014 +0300 Hal Rosenstock
+caf764fc02e8ec5997436f3ceafa5ae2abdb291c
+
+	* osm_subnet.h: Fixed commentary typo
+
+Thu Sep 11 18:13:56 2014 +0300 Vladimir Koushnir
+117bc826b396acc118974f66cbf00e27741344fe
+
+	* osm_prtn.c: Change message verbosity for log message in osm_prtn_add_port
+
+Sun Sep 7 11:34:17 2014 +0300 Daniel Klein
+b6a1dd4741bc4c49ccd15bf5de8003bf097ee068
+
+	* osm_state_mgr.c: Avoid ucast cache invalidation due to errors during initialization
+
+Mon Sep 1 17:49:48 2014 +0300 Tomer Cohen
+3b172ab597516e05aa691aae22f210d73016257a
+
+	* osm_config.h.in: Fixed the difference in osm_opensm_t struct size between opensm and plugins
+
+Thu Sep 4 20:46:25 2014 +0300 Hal Rosenstock
+d13d4bdbab25aefa58762d371b55d03b613868f1
+
+	* osm_console.c: Track and report unknown/speed width ports
+
+Thu Aug 28 14:44:39 2014 +0300 Hal Rosenstock
+d63e7f6d79ebbf3bb2ce43eb2ab5e22fefb6d8dc
+
+	* osm_sa_path_record.c: Cosmetic formatting changes
+
+Mon Aug 18 18:57:57 2014 +0300 Hal Rosenstock
+48d159b7b9f631d6b2e62360bf351e0fe9c2d77c
+
+	* libvendor/osm_vendor_ibumad.c: Remove GID index 0 check in umad_receiver
+
+Tue Aug 12 17:23:51 2014 +0300 Tomer Cohen
+d7f1d02bb4855d8941765ea2095c4f6ee945a63c
+
+	* libvendor/osm_vendor_ibumad.c: memset osm_mad_addr_t before setting fields
+
+Tue Aug 12 15:32:17 2014 +0300 Hal Rosenstock
+96f89d61f28a74256410e8b02203e0926ddaf9fa
+
+	* osm_console.c: Included unknown speed/width ports in "possible issues"
+
+Thu Aug 7 21:12:56 2014 +0300 Hal Rosenstock
+44df23554aeb7b498b0ed01c778371119575aa38
+
+	* osm_dump.c: In dump_topology_node, handle link_width_active of 4 for 8X
+
+Mon Aug 4 15:40:43 2014 +0300 Shlomi Nimrodi
+a1e58e03840fae6b334caf908a95da7c76c39b41
+
+	* osm_link_mgr.c: Fix bug in mlnx extended port info setting
+
+Wed Aug 6 23:25:18 2014 +0300 Hal Rosenstock
+fcb696784930ef2a2c9f665a90003da3ac5edd1e
+
+	* osm_subnet.c: Improve sweep_on_trap documentation in generated conf file
+
+Mon Aug 4 03:13:04 2014 +0300 Hal Rosenstock
+47a6b00477bff9d83376bf97452b8871c1fc08df
+
+	* osm_sa_multipath_record.c: Better logging for 4514, 4515, and 4505 error messages
+
+Mon Aug 4 03:10:52 2014 +0300 Hal Rosenstock
+115529be7bf139357e6554f54ccd342813448f2d
+
+	* osm_sa_path_record.c: Better logging for 1F02 error message
+
+Sun Aug 3 11:12:54 2014 +0300 Vladimir Koushnir
+fe079dfe054d35fcb107df4bca6fa95f79ec2cce
+
+	* osm_sa_path_record.c: Better logging for 1F05 and 1F03 error messages
+
+Sun Aug 3 02:22:33 2014 +0300 Hal Rosenstock
+43c378f4b5ca4856995722998f985f46a6437c3e
+
+	* osm_ucast_mgr.c: A couple of cosmetic log message changes in ucast_mgr_route
+
+Thu Jul 24 14:18:01 2014 +0300 Hal Rosenstock
+9a5e51405392ba13770bd5d909f1d6aee40cb599
+
+	* osmtest/osmtest.c: Cosmetic formatting change
+
+Tue Jul 22 17:32:15 2014 +0300 Hal Rosenstock
+90db6c3da1947de2b0860319a50e1df451e21572
+
+	* osm_state_mgr.c: Cosmetic formatting changes
+
+Tue Jul 22 14:16:11 2014 +0300 Hal Rosenstock
+e7139affd49237d3e5ed1ef55154772053958f69
+
+	* osmtest/osmtest.c: Fix osmtest_get_sm_gid when running osmtest on node other than SM node
+
+Tue Jul 22 04:27:58 2014 +0300 Hal Rosenstock
+83ea812d714e50601dc2aa89fd30e55a3d6ef84c
+
+	* doc/performance-manager-HOWTO.txt: Update perfmgr config options documentation
+
+Mon Jul 21 18:52:22 2014 +0300 Hal Rosenstock
+d4d5af39285fc7fd720c412455c58b494065bc16
+
+	* libvendor/osm_vendor_ibumad_sa.c: Fixed endian in debug log message
+
+Mon Jul 21 18:49:47 2014 +0300 Hal Rosenstock
+c1080b9cc58fb0b1db7b3c3a4a8c7338f91cf31c
+
+	* osmtest/main.c: Cosmetic change to output for consistency
+
+** Version: opensm-3.3.18
 
 Wed Jul 16 22:28:15 2014 +0300 Hal Rosenstock
 77f713a8fdb1ce31a24488b370b14dd6f3cf7aaf

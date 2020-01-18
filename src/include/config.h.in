@@ -146,6 +146,9 @@
    `char[]'. */
 #undef YYTEXT_POINTER
 
+/* define 1 if OpenSM build is in a debug mode */
+#undef _DEBUG_
+
 /* mark config.h inclusion */
 #undef _OSM_CONFIG_H_
 

@@ -13,6 +13,7 @@
 
 /* define 1 if OpenSM build is in a debug mode */
 /* #undef OSM_DEBUG */
+/* #undef _DEBUG_ */
 
 /* Define as 1 if you want Dual Sided RMPP Support */
 #define DUAL_SIDED_RMPP 1
@@ -61,5 +62,8 @@
 
 /* Define as 1 if you want Vendor RMPP Support */
 #define VENDOR_RMPP_SUPPORT 1
+
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#define HAVE_LIBPTHREAD 1
 
 #endif /* _OSM_CONFIG_H_ */

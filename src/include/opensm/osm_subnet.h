@@ -287,7 +287,7 @@ typedef struct osm_subn_opt {
 	uint8_t log_flags;
 	char *dump_files_dir;
 	char *log_file;
-	unsigned long log_max_size;
+	uint32_t log_max_size;
 	char *partition_config_file;
 	boolean_t no_partition_enforcement;
 	char *part_enforce;
@@ -677,7 +677,7 @@ typedef struct osm_subn_opt {
 *		configuration setting.
 *
 *	cc_sw_cong_setting_credit_starvation_threshold
-*		Congestion Control Switch Congestion Setting Credit Staraction Threshold
+*		Congestion Control Switch Congestion Setting Credit Starvation Threshold
 *		configuration setting.
 *
 *	cc_sw_cong_setting_credit_starvation_return_delay
@@ -764,6 +764,7 @@ typedef struct osm_subn {
 	boolean_t force_heavy_sweep;
 	boolean_t force_reroute;
 	boolean_t in_sweep_hop_0;
+	boolean_t force_first_time_master_sweep;
 	boolean_t first_time_master_sweep;
 	boolean_t coming_out_of_standby;
 	boolean_t sweeping_enabled;
@@ -871,6 +872,16 @@ typedef struct osm_subn {
 *		This is relevant for the case of SM on switch, since in the
 *		switch info we need to signal somehow not to continue
 *		the sweeping.
+*
+*	force_first_time_master_sweep
+*		This flag is used to avoid race condition when Master SM being
+*		in the middle of very long configuration stage of the heavy sweep,
+*		receives HANDOVER from another MASTER SM. When the current heavy sweep
+*		is finished, new heavy sweep will be started immediately.
+*		At the beginning of the sweep, opensm will set first_time_master_sweep,
+*		force_heavy_sweep and coming_out_of_standby flags in order to allow full
+*		reconfiguration of the fabric. This is required as another MASTER SM could
+*		change configuration of the fabric before sending HANDOVER to MASTER SM.
 *
 *	first_time_master_sweep
 *		This flag is used for the PortInfo setting. On the first
@@ -1557,7 +1568,7 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn);
 *
 * SYNOPSIS
 */
-int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opt);
+void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opt);
 /*
 * PARAMETERS
 *
@@ -1568,7 +1579,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opt);
 *		[in] Pointer to the subnet options structure.
 *
 * RETURN VALUES
-*	0 on success, negative value otherwise
+*	This method does not return a value
 *********/
 
 /****f* OpenSM: Subnet/osm_subn_write_conf_file

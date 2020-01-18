@@ -228,9 +228,9 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 		p_physp = osm_switch_get_route_by_lid(p_node->sw, dest_lid);
 		if (p_physp == 0) {
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F02: "
-				"Cannot find routing to LID %u on switch "
-				"%s (GUID: 0x%016" PRIx64 ")\n", dest_lid_ho,
-				p_node->print_desc,
+				"Cannot find routing from LID %u to LID %u on "
+				"switch %s (GUID: 0x%016" PRIx64 ")\n",
+				src_lid_ho, dest_lid_ho, p_node->print_desc,
 				cl_ntoh64(osm_node_get_node_guid(p_node)));
 			status = IB_NOT_FOUND;
 			goto Exit;
@@ -272,9 +272,9 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 
 		if (p_dest_physp == 0) {
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F03: "
-				"Cannot find routing to LID %u on switch "
-				"%s (GUID: 0x%016" PRIx64 ")\n", dest_lid_ho,
-				p_node->print_desc,
+				"Can't find routing from LID %u to LID %u on "
+				"switch %s (GUID: 0x%016" PRIx64 ")\n",
+				src_lid_ho, dest_lid_ho, p_node->print_desc,
 				cl_ntoh64(osm_node_get_node_guid(p_node)));
 			status = IB_NOT_FOUND;
 			goto Exit;
@@ -296,11 +296,10 @@ static ib_api_status_t pr_rcv_get_path_parms(IN osm_sa_t * sa,
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1F05: "
 				"Can't find remote phys port of %s (GUID: "
 				"0x%016"PRIx64") port %d "
-				"while routing to LID %u\n",
+				"while routing from LID %u to LID %u\n",
 				p_node->print_desc,
 				cl_ntoh64(osm_node_get_node_guid(p_node)),
-				tmp_pnum,
-				dest_lid_ho);
+				tmp_pnum, src_lid_ho, dest_lid_ho);
 			status = IB_ERROR;
 			goto Exit;
 		}
@@ -1269,13 +1268,13 @@ static ib_net64_t find_router(const osm_sa_t *sa, ib_net64_t prefix)
 }
 
 ib_net16_t osm_pr_get_end_points(IN osm_sa_t * sa,
-					IN const ib_sa_mad_t *sa_mad,
-					OUT const osm_alias_guid_t ** pp_src_alias_guid,
-					OUT const osm_alias_guid_t ** pp_dest_alias_guid,
-					OUT const osm_port_t ** pp_src_port,
-					OUT const osm_port_t ** pp_dest_port,
-					OUT const ib_gid_t ** pp_sgid,
-					OUT const ib_gid_t ** pp_dgid)
+				 IN const ib_sa_mad_t *sa_mad,
+				 OUT const osm_alias_guid_t ** pp_src_alias_guid,
+				 OUT const osm_alias_guid_t ** pp_dest_alias_guid,
+				 OUT const osm_port_t ** pp_src_port,
+				 OUT const osm_port_t ** pp_dest_port,
+				 OUT const ib_gid_t ** pp_sgid,
+				 OUT const ib_gid_t ** pp_dgid)
 {
 	const ib_path_rec_t *p_pr = ib_sa_mad_get_payload_ptr(sa_mad);
 	ib_net64_t comp_mask = sa_mad->comp_mask;

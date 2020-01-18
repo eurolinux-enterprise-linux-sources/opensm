@@ -255,7 +255,7 @@ static void opts_setup_log_max_size(osm_subn_t *p_subn, void *p_val)
 {
 	uint32_t log_max_size = *((uint32_t *) p_val);
 
-	p_subn->p_osm->log.max_size = log_max_size << 20; /* convert from MB to bytes */
+	p_subn->p_osm->log.max_size = (unsigned long)log_max_size << 20; /* convert from MB to bytes */
 }
 
 static void opts_setup_sminfo_polling_timeout(osm_subn_t *p_subn, void *p_val)
@@ -472,7 +472,7 @@ static void opts_parse_charp(IN osm_subn_t *p_subn, IN char *p_key,
 			     void (*pfn)(osm_subn_t *, void *))
 {
 	char **p_val1 = p_v1, **p_val2 = p_v2;
-	const char *current_str = *p_val1 ? *p_val1 : null_str ;
+	const char *current_str = *p_val1 ? *p_val1 : null_str;
 
 	if (p_val_str && strcmp(p_val_str, current_str)) {
 		char *new;
@@ -1474,9 +1474,9 @@ int is_mlnx_ext_port_info_supported(ib_net16_t devid)
 	uint16_t devid_ho;
 
 	devid_ho = cl_ntoh16(devid);
-	if (devid_ho == 0xc738)
+	if ((devid_ho >= 0xc738 && devid_ho <= 0xc73b) || devid_ho == 0xcb20)
 		return 1;
-	if (devid_ho >= 0x1003 && devid_ho <= 0x1011)
+	if (devid_ho >= 0x1003 && devid_ho <= 0x1013)
 		return 1;
 	return 0;
 }
@@ -2274,7 +2274,7 @@ int osm_subn_rescan_conf_files(IN osm_subn_t * p_subn)
 	return 0;
 }
 
-int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
+void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 {
 	int cacongoutputcount = 0;
 	int i;
@@ -2426,7 +2426,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"reassign_lids %s\n\n"
 		"# If TRUE forces every sweep to be a heavy sweep\n"
 		"force_heavy_sweep %s\n\n"
-		"# If TRUE every trap will cause a heavy sweep.\n"
+		"# If TRUE every trap 128 and 144 will cause a heavy sweep.\n"
 		"# NOTE: successive identical traps (>10) are suppressed\n"
 		"sweep_on_trap %s\n\n",
 		p_opts->sweep_interval,
@@ -2699,7 +2699,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# Log file to be used\n"
 		"log_file %s\n\n"
 		"# Limit the size of the log file in MB. If overrun, log is restarted\n"
-		"log_max_size %lu\n\n"
+		"log_max_size %u\n\n"
 		"# If TRUE will accumulate the log over multiple OpenSM sessions\n"
 		"accum_log_file %s\n\n"
 		"# Per module logging configuration file\n"
@@ -2899,7 +2899,7 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		}
 	}
 
-	/* If by chance all the CA Cong Settings are default, output atleast 1 chunk
+	/* If by chance all the CA Cong Settings are default, output at least 1 chunk
          * for illustration */
 	if (!cacongoutputcount)
 		fprintf(out,
@@ -2949,7 +2949,6 @@ int osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 
 	/* optional string attributes ... */
 
-	return 0;
 }
 
 int osm_subn_write_conf_file(char *file_name, IN osm_subn_opt_t * p_opts)
@@ -2963,8 +2962,7 @@ int osm_subn_write_conf_file(char *file_name, IN osm_subn_opt_t * p_opts)
 		return -1;
 	}
 
-	if (osm_subn_output_conf(opts_file, p_opts) < 0)
-		return -1;
+	osm_subn_output_conf(opts_file, p_opts);
 
 	fclose(opts_file);
 

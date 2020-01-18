@@ -1,8 +1,8 @@
 %define _hardened_build 1
 
 Name: opensm
-Version: 3.3.18
-Release: 2%{?dist}
+Version: 3.3.19
+Release: 1%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 Group: System Environment/Daemons
 License: GPLv2 or BSD
@@ -16,12 +16,11 @@ Source7: opensm.rwtab
 Patch0: opensm-3.3.13-prefix.patch
 Patch1: opensm-3.3.18-man-fixes.patch
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.11, libtool, bison, flex, byacc, systemd
+BuildRequires: libibmad-devel = 1.3.12, libtool, bison, flex, byacc, systemd
 Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
-ExcludeArch: s390 s390x
 
 %description
 OpenSM is the OpenIB project's Subnet Manager for Infiniband networks.
@@ -129,6 +128,11 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Fri Jun 05 2015 Doug Ledford <dledford@redhat.com> - 3.3.19-1
+- Update to latest upstream release
+- Build on s390
+- Related: bz1186159
+
 * Fri Oct 17 2014 Doug Ledford <dledford@redhat.com> - 3.3.18-2
 - Fix an issue found by rpmdiff
 - Related: bz1061587

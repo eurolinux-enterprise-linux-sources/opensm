@@ -373,6 +373,13 @@ static boolean_t state_mgr_is_sm_port_down(IN osm_sm_t * sm)
 		state = IB_LINK_ACTIVE;	/* base SP0 */
 	else
 		state = osm_physp_get_port_state(p_physp);
+
+	if (!p_port->discovery_count) {
+		OSM_LOG(sm->p_log, OSM_LOG_ERROR,
+			"ERR 330A: Failed to discover SM port\n");
+		state = IB_LINK_DOWN;
+	}
+
 	CL_PLOCK_RELEASE(sm->p_lock);
 
 Exit:
@@ -1162,6 +1169,13 @@ static void do_sweep(osm_sm_t * sm)
 	osm_remote_sm_t *p_remote_sm;
 	unsigned config_parsed = 0;
 
+	if (sm->p_subn->force_first_time_master_sweep) {
+		sm->p_subn->force_heavy_sweep = TRUE;
+		sm->p_subn->coming_out_of_standby = TRUE;
+		sm->p_subn->first_time_master_sweep = TRUE;
+		sm->p_subn->force_first_time_master_sweep = FALSE;
+	}
+
 	/* after subnet initialization error, run heavy sweep */
 	if (sm->p_subn->subnet_initialization_error)
 		sm->p_subn->force_heavy_sweep = TRUE;
@@ -1228,12 +1242,11 @@ static void do_sweep(osm_sm_t * sm)
 	}
 
 	/*
-	 * Unicast cache should be invalidated if there were errors
-	 * during initialization or if subnet re-route is requested.
+	 * Unicast cache should be invalidated when subnet re-route is
+	 * requested, and when OpenSM comes out of standby state.
 	 */
 	if (sm->p_subn->opt.use_ucast_cache &&
-	    (sm->p_subn->subnet_initialization_error ||
-	     sm->p_subn->force_reroute || sm->p_subn->coming_out_of_standby))
+	    (sm->p_subn->force_reroute || sm->p_subn->coming_out_of_standby))
 		osm_ucast_cache_invalidate(&sm->ucast_mgr);
 
 	/*
@@ -1314,7 +1327,8 @@ repeat_discovery:
 	if (state_mgr_is_sm_port_down(sm) == TRUE) {
 		if (sm->p_subn->last_sm_port_state) {
 			sm->p_subn->last_sm_port_state = 0;
-			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID, "SM port is down\n");
+			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID,
+				   "SM port is down\n");
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"SM PORT DOWN");
 		}
@@ -1331,7 +1345,8 @@ repeat_discovery:
 	} else {
 		if (!sm->p_subn->last_sm_port_state) {
 			sm->p_subn->last_sm_port_state = 1;
-			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID, "SM port is up\n");
+			osm_log_v2(sm->p_log, OSM_LOG_SYS, FILE_ID,
+				   "SM port is up\n");
 			OSM_LOG_MSG_BOX(sm->p_log, OSM_LOG_VERBOSE,
 					"SM PORT UP");
 		}
@@ -1396,9 +1411,16 @@ repeat_discovery:
 				 * need to wait for that SM to relinquish control
 				 * of its portion of the subnet. C14-60.2.1.
 				 * Also - need to start polling on that SM. */
+				CL_PLOCK_EXCL_ACQUIRE(sm->p_lock);
 				sm->polling_sm_guid = p_remote_sm->smi.guid;
+				CL_PLOCK_RELEASE(sm->p_lock);
 				osm_sm_state_mgr_process(sm,
 							 OSM_SM_SIGNAL_WAIT_FOR_HANDOVER);
+				return;
+			} else if (sm->polling_sm_guid) {
+				/* Stop polling SM if it's not found */
+				osm_sm_state_mgr_process(sm,
+							 OSM_SM_SIGNAL_POLLING_TIMEOUT);
 				return;
 			}
 		}
@@ -1456,9 +1478,12 @@ repeat_discovery:
 	 */
 
 	if (!sm->ucast_mgr.cache_valid ||
-	    osm_ucast_cache_process(&sm->ucast_mgr))
-		if (osm_ucast_mgr_process(&sm->ucast_mgr))
+	    osm_ucast_cache_process(&sm->ucast_mgr)) {
+		if (osm_ucast_mgr_process(&sm->ucast_mgr)) {
+			osm_ucast_cache_invalidate(&sm->ucast_mgr);
 			return;
+		}
+	}
 
 	osm_qos_setup(sm->p_subn->p_osm);
 
