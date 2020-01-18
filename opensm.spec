@@ -2,7 +2,7 @@
 
 Name: opensm
 Version: 3.3.20
-Release: 2%{?dist}
+Release: 3%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
 License: GPLv2 or BSD
 Url: http://www.openfabrics.org/
@@ -13,7 +13,7 @@ Source5: opensm.service
 Source6: opensm.launch
 Source7: opensm.rwtab
 Patch0: opensm-3.3.13-prefix.patch
-BuildRequires: libibmad-devel >= 1.3.12, libtool, bison, flex, byacc, systemd
+BuildRequires: libibumad-devel, libtool, bison, flex, byacc, systemd
 Requires: %{name}-libs%{?_isa} = %{version}-%{release}, logrotate, rdma
 Requires(post): systemd
 Requires(preun): systemd
@@ -110,6 +110,10 @@ fi
 %{_libdir}/lib*.a
 
 %changelog
+* Tue Jun 19 2018 Honggang Li <honli@redhat.com> - 3.3.20-3
+- Fix BuildRequires
+- Resolves: bz1567528
+
 * Wed Nov  1 2017 Honggang Li <honli@redhat.com> - 3.3.20-2
 - Fix up preuninstall script
 - Resolves: bz1508334
