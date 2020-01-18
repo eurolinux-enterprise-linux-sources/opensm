@@ -100,6 +100,7 @@ ib_api_status_t osm_pkey_tbl_init(IN osm_pkey_tbl_t * p_pkey_tbl)
 	p_pkey_tbl->used_blocks = 0;
 	p_pkey_tbl->max_blocks = 0;
 	p_pkey_tbl->rcv_blocks_cnt = 0;
+	p_pkey_tbl->indx0_pkey = 0;
 	return IB_SUCCESS;
 }
 
@@ -572,4 +573,14 @@ boolean_t osm_physp_has_pkey(IN osm_log_t * p_log, IN ib_net16_t pkey,
 Exit:
 	OSM_LOG_EXIT(p_log);
 	return res;
+}
+
+void osm_pkey_tbl_set_indx0_pkey(IN osm_log_t * p_log, IN ib_net16_t pkey,
+				 IN boolean_t full,
+				 OUT osm_pkey_tbl_t * p_pkey_tbl)
+{
+	p_pkey_tbl->indx0_pkey = (full == TRUE) ?
+				 pkey | cl_hton16(0x8000) : pkey;
+	OSM_LOG(p_log, OSM_LOG_DEBUG, "pkey 0x%04x set at indx0\n",
+		cl_ntoh16(p_pkey_tbl->indx0_pkey));
 }

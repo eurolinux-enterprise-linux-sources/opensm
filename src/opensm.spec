@@ -1,4 +1,4 @@
-%define RELEASE 3.3.19
+%define RELEASE 3.3.20
 %define rel %{?CUSTOM_RELEASE}%{!?CUSTOM_RELEASE:%RELEASE}
 %if %{?_with_console_socket:1}%{!?_with_console_socket:0}
 %define _enable_console_socket --enable-console-socket
@@ -27,12 +27,12 @@
 
 Summary: InfiniBand subnet manager and administration
 Name: opensm
-Version: 3.3.19
+Version: 3.3.20
 Release: %rel%{?dist}
 License: GPLv2 or BSD
 Group: System Environment/Daemons
 URL: http://openfabrics.org/
-Source: http://www.openfabrics.org/downloads/management/opensm-3.3.19.tar.gz
+Source: http://www.openfabrics.org/downloads/management/opensm-3.3.20.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: libibumad-devel, libtool
 Requires: %{name}-libs = %{version}-%{release}, logrotate

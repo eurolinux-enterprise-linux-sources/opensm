@@ -91,6 +91,7 @@ typedef struct osm_pkeybl {
 	uint16_t used_blocks;
 	uint16_t max_blocks;
 	uint16_t rcv_blocks_cnt;
+	uint16_t indx0_pkey;
 } osm_pkey_tbl_t;
 /*
 * FIELDS
@@ -124,6 +125,10 @@ typedef struct osm_pkeybl {
 *		Counter for the received GetPKeyTable mads.
 *		For every GetPKeyTable mad we send, increase the counter,
 *		and for every GetRespPKeyTable we decrease the counter.
+*
+*	indx0_pkey
+*		stores the pkey to be inserted at block 0 index 0.
+*		if this field is 0, the default pkey will be inserted.
 *
 * NOTES
 * 'blocks' vector should be used to store pkey values obtained from
@@ -664,22 +669,7 @@ boolean_t osm_port_share_pkey(IN osm_log_t * p_log,
 *  osm_physp_has_pkey
 *
 * DESCRIPTION
-*  Checks if the given lids and port_numbers share a pkey.
-*  The meaning P_Key matching:
-*  10.9.3 :
-*   In the following, let M_P_Key(Message P_Key) be the P_Key in the incoming
-*   packet and E_P_Key(Endnode P_Key) be the P_Key it is being compared against
-*   in the packet's destination endnode.
-*
-*    If:
-*    * neither M_P_Key nor E_P_Key are the invalid P_Key
-*    * and the low-order 15 bits of the M_P_Key match the low order 15
-*      bits of the E_P_Key
-*    * and the high order bit(membership type) of both the M_P_Key and
-*      E_P_Key are not both 0 (i.e., both are not Limited members of
-*      the partition)
-*
-*    then the P_Keys are said to match.
+*	Given a physp and a pkey, check if pkey exists in physp pkey table
 *
 * SYNOPSIS
 */
@@ -704,5 +694,37 @@ boolean_t osm_physp_has_pkey(IN osm_log_t * p_log, IN ib_net16_t pkey,
 *
 *********/
 
+/****f* OpenSM: osm_pkey_tbl_set_indx0_pkey
+* NAME
+*  osm_pkey_tbl_set_indx0_pkey
+*
+* DESCRIPTION
+*  Sets given pkey at index0 in given pkey_tbl.
+*
+* SYNOPSIS
+*/
+void osm_pkey_tbl_set_indx0_pkey(IN osm_log_t * p_log, IN ib_net16_t pkey,
+				 IN boolean_t full,
+				 OUT osm_pkey_tbl_t * p_pkey_tbl);
+/*
+* PARAMETERS
+*  p_log
+*     [in] Pointer to a log object.
+*
+*  pkey
+*     [in] P_Key.
+*
+*  full
+*     [in] Indication if this is a full/limited membership pkey.
+*
+*  p_pkey_tbl
+*     [out] Pointer to osm_pkey_tbl_t object in which to set indx0 pkey.
+*
+* RETURN VALUES
+*  None
+*
+* NOTES
+*
+*********/
 END_C_DECLS
 #endif				/* _OSM_PKEY_H_ */

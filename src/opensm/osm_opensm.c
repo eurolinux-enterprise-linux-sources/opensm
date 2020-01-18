@@ -300,22 +300,24 @@ void osm_opensm_destroy(IN osm_opensm_t * p_osm)
 
 	osm_congestion_control_shutdown(&p_osm->cc);
 
-	/* shut down the SA
-	 * - unbind from QP1 messages
-	 */
-	osm_sa_shutdown(&p_osm->sa);
-
 	/* shut down the SM
 	 * - make sure the SM sweeper thread exited
 	 * - unbind from QP0 messages
 	 */
 	osm_sm_shutdown(&p_osm->sm);
 
+	/* shut down the SA
+	 * - unbind from QP1 messages
+	 */
+	osm_sa_shutdown(&p_osm->sa);
+
 	/* cleanup all messages on VL15 fifo that were not sent yet */
 	osm_vl15_shutdown(&p_osm->vl15, &p_osm->mad_pool);
 
 	/* shut down the dispatcher - so no new messages cross */
 	cl_disp_shutdown(&p_osm->disp);
+	if (p_osm->sa_set_disp_initialized)
+		cl_disp_shutdown(&p_osm->sa_set_disp);
 
 	/* dump SA DB */
 	if ((p_osm->sm.p_subn->sm_state == IB_SMINFO_STATE_MASTER) &&
@@ -345,6 +347,8 @@ void osm_opensm_destroy_finish(IN osm_opensm_t * p_osm)
 	osm_vendor_delete(&p_osm->p_vendor);
 	osm_subn_destroy(&p_osm->subn);
 	cl_disp_destroy(&p_osm->disp);
+	if (p_osm->sa_set_disp_initialized)
+		cl_disp_destroy(&p_osm->sa_set_disp);
 #ifdef HAVE_LIBPTHREAD
 	pthread_cond_destroy(&p_osm->stats.cond);
 	pthread_mutex_destroy(&p_osm->stats.mutex);
@@ -432,6 +436,17 @@ ib_api_status_t osm_opensm_init(IN osm_opensm_t * p_osm,
 	if (status != IB_SUCCESS)
 		goto Exit;
 
+	/* Unless OpenSM runs in single threaded mode, we create new single
+	 * threaded dispatcher for SA Set and Delete requets.
+	 */
+	p_osm->sa_set_disp_initialized = FALSE;
+	if (!p_opt->single_thread) {
+		status = cl_disp_init(&p_osm->sa_set_disp, 1, "subnadmin_set");
+		if (status != IB_SUCCESS)
+			goto Exit;
+		p_osm->sa_set_disp_initialized = TRUE;
+	}
+
 	/* the DB is in use by subn so init before */
 	status = osm_db_init(&p_osm->db, &p_osm->log);
 	if (status != IB_SUCCESS)
@@ -480,7 +495,9 @@ ib_api_status_t osm_opensm_init_finish(IN osm_opensm_t * p_osm,
 
 	status = osm_sa_init(&p_osm->sm, &p_osm->sa, &p_osm->subn,
 			     p_osm->p_vendor, &p_osm->mad_pool, &p_osm->log,
-			     &p_osm->stats, &p_osm->disp, &p_osm->lock);
+			     &p_osm->stats, &p_osm->disp,
+			     p_opt->single_thread ? NULL : &p_osm->sa_set_disp,
+			     &p_osm->lock);
 	if (status != IB_SUCCESS)
 		goto Exit;
 

@@ -1,4 +1,616 @@
 
+** Version: HEAD
+
+Thu Jun 9 19:10:28 2016 +0300 Hal Rosenstock
+9bf9def273a832780e36c4ff448e515847795b3e
+
+	* Update opensm_release_notes-3.3.txt
+
+Thu Jun 9 18:21:12 2016 +0300 Hal Rosenstock
+ed5b8fe0080a6e88675b474500ea6b7fd33a6bff
+
+	* Update package number for OpenSM to 3.3.20 for release
+
+Thu Jun 9 18:19:23 2016 +0300 Hal Rosenstock
+da90f1cfa0c2925fba398b824ab0e199e8324470
+
+	* Update (internal) shared library versions
+
+Tue Jun 7 12:08:35 2016 +0300 Daniel Klein
+bb15d2f4af15fdfe6289284e9243aec82fec2967
+
+	* osm_service.c: Fix missing endian conversion in log message
+
+Tue May 24 13:27:44 2016 +0300 Shlomi Nimrodi
+c0e81418cddb44f1332cb018ddae2eee418fd6a2
+
+	* Fix various coverity issues
+
+Wed Sep 19 15:42:26 2012 +0300 Alex Netes
+a0d915733f5cbbde8082fe8f0aeafd9dec928605
+
+	* osm_subnet.c: Add guid_routing_order_no_scatter option to opensm.conf
+
+Mon May 23 12:49:37 2016 +0300 Hal Rosenstock
+5d521c14c14f4889c4280f99f49614c75561040f
+
+	* osm_state_mgr.c: Update comment in state_mgr_check_tbl_consistency
+
+Thu May 19 18:17:33 2016 +0300 Shlomi Nimrodi
+62ea61a15e1b90ce8b8bc864791275edb1527d42
+
+	* osm_state_mgr.c: Fix bug in handling of PortInfo Set timeout
+
+Sun May 1 13:14:10 2016 +0300 Shlomi Nimrodi
+ccefa3d737d2f50918ba54504ead52d02740e06a
+
+	* osm_sm_mad_ctrl.c: Add ':' to "ERR 3120" error message
+
+Tue Nov 24 16:56:12 2015 +0200 Shlomi Nimrodi
+fbe51070dee095ee10c588526fc763275640ded7
+
+	* osm_subnet.c: Add support for Switch-IB2 in is_mlnx_ext_port_info_supported
+
+Tue Mar 1 20:46:35 2016 +0200 Hal Rosenstock
+dc45fca09b86fe365e58df787b050a8d83e6bcf9
+
+	* ib_types.h: Comment change to indicate 1.3.1 rather than 1.2 IBA spec
+
+Tue Mar 1 20:45:22 2016 +0200 Hal Rosenstock
+37e1246eb05b9371419ad84a2aa1006653daaf7b
+
+	* ib_types.h: Cosmetic formatting changes
+
+Mon Dec 28 13:34:10 2015 +0200 Vladimir Koushnir
+6eb8b964f1a2563b20e750b2253eff2a9881f709
+
+	* ftree: Additional ftree indexing algorithm
+
+Fri Feb 26 12:05:21 2016 +0200 Hal Rosenstock
+73fd8ee8df2c82910b8ca0c11bd1d92dd46ff73b
+
+	* man/opensm.8.in: Fix typo (missing close parenthesis)
+
+Fri Feb 26 11:59:38 2016 +0200 Hal Rosenstock
+c32b8139a154626722d9b18bfaadf53502fe3d74
+
+	* doc/current-routing.txt: Fix typo
+
+Wed Feb 24 14:55:48 2016 +0200 Hal Rosenstock
+c4691e795e892c9b427dadb335445373d10973fa
+
+	* ib_types.h: Cosmetic commentary fix
+
+Thu Feb 11 16:48:47 2016 +0200 Shlomi Nimrodi
+85e2214dd8005fbd2225c5ea5fbe6795b6e94823
+
+	* osm_sa_mcmember_record.c: Prevent log errors swamp in MC query scenario
+
+Mon Jan 11 14:00:43 2016 +0200 Tomer Cohen
+34e81dffaa1ce1b909733432a8c013f539cf4245
+
+	* Change precedence in pkey manager with indx0 feature
+
+Tue Mar 24 10:34:11 2015 +0200 Shlomi Nimrodi
+aa905e299715c79d3bce38c7f3cf7a0b3b76d294
+
+	* osm_pkey.[h c], osm_prtn.c: Create method to set pkey at indx0
+
+Wed Jan 13 10:44:12 2016 +0200 Shlomi Nimrodi
+8a696eb25930d6414dbe9eb6003c6875463dd2a1
+
+	* osm_base.h: Fix OSM_CAP2_IS_PORT_INFO_CAPMASK2_MATCH_SUPPORTED definition
+
+Tue Dec 18 13:43:28 2012 +0200 Hal Rosenstock
+70a364f7c4da48328ccd3ceda48c9dd7dde31353
+
+	* opensm/osm_pkey_mgr.c: Fix pkey index wraparound/reuse
+
+Tue Sep 9 15:28:09 2014 +0300 Tomer Cohen
+c1f7ffd24c762fa30f802d7ba5626e8fc80fa674
+
+	* Support configuration for index 0 in pkey table
+
+Fri Nov 20 17:56:22 2015 +0200 Hal Rosenstock
+88626f4bb4b4f6a4444ae8b44393fbc18b0abbcd
+
+	* osm_sa_mcmember_record.c: Updated Mellanox copyright years
+
+Fri Nov 20 17:54:55 2015 +0200 Hal Rosenstock
+432727b8a0e7d73a966e0d573e4fed079ae5f311
+
+	* osm_sa_mcmember_record.c: Cosmetic formatting change to mcmr_rcv_create_new_mgrp
+
+Fri Nov 20 17:47:12 2015 +0200 Hal Rosenstock
+b85c31e230b831d4411cc2f875c017e01f32db69
+
+	* osm_prtn_config.c: Cosmetic formatting changes in manage_membership_change
+
+Fri Nov 20 17:43:26 2015 +0200 Hal Rosenstock
+1a2a6d762dc25948be2efc9715b18e048ef58d76
+
+	* osm_prtn_config.c: Updated Mellanox copyright years
+
+Fri Nov 20 17:30:05 2015 +0200 Hal Rosenstock
+8b288b88501468a5dcbf13561967d4dd70f94601
+
+	* osm_mcast_mgr.c: Cosmetic formatting change in create_mgrp_switch_map
+
+Sun Nov 1 16:50:56 2015 +0200 Rafi Wiener
+4772806964efe9cc2e6934ab29f6a4bb28305ed3
+
+	* osm_state_mgr.c: Fix uninitialized area of SMInfo SET mad
+
+Mon Jul 27 22:08:32 2015 +0300 Daniel Klein
+6e27bbabbdcb7b74e37b77ff650c51b25b9aa409
+
+	* osm_multicast.c: Dump sa after deleting well known mc group
+
+Tue Sep 3 15:17:20 2013 +0300 Daniel Klein
+df212a6e197401943a740701bc58c50efa44b5f9
+
+	* osm_multicast.c: Fix not dumping empty predefined mc groups
+
+Wed Nov 4 17:07:45 2015 +0200 Hal Rosenstock
+175de416b6c4c00779c00ca8fbcbe21fa5610e7f
+
+	* osm_prtn.c: Cosmetic formatting change
+
+Mon Nov 2 10:13:47 2015 +0200 Daniel Klein
+1007810297d7f115a5d72dd095937246a415b0bd
+
+	* osm_sa_guidinfo_record.c: Fix memory leak in set_guidinfo
+
+Thu Oct 1 18:07:59 2015 +0300 Hal Rosenstock
+1b73efd8176e9d3ee6c7c0ab79d86695642a9f5e
+
+	* osm_sa_mcmember_record.c: Conditionalize multicast join parameter validation on new mcgroup_join_validation option
+
+Wed Sep 30 14:25:15 2015 +0300 Hal Rosenstock
+4cd7ec3c6617b944ef5d23ec0a07eaf00728825c
+
+	* osm_sa_mcmember_record.c: Validate IPoIB non broadcast group parameters on group creation
+
+Thu Oct 15 16:55:22 2015 +0300 Hal Rosenstock
+6272a56ca5c7db89a299e8b68380fe3d7f2a85ae
+
+	* osm_ucast_dfsssp.c: In dfsssp_do_mcast_routing, update adj_list first
+
+Thu Oct 15 16:48:38 2015 +0300 Hal Rosenstock
+870b21a8ae67e24d957151f7298f737e9b8c9bc4
+
+	* osm_ucast_dfsssp.c: Fix some commentary typos
+
+Tue Oct 13 15:25:50 2015 +0200 Jens Domke
+44b4edcb336d90dfef352cdfd63f417ccfff2324
+
+	* osm_ucast_mgr.c: LFT update breaks if IB_SMP_DATA_SIZE changes
+
+Tue Oct 13 17:19:06 2015 +0300 Hal Rosenstock
+d5c51e9c0c2be63ccc47b3dffa2b046f00ca5561
+
+	* osm_ucast_mgr.c: Cosmetic formatting change
+
+Thu Oct 1 10:33:23 2015 +0200 Daniel Klein
+f234d8300b88113b5e54d9abe27a4a6a35fc96a8
+
+	* osm_inform.c: Cosmetic code refactoring in match_inf_rec
+
+Thu Oct 1 20:08:51 2015 +0300 Hal Rosenstock
+fdd1a68d3364082d7c7fc34634df463cedffc2e6
+
+	* Updated some Mellanox copyrights
+
+Thu Oct 1 22:55:11 2015 +0300 Hal Rosenstock
+ecf07ebe7b525a8faefc4fdd6eb61ef950d61d24
+
+	* Set Type field in Notice attribute using IB_NOTICE_TYPE_SUBN_MGMT define
+
+Thu Oct 1 20:04:34 2015 +0300 Hal Rosenstock
+022e6af863cc558b9ef9b9d8cda14f217404788e
+
+	* Use SM trap defines from ib_types.h rather than hard coded values
+
+Thu Oct 1 20:00:01 2015 +0300 Hal Rosenstock
+d111a2c1553e1ae175493cef57a0eaba301b2f46
+
+	* ib_types.h: Cosmetic formatting change
+
+Thu Oct 1 18:19:00 2015 +0300 Hal Rosenstock
+1cbea4b653018e5e3d7059a8681232e0f4aa7dd0
+
+	* osmtest/osmt_multicast.c: Cosmetic changes
+
+Fri Oct 2 17:10:59 2015 +0300 Hal Rosenstock
+c52a1b2ff9f38e944cc5265581c0a6b96e765e3c
+
+	* osm_drop_mgr.c: Eliminated redundant check for switch node type
+
+Mon Oct 5 19:59:58 2015 +0200 Jens Domke
+2c4771ff8eeb4c10df5550d1f992d47a2b5baffa
+
+	* osm_ucast_dfsssp.c: Minor change to setting dropped when switch exists
+
+Thu Oct 1 17:24:59 2015 +0200 Jens Domke
+19dbb679d80d5997363ded11cc59576f19605d84
+
+	* osm_ucast_dfsssp.c: Fix dangling pointer when dfsssp used with ucast cache
+
+Thu Oct 1 16:08:22 2015 +0200 Jens Domke
+e94fc29c515d3d00ceb4d9dea97a147407ce2416
+
+	* osm_subnet.[h c]: Fix wrong function documentation and parameter list
+
+Thu Sep 10 22:36:11 2015 +0300 Hal Rosenstock
+76bd8cd45ab58a66da9dae83a7e5d09b1aedaff8
+
+	* osm_sa_mcmember_record.c: Add error logging for mismatches to validate_other_comp_fields
+
+Wed Sep 9 20:04:51 2015 +0300 Hal Rosenstock
+122cad3ccf8e3bc84a5da80527bf9f5c30a82f18
+
+	* osm_sa_mcmember_record.c: When joining MC group and MC group already exists, validate other components if supplied
+
+Wed Sep 23 17:20:41 2015 +0300 Hal Rosenstock
+098259eafa55e8b05054342204f6f93c8c3eb3d1
+
+	* Updated Mellanox copyrights in some recently changed files
+
+Sun Feb 3 16:46:03 2013 +0200 Alex Netes
+909976db07885439c77d9a353601048d8d3b58bc
+
+	* Add more checks for physp validity
+
+Sun Feb 3 16:46:03 2013 +0200 Alex Netes
+b37560b1519511ff91cfb322f906becec5df39b4
+
+	* osm_mcast_mgr.c: Add check for physp validity to create_mgrp_switch_map
+
+Thu Sep 10 21:45:18 2015 +0300 Hal Rosenstock
+1f3dcb4434cdca002f80263eb8fdd9d49d31da8d
+
+	* osm_ucast_ftree.c: Cosmetic formatting changes in fabric_construct_hca_ports
+
+Wed Sep 9 13:52:28 2015 +0300 Hal Rosenstock
+e92cfe5650a69b4932f3c25875d50ad342dba813
+
+	* iba/ib_types.h: Fix commentary typo
+
+Tue Sep 8 16:36:03 2015 +0300 Hal Rosenstock
+5109f44c5a8d34d3b084e76c3f299b6900c6a2a7
+
+	* osm_ucast_ftree.c: Cosmetic formatting change
+
+Tue Sep 8 16:27:20 2015 +0300 Hal Rosenstock
+0bc858e6f9cff0c102da7f186125bcc165ac0ea5
+
+	* osm_ucast_ftree.c: Cosmetic variable name changes in ftree_port_group_t struct
+
+Tue Sep 1 16:20:33 2015 +0300 Daniel Klein
+08e8a9aa4be53ace4d91f59c460ca7cf5f85e7dc
+
+	* osm_sa_path_record.c: Refactored PR [D/S] GID and LID validation
+
+Thu Sep 3 13:13:21 2015 +0300 Vladimir Koushnir
+e4e449e67c02a26b4941cb5024a986aea495d433
+
+	* osm_ucast_ftree.c: Fix wrong is_io assignment to the second HCA port
+
+Wed Sep 2 16:34:59 2015 +0300 Vladimir Koushnir
+e9bbf4434f2b0adc71e11588841c86e9681a3101
+
+	* osm_ucast_ftree.c: Fix wrong handling of dual port HCA
+
+Sun Aug 30 11:23:22 2015 +0300 Vladimir Koushnir
+ccab3b83f463cde7e9a538a2ba6e5dfb01ad6977
+
+	* osm_ucast_ftree.c: ftree calculates wrong number of compute nodes per leaf
+
+Thu Sep 3 15:32:31 2015 +0300 Hal Rosenstock
+7777987fe792d4a40c8c12c97d42a9aa4759543c
+
+	* osm_sa_path_record.c: Cosmetic formatting change
+
+Thu Aug 20 18:34:00 2015 +0300 Shlomi Nimrodi
+a7ac5fc190fa2fd1386cd23ebac2087a2a8c550d
+
+	* osm_prtn_config.c: Handle valgrind warning in osm_prtn_config_parse_file
+
+Mon Aug 31 23:28:49 2015 +0300 Hal Rosenstock
+609b7775f1e3040edb3b8240f32d3b89de8e0f63
+
+	* osm_ucast_ftree.c: Cosmetic formatting change
+
+Mon Aug 17 19:19:05 2015 +0300 Daniel Klein
+06ae3ad6cb2d4839453a39e751f054bd3e3108d3
+
+	* osm_sa.c: Fix osm_db_file_dump
+
+Sun Jul 26 11:18:45 2015 +0300 Tomer Cohen
+f1ab545af5965a8894a6a1c2a41fea99869645aa
+
+	* osm_drop_mgr.c: Do not set SM port discovery count to 0 when switch remote port is nonresponsive
+
+Wed Aug 26 18:41:14 2015 +0300 Vladimir Koushnir
+cd12dcdda09ef10ba8f79ed96ef8cc6d5e344cce
+
+	* osm_port_info_rcv.c: Fix calculation of minimum data VLs
+
+Sun Jun 14 11:33:42 2015 +0300 Daniel Klein
+cb20b11e7ca3c3fd6ff7d5e6b6f452ee99d4b9b4
+
+	* osm_ucast_ftree.c: Fail routing if max rank is 0 and more than one root
+
+Sun Jun 14 11:04:59 2015 +0300 Daniel Klein
+d9a601b044188d3194ee7ac74306bf802243cbad
+
+	* osm_ucast_ftree.c: Remove no longer needed code in remove_depended_hca
+
+Thu Jun 11 14:47:01 2015 +0300 Daniel Klein
+c633e05067018a2ac35c557f78039afbb9177bdf
+
+	* osm_ucast_ftree.c: Mark HCA ports connected to unranked switches
+
+Sun Aug 16 16:09:06 2015 +0300 Rafi Wiener
+f004819d8ff7b77f9e8317ce69a79aa235c82d3c
+
+	* osm_sa.c: Fix race condition when writing SA DB file
+
+Mon Aug 17 17:11:28 2015 +0300 Hal Rosenstock
+1f6cd87e948a9f6027618a235cec5ceb9947a5ce
+
+	* osm_state_mgr.c: Cosmetic formatting changes
+
+Wed Jun 24 17:59:57 2015 +0300 Vladimir Koushnir
+a64de2e4ed6c53e004f3e7bc7c74b0c8dc799e22
+
+	* osm_prtn_config.c: Fix wrong pkey table calculation in allow_both_pkeys mode
+
+Mon Jun 22 14:03:35 2015 +0300 Daniel Klein
+0b6d8ea015b7ef506105ae996e5ca1d2124ce997
+
+	* osm_sa_mcmember_record.c: Validate port's neighbor_mtu when joining MC group
+
+Thu Aug 6 17:37:48 2015 +0300 Hal Rosenstock
+7f2f902543086baeb72f504fcfcb9ec551856532
+
+	* libvendor/osm_vendor_ibumad_sa.c: Cosmetic formatting change to ERR 5501 log message
+
+Thu Aug 6 17:31:56 2015 +0300 Hal Rosenstock
+80ca401092da7f6ae6edc72fd5289f85451d723e
+
+	* osm_sa_path_record.c: When both [D S] GID and LID are supplied, validate that underlying ports are the same
+
+Thu Aug 6 15:13:10 2015 +0300 Hal Rosenstock
+1fa8089fdad0932cef9b11f24327f9914440dbfb
+
+	* osm_sa_path_record.c: Handle path query by DGID and SLID
+
+Mon Aug 3 22:36:24 2015 +0300 Hal Rosenstock
+e527ec68f229ce1753ea39208dd13e4e1ccc3684
+
+	* libvendor/osm_vendor_ibumad_sa.c: Cosmetic formatting changes to osmv_query_sa
+
+Thu Jun 25 17:48:39 2015 +0300 Daniel Klein
+141293d07872d2f9214621dd3f3d42bf85a9afde
+
+	* osmtest/osmt_multicast.c: Fix MC join with unrealistic rate test
+
+Thu Jul 9 18:34:16 2015 +0300 Shlomi Nimrodi
+ec2e2bf56ed4832e00ecc030d4462e0dd9c3c232
+
+	* osm_pkey.h: Fix osm_physp_has_pkey method description
+
+Wed Jul 8 10:29:21 2015 +0300 Vladimir Koushnir
+fd754d25d60eed63bbd2811b5dece3f6a6423985
+
+	* Support another new MLNX OUI
+
+Sun Jul 5 14:49:34 2015 +0300 Vladimir Koushnir
+f4715713eebaf7ece5f9305d5eba50a9d488272e
+
+	* osm_subnet.c: Remove support for changing allow_both_pkeys on the fly
+
+Sun May 17 11:46:03 2015 +0300 Daniel Klein
+cd31ff6275f4d1212757bf6228c031b346db72b8
+
+	* osm_port_info_rcv.c: Sending MEPI(Get) to local switch ports on hop 0
+
+Sun Jun 21 17:46:46 2015 +0300 Daniel Klein
+4c3d782a82fc1c7dd3bbe0c8add503a0585fa666
+
+	* osm_state_mgr.c: Mark port as undiscovered when removed by drop_mgr
+
+Wed Jun 24 13:58:04 2015 +0300 Shlomi Nimrodi
+bf3818b8d1a6fb662100ee55afbb28f2862156c1
+
+	* partition_config.txt: Small correction in doc file
+
+Thu Jun 4 16:16:00 2015 +0200 Vangelis Tasoulas
+9fa761cc637558dd6ee1d345198079cca759dfef
+
+	* osm_ucast_ftree.c: Removed *p_ftree parameter from sw_destroy function
+
+Thu Jun 4 14:12:51 2015 +0200 Vangelis Tasoulas
+652b0633f347dadd856b259941745c6549e09eff
+
+	* osm_ucast_ftree.c: Removed *p_ftree parameter from sw_create function
+
+Mon May 11 10:36:46 2015 +0300 Daniel Klein
+953b70d4febe6cd87a6fe34a2d7c1320de9ba99f
+
+	* osm_opensm.c: Fix race condition between traps handling and SA shutdown
+
+Tue May 26 14:38:21 2015 +0300 Daniel Klein
+a1c4bc253770cb25d65a1388f4e1ecb3be28304c
+
+	* osm_console.c: Fix display of negative counters in console
+
+Sun Aug 19 18:39:44 2012 +0300 Alex Netes
+a6c2bf83af5822b0f455d01fa58b2f46e52a09b9
+
+	* Add cleanup of SA cache after handover
+
+Mon Jan 28 13:53:38 2013 +0200 Ilya Nelkenbaum
+075ff44d89c0066df44d8e6f163054f00e55fdbd
+
+	* osm_mcast_tbl.c: Wrong assert placement in osm_mcast_tbl_get_block
+
+Mon Apr 13 18:52:35 2015 +0300 Hal Rosenstock
+d504e7634512ea8f2a49b1be6b61d4389bce3596
+
+	* doc/QoS_management_in_OpenSM.txt: Cosmetic changes
+
+Fri Mar 27 10:00:52 2015 +0100 Jens Domke
+a28d63ee74bc7390c0dc3bde165946f96e9249de
+
+	* Fix documentation on ignore-guids command line option
+
+Sat Mar 21 15:18:31 2015 +0200 Hal Rosenstock
+df326446b93657db68652ecf54ce6e62f47c866b
+
+	* osm_subnet.c: Minor clarification to SwitchCongestionSetting Control Map description in generated option file
+
+Wed Mar 18 14:14:23 2015 +0200 Hal Rosenstock
+483ff006a87d66c8b4f73e6684b3844dd05a4cff
+
+	* man/osmtest.8: Minor tweaks to inventory option description
+
+Tue Feb 10 19:06:32 2015 +0200 Daniel Klein
+5e50a3c4e7fcdbf205a0d444d378b5304511aea0
+
+	* osm_sa_mcmember_record.c: Extend P_Pkey validation on MCMemberRecord(Join)
+
+Fri Mar 13 14:30:13 2015 +0200 Hal Rosenstock
+8d3c6f85347a7ffc6627c0205033983124ff75f7
+
+	* osm_sa_mcmember_record.c: Change to log messages for PKey consistency
+
+Mon Mar 2 22:01:13 2015 +0200 Hal Rosenstock
+3fcb121dde4b4b9c5c5e00da6cbaa7cee593bbd4
+
+	* osm_subnet.c: Improved m_key_lookup description in generated conf file
+
+Mon Mar 2 21:54:44 2015 +0200 Hal Rosenstock
+b4d20d75ed8479a387ece69cb09f65d050290414
+
+	* osm_port_info_rcv.c: In pi_rcv_process_switch_port0, store port 0's PortInfo before querying switch external ports
+
+Fri Feb 27 16:44:10 2015 +0200 Hal Rosenstock
+504e43f8f1b61238542ad8a938a7fc86ba834178
+
+	* osm_req.c: Cosmetic formatting change
+
+Thu Feb 26 16:56:44 2015 +0200 Hal Rosenstock
+062d35de9d51458303052f7ed0945c5147172540
+
+	* osm_port_info_rcv.c: In pi_rcv_process_switch_port0, determine mkey
+
+Tue Feb 24 01:14:47 2015 +0200 Hal Rosenstock
+a5e484b834e63bc77ec1161a3f44df1919a93868
+
+	* osm_node.h: Fix commentary typo
+
+Thu Feb 19 16:24:01 2015 +0200 Hal Rosenstock
+6ceb0ce7d1d4cd7ce904cb015083a5313d2fa8cd
+
+	* osm_sa_mcmember_record.c: Removed redundancy in comment
+
+Mon Feb 9 23:36:44 2015 +0200 Vladimir Koushnir
+899664d9f866aac2ffb7647bf8d995eb3e5cc10f
+
+	* osm_ucast_mgr.c: Support diverse paths for LMC > 0 when scatter_ports is enabled
+
+Tue Feb 3 20:14:49 2015 +0200 Hal Rosenstock
+9e0cba39f0fcfba258192f7335809ef532103798
+
+	* osm_prtn_config.c: Cosmetic formatting change
+
+Sun Feb 1 13:30:06 2015 +0200 Daniel Klein
+6dc0b8088a717c225c908b47351ff5d1136e0f67
+
+	* osm_opensm.c: Call cl_disp_shutdown for SA SET dispatcher
+
+Tue Jan 27 18:40:02 2015 +0200 Ilya Nelkenbaum
+3199d3441448e2d614a22b8c06c265c43ea1a9f6
+
+	* osmeventplugin.c: Modify osm_event_plugin_t initialization
+
+Sat Jan 24 14:46:16 2015 +0200 Hal Rosenstock
+0eb5117bd188f8d386ca1eb4c75041d52e68adee
+
+	* osm_sa_mcmember_record.c: Cosmetic formatting change
+
+Thu Jan 15 18:15:01 2015 +0200 Daniel Klein
+94c2d74d96f7f8ddda264b3ee5926697fa18eb86
+
+	* Revert "osm_ucast_mgr.c: Force unicast routing to fail when lft allocations fail" patch
+
+Mon Jan 12 20:19:36 2015 +0200 Hal Rosenstock
+66301d8225586d47b17698aa9c9deee13fd7aa3c
+
+	* osm_subnet.c: Add more supported device IDs
+
+Sun Aug 3 14:26:48 2014 +0300 Daniel Klein
+1d205bc99eab68c8063c7164bedfe68fdc234a2b
+
+	* osm_ucast_mgr.c: Select exit ports for lid offset > 0 using new_lft
+
+Wed Oct 1 17:09:10 2014 +0200 Daniel Klein
+2a320950556522a18a959e58905daef4eed3d06e
+
+	* osm_ucast_cache.c: Rewrite p_sw->lft allocation in osm_ucast_cache_process
+
+Sun Aug 3 12:27:51 2014 +0300 Daniel Klein
+e2ee83ee4a1322b0ce2b9c16ec6a1aed21087679
+
+	* Use routing engine calculated LFT for SA queries
+
+Wed Jul 30 18:52:46 2014 +0300 Daniel Klein
+1413d64ba610edf8e950673f80bbaf6fec4e681b
+
+	* osm_state_mgr.c: Remove new_lft buffers cleanup
+
+Sun Dec 14 18:00:28 2014 +0200 Daniel Klein
+f2b96de26867d5e1c69ff2c9d60947030a14e0a1
+
+	* osm_ucast_mgr.c: Force unicast routing to fail when lft allocations fail
+
+Tue Jan 6 18:12:19 2015 +0200 Hal Rosenstock
+2541ed94869edc5a389f8e873887a739e2140a63
+
+	* osm_ucast_mgr.c: Cosmetic formatting change
+
+Sun Sep 28 16:41:03 2014 +0200 Daniel Klein
+948e2b1b08788e4be8e2fd34f876fa493a469ca3
+
+	* Add separate dispatcher for SA set and delete requests
+
+Mon Dec 22 15:32:21 2014 -0800 Albert Chu
+8ea4e0609f022c1458164c4e775d4afab020862d
+
+	* osm_congestion_control.c: Reset cc_timeout_count when count threshold passed
+
+Mon Dec 22 15:32:14 2014 -0800 Albert Chu
+0b7c80ce97306a4dde18784ba6e32093ed965463
+
+	* osm_congestion_control.c: Consistently set cc_unavailable_flag
+
+Mon Dec 22 15:32:12 2014 -0800 Albert Chu
+e590ebcf35139faf351f93316a3e3d5b6c7203cd
+
+	* osm_congestion_control.c: Add additional header status check in cc_rcv_mad
+
+Mon Jan 5 11:28:10 2015 -0800 Albert Chu
+f130d5a4cf798e2bda9a625278ee00f61d8fbdf3
+
+	* osm_subnet.c: Correct output error with congestion control table entries
+
+Sat Dec 20 19:10:33 2014 +0100 Vangelis Tasoulas
+0a695aeeb01ed8056cae66e4fe18fb047c75526c
+
+	* osm_switch.c: Fix wrong assertion failed in osm_switch_get_lft_block()
+
 ** Version: opensm-3.3.19
 
 Wed Dec 17 20:01:21 2014 +0200 Hal Rosenstock

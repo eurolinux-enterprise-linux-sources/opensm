@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
@@ -168,8 +168,8 @@ boolean_t osm_switch_get_lft_block(IN const osm_switch_t * p_sw,
 	if (base_lid_ho > p_sw->max_lid_ho)
 		return FALSE;
 
-	CL_ASSERT(base_lid_ho + IB_SMP_DATA_SIZE <= IB_LID_UCAST_END_HO);
-	memcpy(p_block, &(p_sw->lft[base_lid_ho]), IB_SMP_DATA_SIZE);
+	CL_ASSERT(base_lid_ho + IB_SMP_DATA_SIZE - 1 <= IB_LID_UCAST_END_HO);
+	memcpy(p_block, &(p_sw->new_lft[base_lid_ho]), IB_SMP_DATA_SIZE);
 	return TRUE;
 }
 
@@ -193,6 +193,9 @@ switch_find_guid_common(IN const osm_switch_t * p_sw,
 		goto out;
 
 	p_physp = osm_node_get_physp_ptr(p_sw->p_node, port_num);
+	if (!p_physp)
+		goto out;
+
 	p_rem_physp = osm_physp_get_remote(p_physp);
 	p_rem_node = osm_physp_get_node_ptr(p_rem_physp);
 	sys_guid = p_rem_node->node_info.sys_guid;
@@ -235,7 +238,8 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 				  IN boolean_t routing_for_lmc,
 				  IN boolean_t dor,
 				  IN boolean_t port_shifting,
-				  IN uint32_t scatter_ports)
+				  IN uint32_t scatter_ports,
+				  IN osm_lft_type_enum lft_enum)
 {
 	/*
 	   We support an enhanced LMC aware routing mode:
@@ -319,7 +323,7 @@ uint8_t osm_switch_recommend_path(IN const osm_switch_t * p_sw,
 	   4. the port has min-hops to the target (avoid loops)
 	 */
 	if (!ignore_existing) {
-		port_num = osm_switch_get_port_by_lid(p_sw, lid_ho);
+		port_num = osm_switch_get_port_by_lid(p_sw, lid_ho, lft_enum);
 
 		if (port_num != OSM_NO_PATH) {
 			CL_ASSERT(port_num < num_ports);

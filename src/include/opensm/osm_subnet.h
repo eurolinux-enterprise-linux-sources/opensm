@@ -1,11 +1,12 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009-2015 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -329,6 +330,8 @@ typedef struct osm_subn_opt {
 	boolean_t sm_inactive;
 	boolean_t babbling_port_policy;
 	boolean_t drop_event_subscriptions;
+	boolean_t ipoib_mcgroup_creation_validation;
+	boolean_t mcgroup_join_validation;
 	boolean_t use_optimized_slvl;
 	boolean_t fsync_high_avail_files;
 	osm_qos_options_t qos_options;
@@ -376,6 +379,7 @@ typedef struct osm_subn_opt {
 	uint8_t lash_start_vl;			/* starting vl to use in lash */
 	uint8_t sm_sl;			/* which SL to use for SM/SA communication */
 	char *per_module_logging_file;
+	boolean_t quasi_ftree_indexing;
 } osm_subn_opt_t;
 /*
 * FIELDS
@@ -605,6 +609,14 @@ typedef struct osm_subn_opt {
 *	drop_event_subscriptions
 *		OpenSM will drop event subscriptions if the port goes away.
 *
+*	ipoib_mcgroup_creation_validation
+*		OpenSM will validate IPoIB non-broadcast group parameters
+*		against IPoIB broadcast group.
+*
+*	mcgroup_join_validation
+*		OpenSM will validate multicast join parameters against
+*		multicast group parameters when MC group already exists.
+*
 *	use_optimized_slvl
 *		Use optimized SLtoVLMappingTable programming if
 *		device indicates it supports this.
@@ -786,7 +798,7 @@ typedef struct osm_subn {
 *
 *	port_guid_tbl
 *		Container of pointers to all Port objects in the subnet.
-*		Indexed by port GUID - network order!
+*		Indexed by port GUID.
 *
 *	rtr_guid_tbl
 *		Container of pointers to all Router objects in the subnet.
@@ -1169,14 +1181,14 @@ struct osm_port *osm_get_port_by_mad_addr(IN struct osm_log *p_log,
 * SYNOPSIS
 */
 struct osm_switch *osm_get_switch_by_guid(IN const osm_subn_t * p_subn,
-					  IN uint64_t guid);
+					  IN ib_net64_t guid);
 /*
 * PARAMETERS
 *	p_subn
 *		[in] Pointer to an osm_subn_t object
 *
 *	guid
-*		[in] The node guid in host order
+*		[in] The node guid in network byte order
 *
 * RETURN VALUES
 *	The switch structure pointer if found. NULL otherwise.
@@ -1198,14 +1210,14 @@ struct osm_switch *osm_get_switch_by_guid(IN const osm_subn_t * p_subn,
 * SYNOPSIS
 */
 struct osm_node *osm_get_node_by_guid(IN osm_subn_t const *p_subn,
-				      IN uint64_t guid);
+				      IN ib_net64_t guid);
 /*
 * PARAMETERS
 *	p_subn
 *		[in] Pointer to an osm_subn_t object
 *
 *	guid
-*		[in] The node guid in host order
+*		[in] The node guid in network byte order
 *
 * RETURN VALUES
 *	The node structure pointer if found. NULL otherwise.
@@ -1260,7 +1272,7 @@ struct osm_port *osm_get_port_by_lid_ho(const osm_subn_t * subn, uint16_t lid);
 *		[in] Pointer to the subnet data structure.
 *
 *	lid
-*		[in] LID requested in hot byte order.
+*		[in] LID requested in host byte order.
 *
 * RETURN VALUES
 *	The port structure pointer if found. NULL otherwise.

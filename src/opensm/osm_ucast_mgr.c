@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -219,7 +219,7 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 	 * the initialization. Don't handle this port. */
 	if (min_lid_ho == 0 || max_lid_ho == 0) {
 		OSM_LOG(p_mgr->p_log, OSM_LOG_ERROR, "ERR 3A04: "
-			"Port 0x%"PRIx64" (%s port %d) has LID 0. An "
+			"Port 0x%" PRIx64 " (%s port %d) has LID 0. An "
 			"initialization error occurred. Ignoring port\n",
 			cl_ntoh64(osm_port_get_guid(p_port)),
 			p_port->p_node->print_desc,
@@ -234,7 +234,8 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 
 	if (lid_offset && !p_mgr->is_dor)
 		/* ignore potential overflow - it is handled in osm_switch.c */
-		start_from = osm_switch_get_port_by_lid(p_sw, lid_ho - 1) + 1;
+		start_from =
+		    osm_switch_get_port_by_lid(p_sw, lid_ho - 1, OSM_NEW_LFT) + 1;
 
 	OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
 		"Processing port 0x%" PRIx64
@@ -259,7 +260,8 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 					 p_mgr->p_subn->opt.lmc,
 					 p_mgr->is_dor,
 					 p_mgr->p_subn->opt.port_shifting,
-					 p_port->use_scatter);
+					 !lid_offset && p_port->use_scatter,
+					 OSM_LFT);
 
 	if (port == OSM_NO_PATH) {
 		/* do not try to overwrite the ppro of non existing port ... */
@@ -270,6 +272,8 @@ static void ucast_mgr_process_port(IN osm_ucast_mgr_t * p_mgr,
 			lid_ho, cl_ntoh64(node_guid));
 	} else {
 		osm_physp_t *p = osm_node_get_physp_ptr(p_sw->p_node, port);
+		if (!p)
+			goto Exit;
 
 		OSM_LOG(p_mgr->p_log, OSM_LOG_DEBUG,
 			"Routing LID %u to port %u for switch 0x%" PRIx64 "\n",
@@ -1034,7 +1038,7 @@ static void ucast_mgr_pipeline_fwd_tbl(osm_ucast_mgr_t * p_mgr)
 {
 	cl_qmap_t *tbl;
 	cl_map_item_t *item;
-	unsigned i, max_block = p_mgr->max_lid / 64 + 1;
+	unsigned i, max_block = p_mgr->max_lid / IB_SMP_DATA_SIZE + 1;
 
 	tbl = &p_mgr->p_subn->sw_guid_tbl;
 	for (i = 0; i < max_block; i++)
@@ -1061,7 +1065,7 @@ static int ucast_mgr_route(struct osm_routing_engine *r, osm_opensm_t * osm)
 		"building routing with \'%s\' routing algorithm...\n", r->name);
 
 	/* Set the before each lft build to keep the routes in place between sweeps */
-	if(osm->subn.opt.scatter_ports)
+	if (osm->subn.opt.scatter_ports)
 		srandom(osm->subn.opt.scatter_ports);
 
 	if (!r->build_lid_matrices ||

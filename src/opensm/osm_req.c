@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2005,2009 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
@@ -327,12 +327,12 @@ void osm_send_req_mad(IN osm_sm_t * sm, IN osm_madw_t *p_madw)
   The plock MAY or MAY NOT be held before calling this function.
 **********************************************************************/
 ib_api_status_t osm_req_set(IN osm_sm_t * sm, IN const osm_dr_path_t * p_path,
-                            IN const uint8_t * p_payload,
-                            IN size_t payload_size,
-                            IN ib_net16_t attr_id, IN ib_net32_t attr_mod,
+			    IN const uint8_t * p_payload,
+			    IN size_t payload_size,
+			    IN ib_net16_t attr_id, IN ib_net32_t attr_mod,
 			    IN boolean_t find_mkey, IN ib_net64_t m_key,
-                            IN cl_disp_msgid_t err_msg,
-                            IN const osm_madw_context_t * p_context)
+			    IN cl_disp_msgid_t err_msg,
+			    IN const osm_madw_context_t * p_context)
 {
 	osm_madw_t *p_madw;
 	ib_api_status_t status = IB_SUCCESS;
@@ -411,7 +411,7 @@ int osm_send_trap144(osm_sm_t * sm, ib_net16_t local)
 
 	ntc->generic_type = 0x80 | IB_NOTICE_TYPE_INFO;
 	ib_notice_set_prod_type_ho(ntc, osm_node_get_type(port->p_node));
-	ntc->g_or_v.generic.trap_num = cl_hton16(144);
+	ntc->g_or_v.generic.trap_num = cl_hton16(SM_LOCAL_CHANGES_TRAP); /* 144 */
 	ntc->issuer_lid = pi->base_lid;
 	ntc->data_details.ntc_144.lid = pi->base_lid;
 	ntc->data_details.ntc_144.local_changes = local ?

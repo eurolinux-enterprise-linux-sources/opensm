@@ -1329,7 +1329,9 @@ ib_net16_t osm_pr_get_end_points(IN osm_sa_t * sa,
 		}
 		if (pp_sgid)
 			*pp_sgid = &p_pr->sgid;
-	} else if (comp_mask & IB_PR_COMPMASK_SLID) {
+	}
+
+	if (comp_mask & IB_PR_COMPMASK_SLID) {
 		*pp_src_port = osm_get_port_by_lid(sa->p_subn, p_pr->slid);
 		if (!*pp_src_port) {
 			/*
@@ -1381,7 +1383,9 @@ ib_net16_t osm_pr_get_end_points(IN osm_sa_t * sa,
 			sa_status = IB_SA_MAD_STATUS_INVALID_GID;
 			goto Exit;
 		}
-	} else if (comp_mask & IB_PR_COMPMASK_DLID) {
+	}
+
+	if (comp_mask & IB_PR_COMPMASK_DLID) {
 		*pp_dest_port = osm_get_port_by_lid(sa->p_subn, p_pr->dlid);
 		if (!*pp_dest_port) {
 			/*
@@ -1793,6 +1797,33 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 				  &p_src_port, &p_dest_port,
 				  &p_sgid, &p_dgid) != IB_SA_MAD_STATUS_SUCCESS)
 		goto Unlock;
+
+	if (p_src_alias_guid && p_src_port &&
+	    p_src_alias_guid->p_base_port != p_src_port) {
+		cl_plock_release(sa->p_lock);
+		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+			"Requester port GUID 0x%" PRIx64 ": Port for SGUID "
+			"0x%" PRIx64 " not same as port for SLID %u\n",
+			cl_ntoh64(osm_port_get_guid(requester_port)),
+			cl_ntoh64(p_pr->sgid.unicast.interface_id),
+			cl_ntoh16(p_pr->slid));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
+		goto Exit;
+	}
+
+	if (p_dest_alias_guid && p_dest_port &&
+	    p_dest_alias_guid->p_base_port != p_dest_port) {
+		cl_plock_release(sa->p_lock);
+		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
+			"Requester port GUID 0x%" PRIx64 ": Port for DGUID "
+			"0x%" PRIx64 " not same as port for DLID %u\n",
+			cl_ntoh64(osm_port_get_guid(requester_port)),
+			cl_ntoh64(p_pr->dgid.unicast.interface_id),
+			cl_ntoh16(p_pr->dlid));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
+		goto Exit;
+	}
+
 	/*
 	   What happens next depends on the type of endpoint information
 	   that was specified....
@@ -1827,7 +1858,7 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 			}
 		}
 	} else {
-		if (p_dest_alias_guid)
+		if (p_dest_alias_guid && !p_src_port)
 			osm_pr_process_half(sa, p_sa_mad, requester_port,
 					    NULL, p_dest_alias_guid, p_sgid,
 					    p_dgid, &pr_list);
@@ -1837,7 +1868,26 @@ void osm_pr_rcv_process(IN void *context, IN void *data)
 			 */
 			pr_rcv_process_world(sa, p_sa_mad, requester_port,
 					     p_sgid, p_dgid, &pr_list);
-		else if (p_src_port && !p_dest_port) {
+		else if (p_dest_alias_guid && p_src_port) {
+			/* Get all alias GUIDs for the src port */
+			p_src_alias_guid = (osm_alias_guid_t *) cl_qmap_head(&sa->p_subn->alias_port_guid_tbl);
+			while (p_src_alias_guid !=
+			       (osm_alias_guid_t *) cl_qmap_end(&sa->p_subn->alias_port_guid_tbl)) {
+				if (osm_get_port_by_alias_guid(sa->p_subn,
+							       p_src_alias_guid->alias_guid) ==
+				    p_src_port)
+					osm_pr_process_pair(sa, p_sa_mad,
+							    requester_port,
+							    p_src_alias_guid,
+							    p_dest_alias_guid,
+							    p_sgid, p_dgid,
+							    &pr_list);
+				if (p_sa_mad->method == IB_MAD_METHOD_GET &&
+				    cl_qlist_count(&pr_list) > 0)
+					break;
+				p_src_alias_guid = (osm_alias_guid_t *) cl_qmap_next(&p_src_alias_guid->map_item);
+			}
+		} else if (p_src_port && !p_dest_port) {
 			/* Get all alias GUIDs for the src port */
 			p_src_alias_guid = (osm_alias_guid_t *) cl_qmap_head(&sa->p_subn->alias_port_guid_tbl);
 			while (p_src_alias_guid !=

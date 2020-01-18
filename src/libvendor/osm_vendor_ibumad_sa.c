@@ -100,7 +100,7 @@ __osmv_sa_mad_rcv_cb(IN osm_madw_t * p_madw,
 	mad_status = (ib_net16_t) (p_sa_mad->status & IB_SMP_STATUS_MASK);
 	if (mad_status != IB_SUCCESS) {
 		OSM_LOG(p_bind->p_log, OSM_LOG_ERROR, "ERR 5501: "
-			"Remote error:0x%04X\n", cl_ntoh16(mad_status));
+			"Remote error: 0x%04X\n", cl_ntoh16(mad_status));
 		query_res.status = IB_REMOTE_ERROR;
 	} else
 		query_res.status = IB_SUCCESS;
@@ -615,11 +615,11 @@ osmv_query_sa(IN osm_bind_handle_t h_bind,
 		ib_gid_set_default(&u.path_rec.dgid,
 				   ((osmv_guid_pair_t *) (p_query_req->
 							  p_query_input))->
-				   dest_guid);
+							  dest_guid);
 		ib_gid_set_default(&u.path_rec.sgid,
 				   ((osmv_guid_pair_t *) (p_query_req->
 							  p_query_input))->
-				   src_guid);
+							  src_guid);
 		break;
 
 	case OSMV_QUERY_PATH_REC_BY_GIDS:
@@ -632,10 +632,12 @@ osmv_query_sa(IN osm_bind_handle_t h_bind,
 		sa_mad_data.p_attr = &u.path_rec;
 		memcpy(&u.path_rec.dgid,
 		       &((osmv_gid_pair_t *) (p_query_req->p_query_input))->
-		       dest_gid, sizeof(ib_gid_t));
+					      dest_gid,
+		       sizeof(ib_gid_t));
 		memcpy(&u.path_rec.sgid,
 		       &((osmv_gid_pair_t *) (p_query_req->p_query_input))->
-		       src_gid, sizeof(ib_gid_t));
+					      src_gid,
+		       sizeof(ib_gid_t));
 		break;
 
 	case OSMV_QUERY_PATH_REC_BY_LIDS:
@@ -647,8 +649,7 @@ osmv_query_sa(IN osm_bind_handle_t h_bind,
 		    (IB_PR_COMPMASK_DLID | IB_PR_COMPMASK_SLID);
 		sa_mad_data.p_attr = &u.path_rec;
 		u.path_rec.dlid =
-		    ((osmv_lid_pair_t *) (p_query_req->p_query_input))->
-		    dest_lid;
+		    ((osmv_lid_pair_t *) (p_query_req->p_query_input))->dest_lid;
 		u.path_rec.slid =
 		    ((osmv_lid_pair_t *) (p_query_req->p_query_input))->src_lid;
 		break;

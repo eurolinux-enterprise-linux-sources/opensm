@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2006-2008 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2012 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2012-2015 Mellanox Technologies LTD. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -92,16 +92,18 @@ struct part_conf {
 	unsigned is_ipoib;
 	struct group_flags flags;
 	membership_t membership;
+	boolean_t indx0;
 };
 
 extern osm_prtn_t *osm_prtn_make_new(osm_log_t * p_log, osm_subn_t * p_subn,
 				     const char *name, uint16_t pkey);
 extern ib_api_status_t osm_prtn_add_all(osm_log_t * p_log, osm_subn_t * p_subn,
 					osm_prtn_t * p, unsigned type,
-					boolean_t full);
+					boolean_t full, boolean_t indx0);
 extern ib_api_status_t osm_prtn_add_port(osm_log_t * p_log,
 					 osm_subn_t * p_subn, osm_prtn_t * p,
-					 ib_net64_t guid, boolean_t full);
+					 ib_net64_t guid, boolean_t full,
+					 boolean_t indx0);
 
 ib_api_status_t osm_prtn_add_mcgroup(osm_log_t * p_log, osm_subn_t * p_subn,
 				     osm_prtn_t * p, uint8_t rate, uint8_t mtu,
@@ -123,7 +125,7 @@ static inline boolean_t mgid_is_ip(const ib_gid_t *mgid)
 }
 
 static inline boolean_t ip_mgroup_pkey_ok(struct part_conf *conf,
-				struct precreate_mgroup *group)
+					  struct precreate_mgroup *group)
 {
 	ib_net16_t mpkey = *(ib_net16_t *)&group->mgid.raw[4];
 	char gid_str[INET6_ADDRSTRLEN];
@@ -369,7 +371,9 @@ static int partition_add_flag(unsigned lineno, struct part_conf *conf,
 			else
 				conf->membership = LIMITED;
 		}
-	} else {
+	} else if (!strcmp(flag, "indx0"))
+		conf->indx0 = TRUE;
+	else {
 		OSM_LOG(conf->p_log, OSM_LOG_VERBOSE,
 			"PARSE WARN: line %d: "
 			"unrecognized partition flag \'%s\'"
@@ -377,16 +381,68 @@ static int partition_add_flag(unsigned lineno, struct part_conf *conf,
 	}
 	return 0;
 }
+static void manage_membership_change(struct part_conf *conf, osm_prtn_t * p,
+				     unsigned type, membership_t membership,
+				     ib_net64_t guid)
+{
+	cl_map_t *p_tbl;
+	cl_map_iterator_t p_next, p_item;
+	osm_physp_t *p_physp;
 
+	/* In allow_both_pkeys mode */
+	/* if membership of the PKEY is set to FULL */
+	/* need to clean up the part_guid_tbl table entry for this guid */
+	/* if membership of the PKEY is set to LIMITED */
+	/* need to clean up the full_guid_tbl table entry for this guid */
+	/* as it could be populated because of previous definitions */
+
+	if (!conf->p_subn->opt.allow_both_pkeys || membership == BOTH)
+		return;
+
+	switch (type){
+	/* ALL = 0 */
+	case 0:
+		cl_map_remove_all(membership == LIMITED ?
+				  &p->full_guid_tbl : &p->part_guid_tbl);
+		break;
+	/* specific GUID */
+	case 0xFF:
+		cl_map_remove(membership == LIMITED ?
+			      &p->full_guid_tbl : &p->part_guid_tbl,
+			      cl_hton64(guid));
+		break;
+
+	case IB_NODE_TYPE_CA:
+	case IB_NODE_TYPE_SWITCH:
+	case IB_NODE_TYPE_ROUTER:
+		p_tbl = (membership == LIMITED) ?
+			 &p->full_guid_tbl : &p->part_guid_tbl;
+
+		p_next = cl_map_head(p_tbl);
+		while (p_next != cl_map_end(p_tbl)) {
+			p_item = p_next;
+			p_next = cl_map_next(p_item);
+			p_physp = (osm_physp_t *) cl_map_obj(p_item);
+			if (osm_node_get_type(p_physp->p_node) == type)
+				cl_map_remove_item(p_tbl, p_item);
+		}
+		break;
+	default:
+		break;
+
+	}
+}
 static int partition_add_all(struct part_conf *conf, osm_prtn_t * p,
 			     unsigned type, membership_t membership)
 {
+	manage_membership_change(conf, p, type, membership, 0);
+
 	if (membership != LIMITED &&
-	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, TRUE) != IB_SUCCESS)
+	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, TRUE, conf->indx0) != IB_SUCCESS)
 		return -1;
 	if ((membership == LIMITED ||
 	     (membership == BOTH && conf->p_subn->opt.allow_both_pkeys)) &&
-	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, FALSE) != IB_SUCCESS)
+	    osm_prtn_add_all(conf->p_log, conf->p_subn, p, type, FALSE, conf->indx0) != IB_SUCCESS)
 		return -1;
 	return 0;
 }
@@ -435,14 +491,15 @@ static int partition_add_port(unsigned lineno, struct part_conf *conf,
 			return -1;
 	}
 
+	manage_membership_change(conf, p, 0xFF, membership, guid);
 	if (membership != LIMITED &&
 	    osm_prtn_add_port(conf->p_log, conf->p_subn, p,
-			      cl_hton64(guid), TRUE) != IB_SUCCESS)
+			      cl_hton64(guid), TRUE, conf->indx0) != IB_SUCCESS)
 		return -1;
 	if ((membership == LIMITED ||
 	    (membership == BOTH && conf->p_subn->opt.allow_both_pkeys)) &&
 	    osm_prtn_add_port(conf->p_log, conf->p_subn, p,
-			      cl_hton64(guid), FALSE) != IB_SUCCESS)
+			      cl_hton64(guid), FALSE, conf->indx0) != IB_SUCCESS)
 		return -1;
 	return 0;
 }
@@ -592,6 +649,7 @@ static struct part_conf *new_part_conf(osm_log_t * p_log, osm_subn_t * p_subn)
 	conf->flags.rate = OSM_DEFAULT_MGRP_RATE;
 	conf->flags.mtu = OSM_DEFAULT_MGRP_MTU;
 	conf->membership = LIMITED;
+	conf->indx0 = FALSE;
 	return conf;
 }
 
@@ -708,6 +766,7 @@ int osm_prtn_config_parse_file(osm_log_t * p_log, osm_subn_t * p_subn,
 	int lineno;
 	int is_parse_success;
 
+	line[0] = '\0';
 	file = fopen(file_name, "r");
 	if (!file) {
 		OSM_LOG(p_log, OSM_LOG_VERBOSE,

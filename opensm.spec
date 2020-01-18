@@ -1,10 +1,9 @@
 %define _hardened_build 1
 
 Name: opensm
-Version: 3.3.19
-Release: 1%{?dist}
+Version: 3.3.20
+Release: 2%{?dist}
 Summary: OpenIB InfiniBand Subnet Manager and management utilities
-Group: System Environment/Daemons
 License: GPLv2 or BSD
 Url: http://www.openfabrics.org/
 Source0: http://www.openfabrics.org/downloads/management/%{name}-%{version}.tar.gz
@@ -14,10 +13,8 @@ Source5: opensm.service
 Source6: opensm.launch
 Source7: opensm.rwtab
 Patch0: opensm-3.3.13-prefix.patch
-Patch1: opensm-3.3.18-man-fixes.patch
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: libibmad-devel = 1.3.12, libtool, bison, flex, byacc, systemd
-Requires: %{name}-libs = %{version}-%{release}, logrotate, rdma
+BuildRequires: libibmad-devel >= 1.3.12, libtool, bison, flex, byacc, systemd
+Requires: %{name}-libs%{?_isa} = %{version}-%{release}, logrotate, rdma
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
@@ -32,30 +29,26 @@ running the opensm daemon.
 
 %package libs
 Summary: Libraries used by opensm and included utilities
-Group: System Environment/Libraries
 
 %description libs
 Shared libraries for Infiniband user space access
 
 %package devel
 Summary: Development files for the opensm-libs libraries
-Group: Development/System
-Requires: %{name}-libs = %{version}-%{release}
+Requires: %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description devel
 Development environment for the opensm libraries
 
 %package static
 Summary: Static version of the opensm libraries
-Group: Development/System
-Requires: %{name}-devel = %{version}-%{release}
+Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 %description static
 Static version of opensm libraries
 
 %prep
 %setup -q
 %patch0 -p1 -b .prefix
-%patch1 -p1 -b .man
 
 %build
 %configure --with-opensm-conf-sub-dir=rdma CFLAGS="$CFLAGS -fno-strict-aliasing"
@@ -64,7 +57,6 @@ cd opensm
 ./opensm -c ../opensm-%{version}.conf
 
 %install
-rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
 # remove unpackaged files from the buildroot
 rm -f %{buildroot}%{_libdir}/*.la
@@ -76,25 +68,18 @@ install -D -m644 %{SOURCE5} %{buildroot}%{_unitdir}/opensm.service
 install -D -m755 %{SOURCE6} %{buildroot}%{_libexecdir}/opensm-launch
 install -D -m644 %{SOURCE7} %{buildroot}%{_sysconfdir}/rwtab.d/opensm
 mkdir -p ${RPM_BUILD_ROOT}/var/cache/opensm
-
-%clean
-rm -rf %{buildroot}
+install -m 755 scripts/sldd.sh %{buildroot}%{_sbindir}/sldd.sh
 
 %post
 %systemd_post opensm.service
 
 %preun
-# Don't use the macro because we need to remove our cache directory as well
-# and the macro doesn't have the ability to do that.  But, here the macro
-# is for future reference:
-# %systemd_preun opensm.service
-if [ $1 = 0 ]; then
-	/bin/systemctl --no-reload disable opensm.service >/dev/null 2>&1 || :
-	/bin/systemctl stop opensm.service >/dev/null 2>&1 || :
-	rm -fr /var/cache/opensm
-fi
+%systemd_preun opensm.service
 
 %postun
+if [ -d /var/cache/opensm ]; then
+	rm -fr /var/cache/opensm
+fi
 %systemd_postun_with_restart opensm.service
 
 %post libs -p /sbin/ldconfig
@@ -102,7 +87,6 @@ fi
 %postun libs -p /sbin/ldconfig
 
 %files
-%defattr(-,root,root,-)
 %dir /var/cache/opensm
 %{_sbindir}/*
 %{_mandir}/*
@@ -112,22 +96,29 @@ fi
 %config(noreplace) %{_sysconfdir}/rdma/opensm.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/opensm
 %{_sysconfdir}/rwtab.d/opensm
-%doc AUTHORS COPYING ChangeLog INSTALL README NEWS
+%doc AUTHORS ChangeLog INSTALL README NEWS doc/performance-manager-HOWTO.txt doc/QoS_management_in_OpenSM.txt doc/partition-config.txt doc/opensm-sriov.txt doc/current-routing.txt doc/opensm_release_notes-3.3.txt
+%license COPYING
 
 %files libs
-%defattr(-,root,root,-)
 %{_libdir}/lib*.so.*
 
 %files devel
-%defattr(-,root,root,-)
 %{_libdir}/lib*.so
 %{_includedir}/infiniband
 
 %files static
-%defattr(-,root,root,-)
 %{_libdir}/lib*.a
 
 %changelog
+* Wed Nov  1 2017 Honggang Li <honli@redhat.com> - 3.3.20-2
+- Fix up preuninstall script
+- Resolves: bz1508334
+
+* Mon Oct 16 2017 Honggang Li <honli@redhat.com> - 3.3.20-1
+- Cleanup the spec file
+- Rebase to latest upstream release 3.3.20
+- Resolves: bz1456524
+
 * Fri Jun 05 2015 Doug Ledford <dledford@redhat.com> - 3.3.19-1
 - Update to latest upstream release
 - Build on s390

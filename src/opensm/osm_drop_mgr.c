@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
@@ -115,7 +115,8 @@ static void drop_mgr_clean_physp(osm_sm_t * sm, IN osm_physp_t * p_physp)
 			   the remote port, since it is no longer reachable.
 			   This can be done if we reset the discovery count
 			   of the remote port. */
-			if (!p_remote_physp->p_node->sw) {
+			if (!p_remote_physp->p_node->sw &&
+                            p_remote_physp->port_guid != sm->p_subn->sm_port_guid) {
 				p_remote_port->discovery_count = 0;
 				OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 					"Resetting discovery count of node: "
@@ -143,6 +144,9 @@ static void drop_mgr_clean_physp(osm_sm_t * sm, IN osm_physp_t * p_physp)
 		osm_physp_unlink(p_physp, p_remote_physp);
 
 	}
+
+	/* Make port as undiscovered */
+	p_physp->p_node->physp_discovered[p_physp->port_num] = 0;
 
 	OSM_LOG(sm->p_log, OSM_LOG_DEBUG,
 		"Clearing node 0x%016" PRIx64 " physical port number %u\n",
@@ -187,12 +191,12 @@ static void drop_mgr_remove_port(osm_sm_t * sm, IN osm_port_t * p_port)
 		goto Exit;
 	}
 
-	/* issue a notice - trap 65 */
+	/* issue a notice - trap 65 (SM_GID_OUT_OF_SERVICE_TRAP) */
 	/* details of the notice */
-	notice.generic_type = 0x83;	/* is generic subn mgt type */
+	notice.generic_type = 0x80 | IB_NOTICE_TYPE_SUBN_MGMT;	/* is generic subn mgt type */
 	ib_notice_set_prod_type_ho(&notice, 4);	/* A class manager generator */
 	/* endport ceases to be reachable */
-	notice.g_or_v.generic.trap_num = CL_HTON16(65);
+	notice.g_or_v.generic.trap_num = CL_HTON16(SM_GID_OUT_OF_SERVICE_TRAP); /* 65 */
 	/* The sm_base_lid is saved in network order already. */
 	notice.issuer_lid = sm->p_subn->sm_base_lid;
 	/* following C14-72.1.2 and table 119 p725 */
@@ -382,7 +386,7 @@ static boolean_t drop_mgr_process_node(osm_sm_t * sm, IN osm_node_t * p_node)
 	return return_val;
 }
 
-static void drop_mgr_check_node(osm_sm_t * sm, IN osm_node_t * p_node)
+static void drop_mgr_check_switch_node(osm_sm_t * sm, IN osm_node_t * p_node)
 {
 	ib_net64_t node_guid;
 	osm_physp_t *p_physp, *p_remote_physp;
@@ -394,13 +398,6 @@ static void drop_mgr_check_node(osm_sm_t * sm, IN osm_node_t * p_node)
 	OSM_LOG_ENTER(sm->p_log);
 
 	node_guid = osm_node_get_node_guid(p_node);
-
-	if (osm_node_get_type(p_node) != IB_NODE_TYPE_SWITCH) {
-		OSM_LOG(sm->p_log, OSM_LOG_ERROR, "ERR 0107: "
-			"Node 0x%016" PRIx64 " is not a switch node\n",
-			cl_ntoh64(node_guid));
-		goto Exit;
-	}
 
 	/* Make sure we have a switch object for this node */
 	if (!p_node->sw) {
@@ -586,7 +583,7 @@ void osm_drop_mgr_process(osm_sm_t * sm)
 			continue;
 
 		/* We are handling a switch node */
-		drop_mgr_check_node(sm, p_node);
+		drop_mgr_check_switch_node(sm, p_node);
 	}
 
 	p_next_port = (osm_port_t *) cl_qmap_head(p_port_guid_tbl);

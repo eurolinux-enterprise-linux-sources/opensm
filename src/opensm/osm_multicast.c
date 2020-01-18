@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2012 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
@@ -143,6 +143,7 @@ osm_mgrp_t *osm_mgrp_new(IN osm_subn_t * subn, IN ib_net16_t mlid,
 	cl_fmap_insert(&subn->mgrp_mgid_tbl, &p_mgrp->mcmember_rec.mgid,
 		       &p_mgrp->map_item);
 
+	subn->p_osm->sa.dirty = TRUE;
 	return p_mgrp;
 }
 
@@ -181,6 +182,8 @@ void osm_mgrp_cleanup(osm_subn_t * subn, osm_mgrp_t * mgrp)
 		mgrp_box_delete(mbox);
 	}
 	free(mgrp);
+
+	subn->p_osm->sa.dirty = TRUE;
 }
 
 static void mgrp_send_notice(osm_subn_t * subn, osm_log_t * log,
@@ -189,7 +192,7 @@ static void mgrp_send_notice(osm_subn_t * subn, osm_log_t * log,
 	ib_mad_notice_attr_t notice;
 	ib_api_status_t status;
 
-	notice.generic_type = 0x83;	/* generic SubnMgt type */
+	notice.generic_type = 0x80 | IB_NOTICE_TYPE_SUBN_MGMT;	/* is generic subn mgt type */
 	ib_notice_set_prod_type_ho(&notice, 4);	/* A Class Manager generator */
 	notice.g_or_v.generic.trap_num = CL_HTON16(num);
 	/* The sm_base_lid is saved in network order already. */
@@ -333,7 +336,7 @@ osm_mcm_port_t *osm_mgrp_add_port(IN osm_subn_t * subn, osm_log_t * log,
 	if ((join_state & IB_JOIN_STATE_FULL) &&
 	    !(prev_join_state & IB_JOIN_STATE_FULL) &&
 	    ++mgrp->full_members == 1)
-		mgrp_send_notice(subn, log, mgrp, 66);
+		mgrp_send_notice(subn, log, mgrp, SM_MGID_CREATED_TRAP); /* 66 */
 
 	subn->p_osm->sa.dirty = TRUE;
 	return mcm_port;
@@ -406,7 +409,7 @@ boolean_t osm_mgrp_remove_port(osm_subn_t * subn, osm_log_t * log, osm_mgrp_t * 
 	if ((port_join_state & IB_JOIN_STATE_FULL) &&
 	    !(new_join_state & IB_JOIN_STATE_FULL) &&
 	    --mgrp->full_members == 0) {
-		mgrp_send_notice(subn, log, mgrp, 67);
+		mgrp_send_notice(subn, log, mgrp, SM_MGID_DESTROYED_TRAP); /* 67 */
 		osm_mgrp_cleanup(subn, mgrp);
 		mgrp_deleted = TRUE;
 	}

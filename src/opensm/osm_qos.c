@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2006-2009 Voltaire, Inc. All rights reserved.
+ * Copyright (c) 2010-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -312,6 +313,8 @@ static int qos_extports_setup(osm_sm_t * sm, osm_node_t *node,
 
 	for (out = 1; out < num_ports; out++) {
 		p = osm_node_get_physp_ptr(node, out);
+		if (!p)
+			continue;
 		if (ib_port_info_get_port_state(&p->port_info) == IB_LINK_DOWN)
 			continue;
 		force_update = p->need_update || sm->p_subn->need_update;
@@ -334,6 +337,8 @@ static int qos_extports_setup(osm_sm_t * sm, osm_node_t *node,
 
 		for (out = 1; out < num_ports; out++) {
 			p = osm_node_get_physp_ptr(node, out);
+			if (!p)
+				continue;
 			if (ib_port_info_get_port_state(&p->port_info) ==
 			    IB_LINK_DOWN)
 				continue;
@@ -347,6 +352,8 @@ static int qos_extports_setup(osm_sm_t * sm, osm_node_t *node,
 			}
 
 		}
+		if (!p0)
+			return -1;
 		force_update = node->sw->need_update || sm->p_subn->need_update;
 		if (sl2vl_update_table(sm, p0, p0->port_num, 0x30000, force_update,
 					&qcfg->sl2vl, port_mad_list))
@@ -357,6 +364,8 @@ static int qos_extports_setup(osm_sm_t * sm, osm_node_t *node,
 		 */
 		for (out = 1; out < num_ports; out++) {
 			p = osm_node_get_physp_ptr(node, out);
+			if (!p)
+				continue;
 			if (ib_port_info_get_port_state(&p->port_info) ==
 			    IB_LINK_DOWN)
 				continue;
@@ -376,6 +385,8 @@ static int qos_extports_setup(osm_sm_t * sm, osm_node_t *node,
 	out = ib_switch_info_is_enhanced_port0(&node->sw->switch_info) ? 0 : 1;
 	for (; out < num_ports; out++) {
 		p = osm_node_get_physp_ptr(node, out);
+		if (!p)
+			continue;
 		if (ib_port_info_get_port_state(&p->port_info) == IB_LINK_DOWN)
 			continue;
 		force_update = p->need_update || sm->p_subn->need_update;
@@ -472,8 +483,10 @@ int osm_qos_setup(osm_opensm_t * p_osm)
 		p_next = cl_qmap_next(p_next);
 
 		p_list = (qos_mad_list_t *) malloc(sizeof(*p_list));
-		if (!p_list)
+		if (!p_list) {
+			cl_plock_release(&p_osm->lock);
 			return -1;
+		}
 
 		memset(p_list, 0, sizeof(*p_list));
 
@@ -482,8 +495,10 @@ int osm_qos_setup(osm_opensm_t * p_osm)
 		p_node = p_port->p_node;
 		if (p_node->sw) {
 			if (qos_extports_setup(&p_osm->sm, p_node, &swe_config,
-					       &p_list->port_mad_list))
+					       &p_list->port_mad_list)) {
+				cl_plock_release(&p_osm->lock);
 				ret = -1;
+			}
 
 			/* skip base port 0 */
 			if (!ib_switch_info_is_enhanced_port0
@@ -503,9 +518,10 @@ int osm_qos_setup(osm_opensm_t * p_osm)
 			cfg = &ca_config;
 
 		if (qos_endport_setup(&p_osm->sm, p_port->p_physp, cfg,
-				      vlarb_only, &p_list->port_mad_list))
-
+				      vlarb_only, &p_list->port_mad_list)) {
+			cl_plock_release(&p_osm->lock);
 			ret = -1;
+		}
 Continue:
 		/* if MAD list is not empty, add it to the global MAD list */
 		if (cl_qlist_count(&p_list->port_mad_list)) {

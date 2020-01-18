@@ -45,7 +45,7 @@
 *
 * SYNOPSIS
 */
-#define OSM_VERSION "OpenSM 3.3.19"
+#define OSM_VERSION "OpenSM 3.3.20"
 /********/
 
 #endif				/* _OSM_VERSION_H_ */

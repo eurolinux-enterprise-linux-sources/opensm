@@ -5,7 +5,7 @@
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2009 System Fabric Works, Inc. All rights reserved.
  * Copyright (c) 2009 HNR Consulting. All rights reserved.
- * Copyright (c) 2009-2011 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
+ * Copyright (c) 2009-2015 ZIH, TU Dresden, Federal Republic of Germany. All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -815,7 +815,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "partition_config_file", OPT_OFFSET(partition_config_file), opts_parse_charp, NULL, 0 },
 	{ "no_partition_enforcement", OPT_OFFSET(no_partition_enforcement), opts_parse_boolean, NULL, 1 },
 	{ "part_enforce", OPT_OFFSET(part_enforce), opts_parse_charp, NULL, 1 },
-	{ "allow_both_pkeys", OPT_OFFSET(allow_both_pkeys), opts_parse_boolean, NULL, 1 },
+	{ "allow_both_pkeys", OPT_OFFSET(allow_both_pkeys), opts_parse_boolean, NULL, 0 },
 	{ "sm_assigned_guid", OPT_OFFSET(sm_assigned_guid), opts_parse_uint8, NULL, 1 },
 	{ "qos", OPT_OFFSET(qos), opts_parse_boolean, NULL, 1 },
 	{ "qos_policy_file", OPT_OFFSET(qos_policy_file), opts_parse_charp, NULL, 0 },
@@ -842,6 +842,8 @@ static const opt_rec_t opt_tbl[] = {
 	{ "sm_inactive", OPT_OFFSET(sm_inactive), opts_parse_boolean, NULL, 1 },
 	{ "babbling_port_policy", OPT_OFFSET(babbling_port_policy), opts_parse_boolean, NULL, 1 },
 	{ "drop_event_subscriptions", OPT_OFFSET(drop_event_subscriptions), opts_parse_boolean, NULL, 1 },
+	{ "ipoib_mcgroup_creation_validation", OPT_OFFSET(ipoib_mcgroup_creation_validation), opts_parse_boolean, NULL, 1 },
+	{ "mcgroup_join_validation", OPT_OFFSET(mcgroup_join_validation), opts_parse_boolean, NULL, 1 },
 	{ "use_optimized_slvl", OPT_OFFSET(use_optimized_slvl), opts_parse_boolean, NULL, 1 },
 	{ "fsync_high_avail_files", OPT_OFFSET(fsync_high_avail_files), opts_parse_boolean, NULL, 1 },
 #ifdef ENABLE_OSM_PERF_MGR
@@ -911,6 +913,7 @@ static const opt_rec_t opt_tbl[] = {
 	{ "sm_sl", OPT_OFFSET(sm_sl), opts_parse_uint8, NULL, 1 },
 	{ "log_prefix", OPT_OFFSET(log_prefix), opts_parse_charp, NULL, 1 },
 	{ "per_module_logging_file", OPT_OFFSET(per_module_logging_file), opts_parse_charp, NULL, 0 },
+	{ "quasi_ftree_indexing", OPT_OFFSET(quasi_ftree_indexing), opts_parse_boolean, NULL, 1 },
 	{0}
 };
 
@@ -1371,7 +1374,7 @@ osm_physp_t *osm_get_physp_by_mad_addr(IN osm_log_t * p_log,
 }
 
 osm_switch_t *osm_get_switch_by_guid(IN const osm_subn_t * p_subn,
-				     IN uint64_t guid)
+				     IN ib_net64_t guid)
 {
 	osm_switch_t *p_switch;
 
@@ -1381,7 +1384,7 @@ osm_switch_t *osm_get_switch_by_guid(IN const osm_subn_t * p_subn,
 	return p_switch;
 }
 
-osm_node_t *osm_get_node_by_guid(IN osm_subn_t const *p_subn, IN uint64_t guid)
+osm_node_t *osm_get_node_by_guid(IN osm_subn_t const *p_subn, IN ib_net64_t guid)
 {
 	osm_node_t *p_node;
 
@@ -1474,9 +1477,10 @@ int is_mlnx_ext_port_info_supported(ib_net16_t devid)
 	uint16_t devid_ho;
 
 	devid_ho = cl_ntoh16(devid);
-	if ((devid_ho >= 0xc738 && devid_ho <= 0xc73b) || devid_ho == 0xcb20)
+	if ((devid_ho >= 0xc738 && devid_ho <= 0xc73b) || devid_ho == 0xcb20 ||
+	    devid_ho == 0xcf08)
 		return 1;
-	if (devid_ho >= 0x1003 && devid_ho <= 0x1013)
+	if (devid_ho >= 0x1003 && devid_ho <= 0x1016)
 		return 1;
 	return 0;
 }
@@ -1552,6 +1556,8 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	p_opt->sm_inactive = FALSE;
 	p_opt->babbling_port_policy = FALSE;
 	p_opt->drop_event_subscriptions = FALSE;
+	p_opt->ipoib_mcgroup_creation_validation = TRUE;
+	p_opt->mcgroup_join_validation = TRUE;
 	p_opt->use_optimized_slvl = FALSE;
 	p_opt->fsync_high_avail_files = TRUE;
 #ifdef ENABLE_OSM_PERF_MGR
@@ -1631,6 +1637,7 @@ void osm_subn_set_default_opt(IN osm_subn_opt_t * p_opt)
 	subn_init_qos_options(&p_opt->qos_rtr_options, NULL);
 	p_opt->cc_cct.entries_len = 0;
 	p_opt->cc_cct.input_str = NULL;
+	p_opt->quasi_ftree_indexing = FALSE;
 }
 
 static char *clean_val(char *val)
@@ -2289,7 +2296,9 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"m_key_lease_period %u\n\n"
 		"# The protection level used for the M_Key on this subnet\n"
 		"m_key_protection_level %u\n\n"
-		"# If FALSE, SM won't try to determine the m_key of unknown ports\n"
+		"# If TRUE, SM tries to determine the m_key of unknown ports from guid2mkey file\n"
+		"# If FALSE, SM won't try to determine the m_key of unknown ports.\n"
+		"# Preconfigured m_key will be used instead\n"
 		"m_key_lookup %s\n\n"
 		"# SM_Key value of the SM used for SM authentication\n"
 		"sm_key 0x%016" PRIx64 "\n\n"
@@ -2503,6 +2512,15 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"io_guid_file %s\n\n",
 		p_opts->io_guid_file ? p_opts->io_guid_file : null_str);
 
+        fprintf(out,
+		"# If TRUE enables alternative indexing policy for ftree routing\n"
+		"# in quasi-ftree topologies that can improve shift-pattern support.\n"
+		"# The switch indexing starts from root switch and leaf switches\n"
+		"# are termination points of BFS algorithm\n"
+		"# If FALSE, the indexing starts from leaf switch (default)\n"
+		"quasi_ftree_indexing %s\n\n",
+		p_opts->quasi_ftree_indexing ? "TRUE" : "FALSE");
+
 	fprintf(out,
 		"# Number of reverse hops allowed for I/O nodes\n"
 		"# Used for connectivity between I/O nodes connected to Top Switches\nmax_reverse_hops %d\n\n",
@@ -2539,6 +2557,12 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"# If zero disable (default), otherwise use the value as a random seed\n"
 		"scatter_ports %d\n\n",
 		p_opts->scatter_ports);
+
+	fprintf(out,
+		"# Don't use scatter for ports defined in\n"
+		"# guid_routing_order file\n"
+		"guid_routing_order_no_scatter %s\n\n",
+		p_opts->guid_routing_order_no_scatter ? "TRUE" : "FALSE");
 
 	fprintf(out,
 		"# SA database file name\nsa_db_file %s\n\n",
@@ -2611,8 +2635,14 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		"sm_inactive %s\n\n"
 		"# Babbling Port Policy\n"
 		"babbling_port_policy %s\n\n"
-		"# Drop event subscriptions (InformInfo) if the port goes away\n"
+		"# Drop event subscriptions (InformInfo and ServiceRecord) on port removal and SM coming out of STANDBY\n"
 		"drop_event_subscriptions %s\n\n"
+		"# Validate IPoIB non-broadcast group creation parameters against\n"
+		"# broadcast group parameters per IETF RFC 4391 (default TRUE)\n"
+		"ipoib_mcgroup_creation_validation %s\n\n"
+		"# Validate multicast join parameters against multicast group\n"
+		"# parameters when MC group already exists\n"
+		"mcgroup_join_validation %s\n\n"
 		"# Use Optimized SLtoVLMapping programming if supported by device\n"
 		"use_optimized_slvl %s\n\n"
 		"# Sync in memory files used for high availability with storage\n"
@@ -2621,6 +2651,8 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		p_opts->sm_inactive ? "TRUE" : "FALSE",
 		p_opts->babbling_port_policy ? "TRUE" : "FALSE",
 		p_opts->drop_event_subscriptions ? "TRUE" : "FALSE",
+		p_opts->ipoib_mcgroup_creation_validation ? "TRUE" : "FALSE",
+		p_opts->mcgroup_join_validation ? "TRUE" : "FALSE",
 		p_opts->use_optimized_slvl ? "TRUE" : "FALSE",
 		p_opts->fsync_high_avail_files ? "TRUE" : "FALSE");
 
@@ -2792,7 +2824,7 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 
 	fprintf(out,
 		"#\n# Congestion Control SwitchCongestionSetting options\n#\n"
-		"# Control Map - bitmask indicating which of the following attributes are to be used\n"
+		"# Control Map - bitmask indicating which of the following are to be used\n"
 		"# bit 0 - victim mask\n"
 		"# bit 1 - credit mask\n"
 		"# bit 2 - threshold + packet size\n"
@@ -2926,10 +2958,10 @@ void osm_subn_output_conf(FILE *out, IN osm_subn_opt_t * p_opts)
 		fprintf(out, "%u:%u",
 			p_opts->cc_cct.entries[0].shift,
 			p_opts->cc_cct.entries[0].multiplier);
-		for (i = 0; i < p_opts->cc_cct.entries_len; i++) {
+		for (i = 1; i < p_opts->cc_cct.entries_len; i++) {
 			fprintf(out, ",%u:%u",
-				p_opts->cc_cct.entries[0].shift,
-				p_opts->cc_cct.entries[0].multiplier);
+				p_opts->cc_cct.entries[i].shift,
+				p_opts->cc_cct.entries[i].multiplier);
 		}
 		fprintf(out, "\n");
 	}

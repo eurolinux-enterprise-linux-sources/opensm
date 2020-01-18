@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2004-2009 Voltaire, Inc. All rights reserved.
- * Copyright (c) 2002-2011 Mellanox Technologies LTD. All rights reserved.
+ * Copyright (c) 2002-2015 Mellanox Technologies LTD. All rights reserved.
  * Copyright (c) 1996-2003 Intel Corporation. All rights reserved.
  * Copyright (c) 2008 Xsigo Systems Inc.  All rights reserved.
  * Copyright (c) 2013 Oracle and/or its affiliates. All rights reserved.
@@ -81,6 +81,14 @@
 					IB_MCR_COMPMASK_PKEY | \
 					IB_MCR_COMPMASK_FLOW | \
 					IB_MCR_COMPMASK_SL)
+
+#define IPV4_BCAST_MGID_PREFIX CL_HTON64(0xff10401b00000000ULL)
+#define IPV4_BCAST_MGID_INT_ID CL_HTON64(0x00000000ffffffffULL)
+
+static int validate_other_comp_fields(osm_log_t * p_log, ib_net64_t comp_mask,
+				      const ib_member_rec_t * p_mcmr,
+				      osm_mgrp_t * p_mgrp,
+				      osm_log_level_t log_level);
 
 /*********************************************************************
  Copy certain fields between two mcmember records
@@ -336,7 +344,7 @@ static boolean_t validate_port_caps(osm_log_t * p_log,
 	uint8_t rate_mgrp;
 	int extended;
 
-	mtu_required = ib_port_info_get_mtu_cap(&p_physp->port_info);
+	mtu_required = ib_port_info_get_neighbor_mtu(&p_physp->port_info);
 	mtu_mgrp = (uint8_t) (p_mgrp->mcmember_rec.mtu & 0x3F);
 	if (mtu_required < mtu_mgrp) {
 		OSM_LOG(p_log, OSM_LOG_VERBOSE,
@@ -436,7 +444,7 @@ static boolean_t validate_modify(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
 					p_request_physp)) {
 			/* the request port is not part of the partition for this mgrp */
 			OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
-				"Requesting port 0x%016" PRIx64 " has no P_Key 0x%04x\n",
+				"Requesting port 0x%016" PRIx64 " has no PKey 0x%04x\n",
 				cl_ntoh64(p_request_physp->port_guid),
 				cl_ntoh16(p_mgrp->mcmember_rec.pkey));
 			return FALSE;
@@ -530,7 +538,7 @@ static boolean_t validate_delete(IN osm_sa_t * sa, IN osm_mgrp_t * p_mgrp,
  *     Sc  4bit = Scope (c)
  *     Si 16bit = Signature (2)
  *     P  64bit = GID Prefix (should be a subnet unique ID - normally Subnet Prefix)
- *     Id 32bit = Unique ID in the Subnet (might be MLID or Pkey ?)
+ *     Id 32bit = Unique ID in the Subnet (might be MLID or P_Key ?)
  *
  *  a) 8-bits of 11111111 at the start of the GID identifies this as being a
  *     multicast GID.
@@ -810,22 +818,23 @@ static unsigned build_new_mgid(osm_sa_t * sa, ib_net64_t comp_mask,
 **********************************************************************/
 static ib_api_status_t mcmr_rcv_create_new_mgrp(IN osm_sa_t * sa,
 						IN ib_net64_t comp_mask,
-						IN const ib_member_rec_t *
-						p_recvd_mcmember_rec,
+						IN const ib_member_rec_t * p_recvd_mcmember_rec,
 						IN const osm_physp_t * p_physp,
 						OUT osm_mgrp_t ** pp_mgrp)
 {
 	ib_net16_t mlid;
+	uint16_t signature;
 	ib_api_status_t status = IB_SUCCESS;
+	osm_mgrp_t *bcast_mgrp;
+	ib_gid_t bcast_mgid;
 	ib_member_rec_t mcm_rec = *p_recvd_mcmember_rec;	/* copy for modifications */
+	char gid_str[INET6_ADDRSTRLEN];
 
 	OSM_LOG_ENTER(sa->p_log);
 
 	/* we need to create the new MGID if it was not defined */
 	if (!ib_gid_is_notzero(&p_recvd_mcmember_rec->mgid)) {
 		/* create a new MGID */
-		char gid_str[INET6_ADDRSTRLEN];
-
 		if (!build_new_mgid(sa, comp_mask, &mcm_rec)) {
 			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B23: "
 				"cannot allocate unique MGID value\n");
@@ -835,10 +844,51 @@ static ib_api_status_t mcmr_rcv_create_new_mgrp(IN osm_sa_t * sa,
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG, "Allocated new MGID:%s\n",
 			inet_ntop(AF_INET6, mcm_rec.mgid.raw, gid_str,
 				  sizeof gid_str));
-	} else if (!validate_requested_mgid(sa, &mcm_rec)) {
+	} else if (sa->p_subn->opt.ipoib_mcgroup_creation_validation) {
 		/* a specific MGID was requested so validate the resulting MGID */
-		status = IB_SA_MAD_STATUS_REQ_INVALID;
-		goto Exit;
+		if (validate_requested_mgid(sa, &mcm_rec)) {
+			memcpy(&signature, &(mcm_rec.mgid.multicast.raw_group_id),
+			       sizeof(signature));
+			signature = cl_ntoh16(signature);
+			/* Check for IPoIB signature in MGID */
+			if (signature == 0x401B || signature == 0x601B) {
+				/* Derive IPoIB broadcast MGID */
+				bcast_mgid.unicast.prefix = IPV4_BCAST_MGID_PREFIX;
+				bcast_mgid.unicast.interface_id = IPV4_BCAST_MGID_INT_ID;
+				/* Set scope in IPoIB broadcast MGID */
+				bcast_mgid.multicast.header[1] =
+					(bcast_mgid.multicast.header[1] & 0xF0) |
+					(mcm_rec.mgid.multicast.header[1] & 0x0F);
+				/* Set P_Key in IPoIB broadcast MGID */
+				bcast_mgid.multicast.raw_group_id[2] =
+					mcm_rec.mgid.multicast.raw_group_id[2];
+				bcast_mgid.multicast.raw_group_id[3] =
+					mcm_rec.mgid.multicast.raw_group_id[3];
+				/* Check MC group for the IPoIB broadcast group */
+				if (signature != 0x401B ||
+				    memcmp(&bcast_mgid, &(mcm_rec.mgid), sizeof(ib_gid_t))) {
+					bcast_mgrp = osm_get_mgrp_by_mgid(sa->p_subn,
+									  &bcast_mgid);
+					if (!bcast_mgrp) {
+						OSM_LOG(sa->p_log, OSM_LOG_ERROR,
+							"ERR 1B1B: Broadcast group %s not found, sending IB_SA_MAD_STATUS_REQ_INVALID\n",
+							inet_ntop(AF_INET6, bcast_mgid.raw, gid_str, sizeof gid_str));
+						status = IB_SA_MAD_STATUS_REQ_INVALID;
+						goto Exit;
+					}
+					if (!validate_other_comp_fields(sa->p_log, comp_mask, p_recvd_mcmember_rec, bcast_mgrp, OSM_LOG_ERROR)) {
+						OSM_LOG(sa->p_log, OSM_LOG_ERROR,
+							"ERR 1B1C: validate_other_comp_fields failed for MGID: %s, sending IB_SA_MAD_STATUS_REQ_INVALID\n",
+							inet_ntop(AF_INET6, &p_recvd_mcmember_rec->mgid, gid_str, sizeof gid_str));
+						status = IB_SA_MAD_STATUS_REQ_INVALID;
+						goto Exit;
+					}
+				}
+			}
+		} else {
+			status = IB_SA_MAD_STATUS_REQ_INVALID;
+			goto Exit;
+		}
 	}
 
 	/* check the requested parameters are realizable */
@@ -995,6 +1045,89 @@ Exit:
 	OSM_LOG_EXIT(sa->p_log);
 }
 
+static int validate_other_comp_fields(osm_log_t * p_log, ib_net64_t comp_mask,
+				      const ib_member_rec_t * p_mcmr,
+				      osm_mgrp_t * p_mgrp,
+				      osm_log_level_t log_level)
+{
+	int ret = 0;
+
+	if ((IB_MCR_COMPMASK_QKEY & comp_mask) &&
+	    p_mcmr->qkey != p_mgrp->mcmember_rec.qkey) {
+		OSM_LOG(p_log, log_level, "ERR 1B30: "
+			"Q_Key mismatch: query 0x%x group 0x%x\n",
+			cl_ntoh32(p_mcmr->qkey),
+			cl_ntoh32(p_mgrp->mcmember_rec.qkey));
+		goto Exit;
+	}
+
+	if (IB_MCR_COMPMASK_PKEY & comp_mask) {
+		if (!(ib_pkey_is_full_member(p_mcmr->pkey) ||
+		      ib_pkey_is_full_member(p_mgrp->mcmember_rec.pkey))) {
+			OSM_LOG(p_log, log_level, "ERR 1B31: "
+				"Both limited P_Keys: query 0x%x group 0x%x\n",
+				cl_ntoh16(p_mcmr->pkey),
+				cl_ntoh16(p_mgrp->mcmember_rec.pkey));
+			goto Exit;
+		}
+		if (ib_pkey_get_base(p_mcmr->pkey) !=
+		    ib_pkey_get_base(p_mgrp->mcmember_rec.pkey)) {
+			OSM_LOG(p_log, log_level, "ERR 1B32: "
+				"P_Key base mismatch: query 0x%x group 0x%x\n",
+				cl_ntoh16(p_mcmr->pkey),
+				cl_ntoh16(p_mgrp->mcmember_rec.pkey));
+			goto Exit;
+		}
+	}
+
+	if ((IB_MCR_COMPMASK_TCLASS & comp_mask) &&
+	    p_mcmr->tclass != p_mgrp->mcmember_rec.tclass) {
+		OSM_LOG(p_log, log_level, "ERR 1B33: "
+			"TClass mismatch: query %d group %d\n",
+			p_mcmr->tclass, p_mgrp->mcmember_rec.tclass);
+		goto Exit;
+	}
+
+	/* check SL, Flow, and Hop limit */
+	{
+		uint32_t mgrp_flow, query_flow;
+		uint8_t mgrp_sl, query_sl;
+		uint8_t mgrp_hop, query_hop;
+
+		ib_member_get_sl_flow_hop(p_mcmr->sl_flow_hop,
+					  &query_sl, &query_flow, &query_hop);
+
+		ib_member_get_sl_flow_hop(p_mgrp->mcmember_rec.sl_flow_hop,
+					  &mgrp_sl, &mgrp_flow, &mgrp_hop);
+
+		if ((IB_MCR_COMPMASK_SL & comp_mask) && query_sl != mgrp_sl) {
+			OSM_LOG(p_log, log_level, "ERR 1B34: "
+				"SL mismatch: query %d group %d\n",
+				query_sl, mgrp_sl);
+			goto Exit;
+		}
+
+		if ((IB_MCR_COMPMASK_FLOW & comp_mask) &&
+		    query_flow != mgrp_flow) {
+			OSM_LOG(p_log, log_level, "ERR 1B35: "
+				"FlowLabel mismatch: query 0x%x group 0x%x\n",
+				query_flow, mgrp_flow);
+			goto Exit;
+		}
+
+		if ((IB_MCR_COMPMASK_HOP & comp_mask) && query_hop != mgrp_hop) {
+			OSM_LOG(p_log, log_level, "ERR 1B36: "
+				"Hop mismatch: query %d group %d\n",
+				query_hop, mgrp_hop);
+			goto Exit;
+		}
+	}
+
+	ret = 1;
+Exit:
+	return ret;
+}
+
 /**********************************************************************
  Handle a join (or create) request
 **********************************************************************/
@@ -1024,7 +1157,7 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 
 	mcmember_rec = *p_recvd_mcmember_rec;
 
-        /* Validate the subnet prefix in the PortGID */
+	/* Validate the subnet prefix in the PortGID */
 	if (p_recvd_mcmember_rec->port_gid.unicast.prefix !=
 	    sa->p_subn->opt.subnet_prefix) {
 		OSM_LOG(sa->p_log, OSM_LOG_DEBUG,
@@ -1083,7 +1216,7 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 					   sa->p_subn->opt.allow_both_pkeys)) {
 		CL_PLOCK_RELEASE(sa->p_lock);
 		OSM_LOG(sa->p_log, OSM_LOG_VERBOSE,
-			"Port and requester don't share pkey\n");
+			"Port and requester don't share PKey\n");
 		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
 		goto Exit;
 	}
@@ -1152,9 +1285,29 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		/* copy the MGID to the result */
 		mcmember_rec.mgid = p_mgrp->mcmember_rec.mgid;
 		is_new_group = 1;
-	} else
+	} else {
 		/* no need for a new group */
 		is_new_group = 0;
+		if (sa->p_subn->opt.mcgroup_join_validation &&
+		    !validate_other_comp_fields(sa->p_log, p_sa_mad->comp_mask,
+						p_recvd_mcmember_rec, p_mgrp,
+						OSM_LOG_ERROR)) {
+			char gid_str[INET6_ADDRSTRLEN];
+			CL_PLOCK_RELEASE(sa->p_lock);
+			OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B1A: "
+				"validate_other_comp_fields failed for "
+				"MGID: %s port 0x%016" PRIx64
+				" (%s), sending IB_SA_MAD_STATUS_REQ_INVALID\n",
+				inet_ntop(AF_INET6,
+					  p_mgrp->mcmember_rec.mgid.raw,
+					  gid_str, sizeof gid_str),
+				cl_ntoh64(portguid),
+				p_port->p_node->print_desc);
+			osm_sa_send_error(sa, p_madw,
+					  IB_SA_MAD_STATUS_REQ_INVALID);
+			goto Exit;
+		}
+	}
 
 	CL_ASSERT(p_mgrp);
 
@@ -1197,6 +1350,24 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		goto Exit;
 	}
 
+	/* verify that the joining port is in the partition of the group */
+	if (!osm_physp_has_pkey(sa->p_log, p_mgrp->mcmember_rec.pkey, p_physp)) {
+		char gid_str[INET6_ADDRSTRLEN];
+		if (is_new_group)
+			osm_mgrp_cleanup(sa->p_subn, p_mgrp);
+		CL_PLOCK_RELEASE(sa->p_lock);
+		memset(gid_str, 0, sizeof(gid_str));
+		OSM_LOG(sa->p_log, OSM_LOG_ERROR, "ERR 1B14: "
+			"Cannot join port 0x%016" PRIx64 " to MGID %s - "
+			"Port is not in partition of this MC group\n",
+			cl_ntoh64(portguid),
+			inet_ntop(AF_INET6,
+				  p_mgrp->mcmember_rec.mgid.raw,
+				  gid_str, sizeof(gid_str)));
+		osm_sa_send_error(sa, p_madw, IB_SA_MAD_STATUS_REQ_INVALID);
+		goto Exit;
+	}
+
 	/*
 	 * o15-0.2.1 requires validation of the requesting port
 	 * in the case of modification:
@@ -1213,7 +1384,7 @@ static void mcmr_rcv_join_mgrp(IN osm_sa_t * sa, IN osm_madw_t * p_madw)
 		goto Exit;
 	}
 
-	/* copy qkey mlid tclass pkey sl_flow_hop mtu rate pkt_life sl_flow_hop */
+	/* copy qkey mlid tclass pkey sl_flow_hop mtu rate pkt_life */
 	copy_from_create_mc_rec(&mcmember_rec, &p_mgrp->mcmember_rec);
 
 	/* create or update existing port (join-state will be updated) */
@@ -1316,40 +1487,9 @@ static void mcmr_by_comp_mask(osm_sa_t * sa, const ib_member_rec_t * p_rcvd_rec,
 		goto Exit;
 
 	/* now do the rest of the match */
-	if ((IB_MCR_COMPMASK_QKEY & comp_mask) &&
-	    p_rcvd_rec->qkey != p_mgrp->mcmember_rec.qkey)
+	if (!validate_other_comp_fields(sa->p_log, comp_mask, p_rcvd_rec, p_mgrp,
+					OSM_LOG_NONE))
 		goto Exit;
-
-	if ((IB_MCR_COMPMASK_PKEY & comp_mask) &&
-	    p_rcvd_rec->pkey != p_mgrp->mcmember_rec.pkey)
-		goto Exit;
-
-	if ((IB_MCR_COMPMASK_TCLASS & comp_mask) &&
-	    p_rcvd_rec->tclass != p_mgrp->mcmember_rec.tclass)
-		goto Exit;
-
-	/* check SL, Flow, and Hop limit */
-	{
-		uint8_t mgrp_sl, query_sl;
-		uint32_t mgrp_flow, query_flow;
-		uint8_t mgrp_hop, query_hop;
-
-		ib_member_get_sl_flow_hop(p_rcvd_rec->sl_flow_hop,
-					  &query_sl, &query_flow, &query_hop);
-
-		ib_member_get_sl_flow_hop(p_mgrp->mcmember_rec.sl_flow_hop,
-					  &mgrp_sl, &mgrp_flow, &mgrp_hop);
-
-		if ((IB_MCR_COMPMASK_SL & comp_mask) && query_sl != mgrp_sl)
-			goto Exit;
-
-		if ((IB_MCR_COMPMASK_FLOW & comp_mask) &&
-		    query_flow != mgrp_flow)
-			goto Exit;
-
-		if ((IB_MCR_COMPMASK_HOP & comp_mask) && query_hop != mgrp_hop)
-			goto Exit;
-	}
 
 	if ((IB_MCR_COMPMASK_PROXY & comp_mask) &&
 	    p_rcvd_rec->proxy_join != p_mgrp->mcmember_rec.proxy_join)
